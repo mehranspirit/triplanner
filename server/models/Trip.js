@@ -40,9 +40,45 @@ const tripSchema = new mongoose.Schema({
   },
   thumbnailUrl: String,
   notes: String,
-  events: [eventSchema]
+  events: [eventSchema],
+  owner: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  collaborators: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    role: {
+      type: String,
+      enum: ['editor', 'viewer'],
+      default: 'viewer'
+    },
+    addedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  isPublic: {
+    type: Boolean,
+    default: false
+  },
+  shareableLink: {
+    type: String,
+    unique: true,
+    sparse: true
+  }
 }, {
   timestamps: true
 });
+
+// Method to check if a user has access to this trip
+tripSchema.methods.hasAccess = function(userId) {
+  if (this.owner.equals(userId)) return 'owner';
+  const collaborator = this.collaborators.find(c => c.user.equals(userId));
+  return collaborator ? collaborator.role : (this.isPublic ? 'viewer' : null);
+};
 
 module.exports = mongoose.model('Trip', tripSchema); 
