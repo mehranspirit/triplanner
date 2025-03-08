@@ -9,6 +9,7 @@ interface LoginFormData {
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: '',
@@ -41,9 +42,8 @@ const Login: React.FC = () => {
         throw new Error(data.message || 'Login failed');
       }
 
-      // Store token and user data
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      // Use the login function from AuthContext
+      login(data.token, data.user);
 
       // Redirect to trips page
       navigate('/trips');

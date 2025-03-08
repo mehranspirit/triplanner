@@ -11,6 +11,7 @@ interface RegisterFormData {
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState<RegisterFormData>({
     name: '',
     email: '',
@@ -55,9 +56,8 @@ const Register: React.FC = () => {
         throw new Error(data.message || 'Registration failed');
       }
 
-      // Store token and user data
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      // Use the login function from AuthContext
+      login(data.token, data.user);
 
       // Redirect to trips page
       navigate('/trips');
