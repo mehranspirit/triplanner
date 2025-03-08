@@ -101,31 +101,48 @@ app.delete('/api/trips/:id', auth, async (req, res) => {
       params: req.params
     });
     
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.error('Invalid trip ID format:', req.params.id);
+      return res.status(400).json({ message: 'Invalid trip ID format' });
+    }
+
+    // Convert string IDs to ObjectIds for comparison
+    const tripId = new mongoose.Types.ObjectId(req.params.id);
+    const userId = new mongoose.Types.ObjectId(req.user._id);
+    
     // Log the trip before deletion attempt
-    const tripBeforeDelete = await Trip.findById(req.params.id);
-    console.log('Trip before deletion attempt:', tripBeforeDelete);
+    const tripBeforeDelete = await Trip.findById(tripId);
+    console.log('Trip before deletion attempt:', {
+      tripFound: !!tripBeforeDelete,
+      tripDetails: tripBeforeDelete ? {
+        id: tripBeforeDelete._id.toString(),
+        owner: tripBeforeDelete.owner.toString(),
+        ownerMatch: tripBeforeDelete.owner.equals(userId)
+      } : null
+    });
     
     const trip = await Trip.findOneAndDelete({ 
-      _id: req.params.id, 
-      owner: req.user._id 
+      _id: tripId,
+      owner: userId
     });
 
     if (!trip) {
       console.log('Trip not found or user not authorized:', {
-        tripId: req.params.id,
-        userId: req.user._id,
+        tripId: tripId.toString(),
+        userId: userId.toString(),
         tripBeforeDelete: tripBeforeDelete ? {
-          id: tripBeforeDelete._id,
-          owner: tripBeforeDelete.owner,
-          ownerMatches: tripBeforeDelete.owner.equals(req.user._id)
+          id: tripBeforeDelete._id.toString(),
+          owner: tripBeforeDelete.owner.toString(),
+          ownerMatches: tripBeforeDelete.owner.equals(userId)
         } : null
       });
       return res.status(404).json({ message: 'Trip not found or you are not authorized to delete it' });
     }
     
     console.log('Trip successfully deleted:', {
-      tripId: trip._id,
-      owner: trip.owner
+      tripId: trip._id.toString(),
+      owner: trip.owner.toString()
     });
     res.json({ message: 'Trip deleted successfully' });
   } catch (error) {
