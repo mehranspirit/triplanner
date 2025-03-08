@@ -133,7 +133,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const addTrip = async (trip: Trip) => {
     try {
       const newTrip = await api.createTrip(trip);
-      dispatch({ type: 'ADD_TRIP', payload: newTrip });
+      // Check if the trip already exists in state
+      const exists = state.trips.some(t => t.id === newTrip.id);
+      if (!exists) {
+        dispatch({ type: 'ADD_TRIP', payload: newTrip });
+      }
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to create trip' });
     }

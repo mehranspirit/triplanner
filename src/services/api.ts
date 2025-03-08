@@ -87,12 +87,15 @@ export const api = {
       throw new Error(errorData?.message || 'Failed to create trip');
     }
     const createdTrip = await response.json();
+    
+    // Ensure we only use _id as id and remove any duplicate id fields
+    const { _id, owner, ...rest } = createdTrip;
     return {
-      ...createdTrip,
-      id: createdTrip._id || createdTrip.id,
+      ...rest,
+      id: _id,
       owner: {
-        ...createdTrip.owner,
-        id: createdTrip.owner._id || createdTrip.owner.id
+        ...owner,
+        id: owner._id
       }
     };
   },
