@@ -8,7 +8,6 @@ import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
-import EventModal from './EventModal';
 
 const TripDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +49,6 @@ const TripDetails: React.FC = () => {
   });
   const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchTrip = async () => {
@@ -563,18 +561,13 @@ const TripDetails: React.FC = () => {
           </div>
         </div>
         <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
-          {trip.notes && (
+          {trip.description && (
             <div className="mb-4">
-              <h4 className="text-sm font-medium text-gray-500">Notes</h4>
-              <p className="mt-1 text-sm text-gray-900">{trip.notes}</p>
+              <h4 className="text-sm font-medium text-gray-500">Description</h4>
+              <p className="mt-1 text-sm text-gray-900">{trip.description}</p>
             </div>
           )}
           <div className="flex items-center space-x-4">
-            {trip.isPublic && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                Public
-              </span>
-            )}
             {trip.shareableLink && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                 Shared
