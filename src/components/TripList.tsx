@@ -53,7 +53,7 @@ export default function TripList() {
     try {
       await api.deleteTrip(tripId);
       deleteTrip(tripId);
-      setError(null); // Clear any existing errors
+      setError(null);
     } catch (err) {
       console.error('Error deleting trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete trip');

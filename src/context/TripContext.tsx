@@ -11,7 +11,7 @@ interface TripState {
 type TripAction =
   | { type: 'SET_TRIPS'; payload: Trip[] }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string }
+  | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'ADD_TRIP'; payload: Trip }
   | { type: 'UPDATE_TRIP'; payload: Trip }
   | { type: 'DELETE_TRIP'; payload: string }
@@ -149,11 +149,14 @@ export function TripProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteTrip = async (tripId: string) => {
+    dispatch({ type: 'SET_ERROR', payload: null });
     try {
       await api.deleteTrip(tripId);
       dispatch({ type: 'DELETE_TRIP', payload: tripId });
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to delete trip' });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete trip';
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
+      throw error; // Re-throw to handle in component
     }
   };
 

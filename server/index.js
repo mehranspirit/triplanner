@@ -18,7 +18,11 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 app.use(express.json());
 
@@ -89,13 +93,38 @@ app.put('/api/trips/:id', auth, async (req, res) => {
 
 app.delete('/api/trips/:id', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOneAndDelete({ _id: req.params.id, owner: req.user._id });
-    if (!trip) {
+    console.log('Delete request received for trip:', req.params.id);
+    console.log('User ID from token:', req.user._id);
+    
+    // First find the trip to get more info
+    const tripToDelete = await Trip.findById(req.params.id);
+    if (!tripToDelete) {
+      console.log('Trip not found with ID:', req.params.id);
       return res.status(404).json({ message: 'Trip not found' });
     }
-    res.json({ message: 'Trip deleted' });
+    
+    console.log('Trip found:', {
+      tripId: tripToDelete._id,
+      ownerId: tripToDelete.owner,
+      requestingUserId: req.user._id,
+      isOwner: tripToDelete.owner.equals(req.user._id)
+    });
+
+    const trip = await Trip.findOneAndDelete({ 
+      _id: req.params.id, 
+      owner: req.user._id 
+    });
+    
+    if (!trip) {
+      console.log('User not authorized to delete trip');
+      return res.status(403).json({ message: 'You are not authorized to delete this trip' });
+    }
+    
+    console.log('Trip successfully deleted:', trip._id);
+    res.json({ message: 'Trip deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error deleting trip:', error);
+    res.status(500).json({ message: error.message || 'Failed to delete trip' });
   }
 });
 

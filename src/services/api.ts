@@ -123,13 +123,26 @@ export const api = {
   // Delete a trip
   deleteTrip: async (tripId: string): Promise<void> => {
     if (!tripId) throw new Error('Trip ID is required for deletion');
+    console.log('Attempting to delete trip:', tripId);
     const response = await fetch(`${API_URL}/api/trips/${tripId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
+    
     if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      throw new Error(errorData?.message || 'Failed to delete trip');
+      const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
+      console.log('Delete error response:', { status: response.status, data: errorData });
+      
+      switch (response.status) {
+        case 403:
+          throw new Error('You do not have permission to delete this trip');
+        case 404:
+          throw new Error('Trip not found');
+        case 401:
+          throw new Error('Please log in again to delete this trip');
+        default:
+          throw new Error(errorData?.message || `Failed to delete trip (${response.status})`);
+      }
     }
   },
 
