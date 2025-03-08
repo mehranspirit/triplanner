@@ -44,7 +44,7 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/trips/:id"
+              path="/trip/:id"
               element={
                 <ProtectedRoute>
                   <AuthenticatedLayout>
