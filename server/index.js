@@ -62,12 +62,20 @@ app.post('/api/trips', auth, async (req, res) => {
 
 app.get('/api/trips/:id', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({ _id: req.params.id, owner: req.user._id })
+    const trip = await Trip.findById(req.params.id)
       .populate('owner', 'name email')
       .populate('collaborators.user', 'name email');
+    
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
     }
+
+    // Check if user has access (owner, editor, or viewer)
+    const accessRole = trip.hasAccess(req.user._id);
+    if (!accessRole) {
+      return res.status(403).json({ message: 'You do not have access to this trip' });
+    }
+
     res.json(trip);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -76,16 +84,29 @@ app.get('/api/trips/:id', auth, async (req, res) => {
 
 app.put('/api/trips/:id', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOneAndUpdate(
-      { _id: req.params.id, owner: req.user._id },
+    const trip = await Trip.findById(req.params.id)
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
+    
+    if (!trip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+
+    // Check if user has edit access (owner or editor)
+    const accessRole = trip.hasAccess(req.user._id);
+    if (!accessRole || (accessRole === 'viewer')) {
+      return res.status(403).json({ message: 'You do not have permission to edit this trip' });
+    }
+
+    // Update the trip
+    const updatedTrip = await Trip.findByIdAndUpdate(
+      req.params.id,
       req.body,
       { new: true }
     ).populate('owner', 'name email')
      .populate('collaborators.user', 'name email');
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-    res.json(trip);
+
+    res.json(updatedTrip);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
