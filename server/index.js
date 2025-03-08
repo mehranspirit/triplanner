@@ -96,28 +96,17 @@ app.delete('/api/trips/:id', auth, async (req, res) => {
     console.log('Delete request received for trip:', req.params.id);
     console.log('User ID from token:', req.user._id);
     
-    // First find the trip to get more info
-    const tripToDelete = await Trip.findById(req.params.id);
-    if (!tripToDelete) {
-      console.log('Trip not found with ID:', req.params.id);
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-    
-    console.log('Trip found:', {
-      tripId: tripToDelete._id,
-      ownerId: tripToDelete.owner,
-      requestingUserId: req.user._id,
-      isOwner: tripToDelete.owner.equals(req.user._id)
-    });
-
     const trip = await Trip.findOneAndDelete({ 
       _id: req.params.id, 
       owner: req.user._id 
     });
-    
+
     if (!trip) {
-      console.log('User not authorized to delete trip');
-      return res.status(403).json({ message: 'You are not authorized to delete this trip' });
+      console.log('Trip not found or user not authorized:', {
+        tripId: req.params.id,
+        userId: req.user._id
+      });
+      return res.status(404).json({ message: 'Trip not found or you are not authorized to delete it' });
     }
     
     console.log('Trip successfully deleted:', trip._id);
