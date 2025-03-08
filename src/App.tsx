@@ -9,6 +9,7 @@ import Register from './components/auth/Register';
 import TripList from './components/TripList';
 import TripDetails from './components/TripDetails';
 import UserProfile from './components/UserProfile';
+import { UserList } from './components/UserList';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -48,6 +49,16 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AuthenticatedLayout>
                     <TripDetails />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <UserList />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }

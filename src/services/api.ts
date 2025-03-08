@@ -11,7 +11,26 @@ const getHeaders = () => {
   };
 };
 
+interface User {
+  _id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+}
+
 export const api = {
+  // Get all users
+  getUsers: async (): Promise<User[]> => {
+    const response = await fetch(`${API_URL}/api/auth/users`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.message || 'Failed to fetch users');
+    }
+    return response.json();
+  },
+
   // Get all trips
   getTrips: async (): Promise<Trip[]> => {
     const response = await fetch(`${API_URL}/api/trips`, {
