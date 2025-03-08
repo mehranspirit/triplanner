@@ -54,7 +54,7 @@ export interface Collaborator {
 }
 
 export interface Trip {
-  id: string;
+  id?: string;
   name: string;
   thumbnailUrl?: string;
   notes?: string;
@@ -63,6 +63,6 @@ export interface Trip {
   collaborators: Collaborator[];
   isPublic: boolean;
   shareableLink?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 } 

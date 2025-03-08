@@ -16,10 +16,9 @@ export default function TripList() {
     e.preventDefault();
     if (!user) return;
 
-    const trip: Omit<Trip, '_id'> = {
-      id: uuidv4(),
+    const trip = {
       name: newTrip.name,
-      thumbnailUrl: newTrip.thumbnailUrl || '',
+      thumbnailUrl: newTrip.thumbnailUrl || undefined,
       events: [],
       owner: {
         id: user.id,
@@ -28,8 +27,6 @@ export default function TripList() {
       },
       collaborators: [],
       isPublic: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
     };
 
     await addTrip(trip);

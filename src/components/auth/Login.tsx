@@ -39,7 +39,7 @@ const Login: React.FC = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+        throw new Error(data.message || data.error || 'Login failed. Please check your credentials.');
       }
 
       // Use the login function from AuthContext
@@ -48,7 +48,7 @@ const Login: React.FC = () => {
       // Redirect to trips page
       navigate('/trips');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }

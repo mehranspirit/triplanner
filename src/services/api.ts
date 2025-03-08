@@ -18,7 +18,8 @@ export const api = {
       headers: getHeaders(),
     });
     if (!response.ok) {
-      throw new Error('Failed to fetch trips');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch trips');
     }
     return response.json();
   },
@@ -28,105 +29,126 @@ export const api = {
     const response = await fetch(`${API_URL}/api/trips/${id}`, {
       headers: getHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to fetch trip');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch trip');
+    }
     return response.json();
   },
 
   // Create a new trip
-  createTrip: async (trip: Omit<Trip, '_id'>): Promise<Trip> => {
+  createTrip: async (trip: Omit<Trip, 'id'>): Promise<Trip> => {
     const response = await fetch(`${API_URL}/api/trips`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(trip),
     });
     if (!response.ok) {
-      throw new Error('Failed to create trip');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to create trip');
     }
     return response.json();
   },
 
   // Update a trip
   updateTrip: async (trip: Trip): Promise<Trip> => {
+    if (!trip.id) throw new Error('Trip ID is required for update');
     const response = await fetch(`${API_URL}/api/trips/${trip.id}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(trip),
     });
     if (!response.ok) {
-      throw new Error('Failed to update trip');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to update trip');
     }
     return response.json();
   },
 
   // Delete a trip
   deleteTrip: async (tripId: string): Promise<void> => {
+    if (!tripId) throw new Error('Trip ID is required for deletion');
     const response = await fetch(`${API_URL}/api/trips/${tripId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
     if (!response.ok) {
-      throw new Error('Failed to delete trip');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to delete trip');
     }
   },
 
   // Add a collaborator to a trip
   addCollaborator: async (tripId: string, email: string, role: 'editor' | 'viewer'): Promise<Trip> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    if (!email) throw new Error('Email is required');
     const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ email, role }),
     });
     if (!response.ok) {
-      throw new Error('Failed to add collaborator');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to add collaborator');
     }
     return response.json();
   },
 
   // Remove a collaborator from a trip
   removeCollaborator: async (tripId: string, userId: string): Promise<Trip> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    if (!userId) throw new Error('User ID is required');
     const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
     if (!response.ok) {
-      throw new Error('Failed to remove collaborator');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to remove collaborator');
     }
     return response.json();
   },
 
   // Update a collaborator's role
   updateCollaboratorRole: async (tripId: string, userId: string, role: 'editor' | 'viewer'): Promise<Trip> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    if (!userId) throw new Error('User ID is required');
     const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify({ role }),
     });
     if (!response.ok) {
-      throw new Error('Failed to update collaborator role');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to update collaborator role');
     }
     return response.json();
   },
 
   // Generate a share link for a trip
   generateShareLink: async (tripId: string): Promise<{ shareableLink: string }> => {
+    if (!tripId) throw new Error('Trip ID is required');
     const response = await fetch(`${API_URL}/api/trips/${tripId}/share`, {
       method: 'POST',
       headers: getHeaders(),
     });
     if (!response.ok) {
-      throw new Error('Failed to generate share link');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to generate share link');
     }
     return response.json();
   },
 
   // Revoke a share link for a trip
   revokeShareLink: async (tripId: string): Promise<void> => {
+    if (!tripId) throw new Error('Trip ID is required');
     const response = await fetch(`${API_URL}/api/trips/${tripId}/share`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
     if (!response.ok) {
-      throw new Error('Failed to revoke share link');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to revoke share link');
     }
   },
 }; 
