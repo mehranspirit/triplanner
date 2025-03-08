@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const Trip = require('./models/Trip');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 
@@ -19,6 +20,9 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Mount auth routes
+app.use('/auth', authRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
