@@ -28,7 +28,11 @@ export const api = {
       const data = await response.json();
       throw new Error(data.message || 'Failed to fetch users');
     }
-    return response.json();
+    const users = await response.json();
+    return users.map((user: any) => ({
+      ...user,
+      id: user._id || user.id
+    }));
   },
 
   // Get all trips
@@ -43,7 +47,11 @@ export const api = {
     const trips = await response.json();
     return trips.map((trip: any) => ({
       ...trip,
-      id: trip._id || trip.id
+      id: trip._id || trip.id,
+      owner: {
+        ...trip.owner,
+        id: trip.owner._id || trip.owner.id
+      }
     }));
   },
 
@@ -59,7 +67,11 @@ export const api = {
     const trip = await response.json();
     return {
       ...trip,
-      id: trip._id || trip.id
+      id: trip._id || trip.id,
+      owner: {
+        ...trip.owner,
+        id: trip.owner._id || trip.owner.id
+      }
     };
   },
 
@@ -77,7 +89,11 @@ export const api = {
     const createdTrip = await response.json();
     return {
       ...createdTrip,
-      id: createdTrip._id || createdTrip.id
+      id: createdTrip._id || createdTrip.id,
+      owner: {
+        ...createdTrip.owner,
+        id: createdTrip.owner._id || createdTrip.owner.id
+      }
     };
   },
 
@@ -96,7 +112,11 @@ export const api = {
     const updatedTrip = await response.json();
     return {
       ...updatedTrip,
-      id: updatedTrip._id || updatedTrip.id
+      id: updatedTrip._id || updatedTrip.id,
+      owner: {
+        ...updatedTrip.owner,
+        id: updatedTrip.owner._id || updatedTrip.owner.id
+      }
     };
   },
 

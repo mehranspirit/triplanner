@@ -53,10 +53,22 @@ app.post('/api/trips', auth, async (req, res) => {
   }
 });
 
+app.get('/api/trips/:id', auth, async (req, res) => {
+  try {
+    const trip = await Trip.findOne({ _id: req.params.id, owner: req.user._id });
+    if (!trip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+    res.json(trip);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 app.put('/api/trips/:id', auth, async (req, res) => {
   try {
     const trip = await Trip.findOneAndUpdate(
-      { id: req.params.id, owner: req.user._id },
+      { _id: req.params.id, owner: req.user._id },
       req.body,
       { new: true }
     );
@@ -71,7 +83,7 @@ app.put('/api/trips/:id', auth, async (req, res) => {
 
 app.delete('/api/trips/:id', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOneAndDelete({ id: req.params.id, owner: req.user._id });
+    const trip = await Trip.findOneAndDelete({ _id: req.params.id, owner: req.user._id });
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
     }
