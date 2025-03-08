@@ -96,9 +96,7 @@ app.delete('/api/trips/:id', auth, async (req, res) => {
     console.log('Delete request received:', {
       tripId: req.params.id,
       userId: req.user._id,
-      userIdType: typeof req.user._id,
-      headers: req.headers,
-      params: req.params
+      userIdType: typeof req.user._id
     });
     
     // Validate ObjectId format
@@ -107,43 +105,31 @@ app.delete('/api/trips/:id', auth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid trip ID format' });
     }
 
-    // Convert string IDs to ObjectIds for comparison
-    const tripId = new mongoose.Types.ObjectId(req.params.id);
-    const userId = new mongoose.Types.ObjectId(req.user._id);
+    // First check if the trip exists and if the user has permission
+    const trip = await Trip.findById(req.params.id).populate('owner', 'name email');
     
-    // Log the trip before deletion attempt
-    const tripBeforeDelete = await Trip.findById(tripId);
-    console.log('Trip before deletion attempt:', {
-      tripFound: !!tripBeforeDelete,
-      tripDetails: tripBeforeDelete ? {
-        id: tripBeforeDelete._id.toString(),
-        owner: tripBeforeDelete.owner.toString(),
-        ownerMatch: tripBeforeDelete.owner.equals(userId)
-      } : null
-    });
-    
-    const trip = await Trip.findOneAndDelete({ 
-      _id: tripId,
-      owner: userId
-    });
-
     if (!trip) {
-      console.log('Trip not found or user not authorized:', {
-        tripId: tripId.toString(),
-        userId: userId.toString(),
-        tripBeforeDelete: tripBeforeDelete ? {
-          id: tripBeforeDelete._id.toString(),
-          owner: tripBeforeDelete.owner.toString(),
-          ownerMatches: tripBeforeDelete.owner.equals(userId)
-        } : null
-      });
-      return res.status(404).json({ message: 'Trip not found or you are not authorized to delete it' });
+      console.log('Trip not found:', req.params.id);
+      return res.status(404).json({ message: 'Trip not found' });
     }
+
+    // Check if the user is the owner
+    if (!trip.owner._id.equals(req.user._id)) {
+      console.log('User not authorized:', {
+        tripOwner: trip.owner._id,
+        requestingUser: req.user._id
+      });
+      return res.status(403).json({ message: 'You are not authorized to delete this trip' });
+    }
+
+    // If we get here, the user is authorized to delete the trip
+    const deletedTrip = await Trip.findByIdAndDelete(req.params.id);
     
     console.log('Trip successfully deleted:', {
-      tripId: trip._id.toString(),
-      owner: trip.owner.toString()
+      tripId: deletedTrip._id,
+      owner: deletedTrip.owner
     });
+    
     res.json({ message: 'Trip deleted successfully' });
   } catch (error) {
     console.error('Error deleting trip:', {
