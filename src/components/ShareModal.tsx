@@ -16,6 +16,11 @@ const ShareModal: React.FC<ShareModalProps> = ({ trip, isOpen, onClose, onUpdate
   if (!isOpen) return null;
 
   const handleGenerateLink = async () => {
+    if (!trip.id) {
+      setError('Trip ID is missing');
+      return;
+    }
+
     try {
       const result = await api.generateShareLink(trip.id);
       const updatedTrip = { ...trip, shareableLink: result.shareableLink };
@@ -27,6 +32,11 @@ const ShareModal: React.FC<ShareModalProps> = ({ trip, isOpen, onClose, onUpdate
   };
 
   const handleRevokeLink = async () => {
+    if (!trip.id) {
+      setError('Trip ID is missing');
+      return;
+    }
+
     try {
       await api.revokeShareLink(trip.id);
       const updatedTrip = { ...trip, shareableLink: undefined };

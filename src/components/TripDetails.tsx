@@ -8,24 +8,21 @@ import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
+import EventModal from './EventModal';
 
 const TripDetails: React.FC = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { state, updateTrip, deleteTrip, addEvent, updateEvent, deleteEvent } = useTrip();
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventType, setEventType] = useState<EventType>('arrival');
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [isEditingEvent, setIsEditingEvent] = useState<string | null>(null);
-  const [editedTrip, setEditedTrip] = useState({ 
-    name: trip?.name || '', 
-    thumbnailUrl: trip?.thumbnailUrl || '',
-    notes: trip?.notes || '' 
-  });
+  const [editedTrip, setEditedTrip] = useState<Trip | null>(null);
   const [eventData, setEventData] = useState({
     thumbnailUrl: '',
     date: '',
@@ -51,8 +48,9 @@ const TripDetails: React.FC = () => {
     description: '',
     openingHours: '',
   });
-  const [isCollaboratorModalOpen, setCollaboratorModalOpen] = useState(false);
-  const [isShareModalOpen, setShareModalOpen] = useState(false);
+  const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchTrip = async () => {
@@ -63,8 +61,9 @@ const TripDetails: React.FC = () => {
       }
 
       try {
-        const tripData = await api.getTrip(id);
-        setTrip(tripData);
+        const fetchedTrip = await api.getTrip(id);
+        setTrip(fetchedTrip);
+        setEditedTrip(fetchedTrip);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch trip');
       } finally {
@@ -96,24 +95,24 @@ const TripDetails: React.FC = () => {
   }
 
   const handleTripEdit = () => {
-    setEditedTrip({ 
-      name: trip.name, 
-      thumbnailUrl: trip.thumbnailUrl || '', 
-      notes: trip.notes || '' 
-    });
+    if (!trip) return;
+    setEditedTrip(trip);
     setIsEditingTrip(true);
   };
 
-  const handleTripSave = () => {
-    if (!trip) return;
-    
-    updateTrip({
-      ...trip,
-      name: editedTrip.name,
-      thumbnailUrl: editedTrip.thumbnailUrl || undefined,
-      notes: editedTrip.notes || undefined,
-    });
-    setIsEditingTrip(false);
+  const handleTripSave = async () => {
+    if (!trip?.id || !editedTrip) {
+      setError('Trip data is missing');
+      return;
+    }
+
+    try {
+      const updatedTrip = await api.updateTrip(editedTrip);
+      setTrip(updatedTrip);
+      setIsEditingTrip(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update trip');
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -171,8 +170,16 @@ const TripDetails: React.FC = () => {
     }
 
     if (isEditingEvent) {
+      if (!trip.id) {
+        setError('Trip ID is missing');
+        return;
+      }
       updateEvent(trip.id, newEvent);
     } else {
+      if (!trip.id) {
+        setError('Trip ID is missing');
+        return;
+      }
       addEvent(trip.id, newEvent);
     }
     setIsModalOpen(false);
@@ -522,13 +529,13 @@ const TripDetails: React.FC = () => {
           {isOwner && (
             <>
               <button
-                onClick={() => setCollaboratorModalOpen(true)}
+                onClick={() => setIsCollaboratorModalOpen(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
               >
                 Manage Collaborators
               </button>
               <button
-                onClick={() => setShareModalOpen(true)}
+                onClick={() => setIsShareModalOpen(true)}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
               >
                 Share Trip
@@ -605,13 +612,13 @@ const TripDetails: React.FC = () => {
       <CollaboratorModal
         trip={trip}
         isOpen={isCollaboratorModalOpen}
-        onClose={() => setCollaboratorModalOpen(false)}
+        onClose={() => setIsCollaboratorModalOpen(false)}
         onUpdate={handleTripUpdate}
       />
       <ShareModal
         trip={trip}
         isOpen={isShareModalOpen}
-        onClose={() => setShareModalOpen(false)}
+        onClose={() => setIsShareModalOpen(false)}
         onUpdate={handleTripUpdate}
       />
     </div>

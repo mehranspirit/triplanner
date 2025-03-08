@@ -20,6 +20,11 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     e.preventDefault();
     setError('');
 
+    if (!trip.id) {
+      setError('Trip ID is missing');
+      return;
+    }
+
     try {
       const updatedTrip = await api.addCollaborator(trip.id, email, role);
       onUpdate(updatedTrip);
@@ -31,6 +36,11 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   };
 
   const handleRemoveCollaborator = async (userId: string) => {
+    if (!trip.id) {
+      setError('Trip ID is missing');
+      return;
+    }
+
     try {
       const updatedTrip = await api.removeCollaborator(trip.id, userId);
       onUpdate(updatedTrip);
@@ -40,6 +50,11 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   };
 
   const handleRoleChange = async (userId: string, newRole: 'editor' | 'viewer') => {
+    if (!trip.id) {
+      setError('Trip ID is missing');
+      return;
+    }
+
     try {
       const updatedTrip = await api.updateCollaboratorRole(trip.id, userId, newRole);
       onUpdate(updatedTrip);

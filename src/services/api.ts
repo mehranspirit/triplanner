@@ -37,7 +37,7 @@ export const api = {
   },
 
   // Create a new trip
-  createTrip: async (trip: Omit<Trip, 'id'>): Promise<Trip> => {
+  createTrip: async (trip: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>): Promise<Trip> => {
     const response = await fetch(`${API_URL}/api/trips`, {
       method: 'POST',
       headers: getHeaders(),

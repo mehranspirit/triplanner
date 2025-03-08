@@ -50,19 +50,30 @@ export interface User {
 export interface Collaborator {
   user: User;
   role: 'editor' | 'viewer';
-  addedAt: string;
 }
 
 export interface Trip {
-  id?: string;
+  id: string;
   name: string;
+  description?: string;
   thumbnailUrl?: string;
-  notes?: string;
+  startDate?: string;
+  endDate?: string;
   events: Event[];
   owner: User;
   collaborators: Collaborator[];
-  isPublic: boolean;
   shareableLink?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface AuthState {
+  user: AuthUser | null;
+  token: string | null;
 } 

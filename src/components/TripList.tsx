@@ -4,6 +4,7 @@ import { useTrip } from '../context/TripContext';
 import { Trip } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 
 export default function TripList() {
   const navigate = useNavigate();
@@ -11,27 +12,50 @@ export default function TripList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTrip, setNewTrip] = useState({ name: '', thumbnailUrl: '' });
   const { user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    const trip = {
-      name: newTrip.name,
-      thumbnailUrl: newTrip.thumbnailUrl || undefined,
-      events: [],
-      owner: {
-        id: user.id,
-        name: user.name,
-        email: user.email
-      },
-      collaborators: [],
-      isPublic: false,
-    };
+    try {
+      const newTripData: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'> = {
+        name: newTrip.name,
+        thumbnailUrl: newTrip.thumbnailUrl || undefined,
+        description: '',
+        startDate: '',
+        endDate: '',
+        events: [],
+        owner: {
+          id: user.id,
+          name: user.name,
+          email: user.email
+        },
+        collaborators: [],
+        shareableLink: undefined
+      };
 
-    await addTrip(trip);
-    setNewTrip({ name: '', thumbnailUrl: '' });
-    setIsModalOpen(false);
+      const createdTrip = await api.createTrip(newTripData);
+      addTrip(createdTrip);
+      setNewTrip({ name: '', thumbnailUrl: '' });
+      setIsModalOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create trip');
+    }
+  };
+
+  const handleDeleteTrip = async (tripId: string) => {
+    if (!tripId) {
+      setError('Trip ID is missing');
+      return;
+    }
+
+    try {
+      await api.deleteTrip(tripId);
+      deleteTrip(tripId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete trip');
+    }
   };
 
   if (state.loading) {
@@ -89,7 +113,7 @@ export default function TripList() {
                   View Details
                 </button>
                 <button
-                  onClick={() => deleteTrip(trip.id)}
+                  onClick={() => handleDeleteTrip(trip.id)}
                   className="btn btn-secondary"
                 >
                   Delete
