@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { Trip, Event } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3000';
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
@@ -14,7 +14,7 @@ const getHeaders = () => {
 export const api = {
   // Get all trips
   getTrips: async (): Promise<Trip[]> => {
-    const response = await fetch(`${API_URL}/trips`, {
+    const response = await fetch(`${API_URL}/api/trips`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
@@ -25,7 +25,7 @@ export const api = {
 
   getTrip: async (id: string | undefined): Promise<Trip> => {
     if (!id) throw new Error('Trip ID is required');
-    const response = await fetch(`${API_URL}/trips/${id}`, {
+    const response = await fetch(`${API_URL}/api/trips/${id}`, {
       headers: getHeaders(),
     });
     if (!response.ok) throw new Error('Failed to fetch trip');
@@ -34,7 +34,7 @@ export const api = {
 
   // Create a new trip
   createTrip: async (trip: Omit<Trip, '_id'>): Promise<Trip> => {
-    const response = await fetch(`${API_URL}/trips`, {
+    const response = await fetch(`${API_URL}/api/trips`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(trip),
@@ -47,7 +47,7 @@ export const api = {
 
   // Update a trip
   updateTrip: async (trip: Trip): Promise<Trip> => {
-    const response = await fetch(`${API_URL}/trips/${trip.id}`, {
+    const response = await fetch(`${API_URL}/api/trips/${trip.id}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(trip),
@@ -60,7 +60,7 @@ export const api = {
 
   // Delete a trip
   deleteTrip: async (tripId: string): Promise<void> => {
-    const response = await fetch(`${API_URL}/trips/${tripId}`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
@@ -71,7 +71,7 @@ export const api = {
 
   // Add a collaborator to a trip
   addCollaborator: async (tripId: string, email: string, role: 'editor' | 'viewer'): Promise<Trip> => {
-    const response = await fetch(`${API_URL}/trips/${tripId}/collaborators`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ email, role }),
@@ -84,7 +84,7 @@ export const api = {
 
   // Remove a collaborator from a trip
   removeCollaborator: async (tripId: string, userId: string): Promise<Trip> => {
-    const response = await fetch(`${API_URL}/trips/${tripId}/collaborators/${userId}`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
@@ -96,7 +96,7 @@ export const api = {
 
   // Update a collaborator's role
   updateCollaboratorRole: async (tripId: string, userId: string, role: 'editor' | 'viewer'): Promise<Trip> => {
-    const response = await fetch(`${API_URL}/trips/${tripId}/collaborators/${userId}`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify({ role }),
@@ -109,7 +109,7 @@ export const api = {
 
   // Generate a share link for a trip
   generateShareLink: async (tripId: string): Promise<{ shareableLink: string }> => {
-    const response = await fetch(`${API_URL}/trips/${tripId}/share`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/share`, {
       method: 'POST',
       headers: getHeaders(),
     });
@@ -121,7 +121,7 @@ export const api = {
 
   // Revoke a share link for a trip
   revokeShareLink: async (tripId: string): Promise<void> => {
-    const response = await fetch(`${API_URL}/trips/${tripId}/share`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/share`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
