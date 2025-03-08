@@ -21,7 +21,7 @@ interface User {
 export const api = {
   // Get all users
   getUsers: async (): Promise<User[]> => {
-    const response = await fetch(`${API_URL}/api/auth/users`, {
+    const response = await fetch(`${API_URL}/auth/users`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
@@ -33,7 +33,7 @@ export const api = {
 
   // Get all trips
   getTrips: async (): Promise<Trip[]> => {
-    const response = await fetch(`${API_URL}/api/trips`, {
+    const response = await fetch(`${API_URL}/trips`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
@@ -45,7 +45,7 @@ export const api = {
 
   getTrip: async (id: string | undefined): Promise<Trip> => {
     if (!id) throw new Error('Trip ID is required');
-    const response = await fetch(`${API_URL}/api/trips/${id}`, {
+    const response = await fetch(`${API_URL}/trips/${id}`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
@@ -57,7 +57,7 @@ export const api = {
 
   // Create a new trip
   createTrip: async (trip: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>): Promise<Trip> => {
-    const response = await fetch(`${API_URL}/api/trips`, {
+    const response = await fetch(`${API_URL}/trips`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(trip),
@@ -72,7 +72,7 @@ export const api = {
   // Update a trip
   updateTrip: async (trip: Trip): Promise<Trip> => {
     if (!trip.id) throw new Error('Trip ID is required for update');
-    const response = await fetch(`${API_URL}/api/trips/${trip.id}`, {
+    const response = await fetch(`${API_URL}/trips/${trip.id}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(trip),
@@ -87,7 +87,7 @@ export const api = {
   // Delete a trip
   deleteTrip: async (tripId: string): Promise<void> => {
     if (!tripId) throw new Error('Trip ID is required for deletion');
-    const response = await fetch(`${API_URL}/api/trips/${tripId}`, {
+    const response = await fetch(`${API_URL}/trips/${tripId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
@@ -101,7 +101,7 @@ export const api = {
   addCollaborator: async (tripId: string, email: string, role: 'editor' | 'viewer'): Promise<Trip> => {
     if (!tripId) throw new Error('Trip ID is required');
     if (!email) throw new Error('Email is required');
-    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators`, {
+    const response = await fetch(`${API_URL}/trips/${tripId}/collaborators`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ email, role }),
@@ -117,7 +117,7 @@ export const api = {
   removeCollaborator: async (tripId: string, userId: string): Promise<Trip> => {
     if (!tripId) throw new Error('Trip ID is required');
     if (!userId) throw new Error('User ID is required');
-    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
+    const response = await fetch(`${API_URL}/trips/${tripId}/collaborators/${userId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
@@ -132,7 +132,7 @@ export const api = {
   updateCollaboratorRole: async (tripId: string, userId: string, role: 'editor' | 'viewer'): Promise<Trip> => {
     if (!tripId) throw new Error('Trip ID is required');
     if (!userId) throw new Error('User ID is required');
-    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
+    const response = await fetch(`${API_URL}/trips/${tripId}/collaborators/${userId}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify({ role }),
@@ -147,7 +147,7 @@ export const api = {
   // Generate a share link for a trip
   generateShareLink: async (tripId: string): Promise<{ shareableLink: string }> => {
     if (!tripId) throw new Error('Trip ID is required');
-    const response = await fetch(`${API_URL}/api/trips/${tripId}/share`, {
+    const response = await fetch(`${API_URL}/trips/${tripId}/share`, {
       method: 'POST',
       headers: getHeaders(),
     });
@@ -161,7 +161,7 @@ export const api = {
   // Revoke a share link for a trip
   revokeShareLink: async (tripId: string): Promise<void> => {
     if (!tripId) throw new Error('Trip ID is required');
-    const response = await fetch(`${API_URL}/api/trips/${tripId}/share`, {
+    const response = await fetch(`${API_URL}/trips/${tripId}/share`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
