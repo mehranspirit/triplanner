@@ -21,7 +21,7 @@ interface User {
 export const api = {
   // Get all users
   getUsers: async (): Promise<User[]> => {
-    const response = await fetch(`${API_URL}/auth/users`, {
+    const response = await fetch(`${API_URL}/api/auth/users`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
@@ -33,31 +33,39 @@ export const api = {
 
   // Get all trips
   getTrips: async (): Promise<Trip[]> => {
-    const response = await fetch(`${API_URL}/trips`, {
+    const response = await fetch(`${API_URL}/api/trips`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to fetch trips');
     }
-    return response.json();
+    const trips = await response.json();
+    return trips.map((trip: any) => ({
+      ...trip,
+      id: trip._id || trip.id
+    }));
   },
 
   getTrip: async (id: string | undefined): Promise<Trip> => {
     if (!id) throw new Error('Trip ID is required');
-    const response = await fetch(`${API_URL}/trips/${id}`, {
+    const response = await fetch(`${API_URL}/api/trips/${id}`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to fetch trip');
     }
-    return response.json();
+    const trip = await response.json();
+    return {
+      ...trip,
+      id: trip._id || trip.id
+    };
   },
 
   // Create a new trip
   createTrip: async (trip: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>): Promise<Trip> => {
-    const response = await fetch(`${API_URL}/trips`, {
+    const response = await fetch(`${API_URL}/api/trips`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(trip),
@@ -66,13 +74,17 @@ export const api = {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to create trip');
     }
-    return response.json();
+    const createdTrip = await response.json();
+    return {
+      ...createdTrip,
+      id: createdTrip._id || createdTrip.id
+    };
   },
 
   // Update a trip
   updateTrip: async (trip: Trip): Promise<Trip> => {
     if (!trip.id) throw new Error('Trip ID is required for update');
-    const response = await fetch(`${API_URL}/trips/${trip.id}`, {
+    const response = await fetch(`${API_URL}/api/trips/${trip.id}`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(trip),
@@ -81,13 +93,17 @@ export const api = {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to update trip');
     }
-    return response.json();
+    const updatedTrip = await response.json();
+    return {
+      ...updatedTrip,
+      id: updatedTrip._id || updatedTrip.id
+    };
   },
 
   // Delete a trip
   deleteTrip: async (tripId: string): Promise<void> => {
     if (!tripId) throw new Error('Trip ID is required for deletion');
-    const response = await fetch(`${API_URL}/trips/${tripId}`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });

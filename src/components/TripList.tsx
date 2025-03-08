@@ -44,7 +44,7 @@ export default function TripList() {
     }
   };
 
-  const handleDeleteTrip = async (tripId: string) => {
+  const handleDeleteTrip = async (tripId: string | undefined) => {
     if (!tripId) {
       setError('Trip ID is missing');
       return;
@@ -109,13 +109,13 @@ export default function TripList() {
         {state.trips.map((trip) => (
           <div key={trip.id} className="card hover:shadow-lg">
             <img
-              src={trip.thumbnailUrl}
+              src={trip.thumbnailUrl || 'https://via.placeholder.com/400x300?text=No+Image'}
               alt={trip.name}
               className="w-full h-48 object-cover rounded-t-lg"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = 'https://via.placeholder.com/400x300?text=No+Image';
-                target.onerror = null; // Prevent infinite loop if placeholder also fails
+                target.onerror = null;
               }}
             />
             <div className="p-4">
