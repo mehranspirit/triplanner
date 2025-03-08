@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const Trip = require('./models/Trip');
 const authRoutes = require('./routes/auth');
+const auth = require('./middleware/auth');
 
 const app = express();
 
@@ -29,19 +30,22 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('Could not connect to MongoDB:', err));
 
-// Routes
-app.get('/api/trips', async (req, res) => {
+// Protected Routes
+app.get('/api/trips', auth, async (req, res) => {
   try {
-    const trips = await Trip.find();
+    const trips = await Trip.find({ owner: req.user._id });
     res.json(trips);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-app.post('/api/trips', async (req, res) => {
+app.post('/api/trips', auth, async (req, res) => {
   try {
-    const trip = new Trip(req.body);
+    const trip = new Trip({
+      ...req.body,
+      owner: req.user._id
+    });
     const savedTrip = await trip.save();
     res.status(201).json(savedTrip);
   } catch (error) {
@@ -49,10 +53,10 @@ app.post('/api/trips', async (req, res) => {
   }
 });
 
-app.put('/api/trips/:id', async (req, res) => {
+app.put('/api/trips/:id', auth, async (req, res) => {
   try {
     const trip = await Trip.findOneAndUpdate(
-      { id: req.params.id },
+      { id: req.params.id, owner: req.user._id },
       req.body,
       { new: true }
     );
@@ -65,9 +69,9 @@ app.put('/api/trips/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/trips/:id', async (req, res) => {
+app.delete('/api/trips/:id', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOneAndDelete({ id: req.params.id });
+    const trip = await Trip.findOneAndDelete({ id: req.params.id, owner: req.user._id });
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
     }
