@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 import { Trip, Event, EventType, ArrivalDepartureEvent, StaysEvent, DestinationsEvent } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
+import CollaboratorModal from './CollaboratorModal';
+import ShareModal from './ShareModal';
 
-export default function TripDetails() {
-  const { id } = useParams<{ id: string }>();
+const TripDetails: React.FC = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const { state, updateTrip, deleteTrip, addEvent, updateEvent, deleteEvent } = useTrip();
-  const trip = state.trips.find((t) => t.id === id);
+  const { user } = useAuth();
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventType, setEventType] = useState<EventType>('arrival');
   const [isEditingTrip, setIsEditingTrip] = useState(false);
@@ -44,17 +51,46 @@ export default function TripDetails() {
     description: '',
     openingHours: '',
   });
+  const [isCollaboratorModalOpen, setCollaboratorModalOpen] = useState(false);
+  const [isShareModalOpen, setShareModalOpen] = useState(false);
 
-  if (!trip) {
+  useEffect(() => {
+    const fetchTrip = async () => {
+      if (!id) {
+        setError('Trip ID is missing');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const tripData = await api.getTrip(id);
+        setTrip(tripData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch trip');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrip();
+  }, [id]);
+
+  const handleTripUpdate = (updatedTrip: Trip) => {
+    setTrip(updatedTrip);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (error || !trip) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Trip not found</h2>
-        <button
-          onClick={() => navigate('/')}
-          className="mt-4 btn btn-primary"
-        >
-          Back to Trips
-        </button>
+        <p className="text-red-600">{error || 'Trip not found'}</p>
       </div>
     );
   }
@@ -468,207 +504,112 @@ export default function TripDetails() {
     }
   };
 
+  const isOwner = user?.id === trip.owner.id;
+  const collaborator = trip.collaborators.find(c => c.user.id === user?.id);
+  const canEdit = isOwner || collaborator?.role === 'editor';
+
   return (
-    <div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          {isEditingTrip ? (
-            <div className="space-y-4">
-              <input
-                type="text"
-                value={editedTrip.name}
-                onChange={(e) => setEditedTrip({ ...editedTrip, name: e.target.value })}
-                className="input text-2xl font-bold"
-                placeholder="Trip Name"
-                required
-              />
-              <input
-                type="url"
-                value={editedTrip.thumbnailUrl}
-                onChange={(e) => setEditedTrip({ ...editedTrip, thumbnailUrl: e.target.value })}
-                className="input w-full"
-                placeholder="Thumbnail URL (optional)"
-              />
-              <textarea
-                value={editedTrip.notes}
-                onChange={(e) => setEditedTrip({ ...editedTrip, notes: e.target.value })}
-                className="input w-full"
-                placeholder="Trip notes (optional)"
-              />
-              <div className="flex gap-2">
-                <button onClick={handleTripSave} className="btn btn-primary">Save</button>
-                <button onClick={() => setIsEditingTrip(false)} className="btn btn-secondary">Cancel</button>
-              </div>
-            </div>
-          ) : (
+        <h1 className="text-3xl font-bold text-gray-900">{trip.name}</h1>
+        <div className="flex space-x-4">
+          {isOwner && (
             <>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold text-gray-900">{trip.name}</h2>
-                <button
-                  onClick={handleTripEdit}
-                  className="text-gray-600 hover:text-gray-800"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-                  </svg>
-                </button>
-              </div>
-              <img
-                src={trip.thumbnailUrl}
-                alt={trip.name}
-                className="mt-4 w-full max-w-2xl h-64 object-cover rounded-lg"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = 'https://via.placeholder.com/800x400?text=No+Image';
-                  target.onerror = null;
-                }}
-              />
-              {trip.notes && (
-                <p className="mt-4 text-gray-600">{trip.notes}</p>
-              )}
+              <button
+                onClick={() => setCollaboratorModalOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                Manage Collaborators
+              </button>
+              <button
+                onClick={() => setShareModalOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Share Trip
+              </button>
             </>
           )}
         </div>
-        <div>
-          <button onClick={() => navigate('/')} className="btn btn-secondary mr-4">
-            Back to Trips
-          </button>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="btn btn-primary"
-          >
-            Add Event
-          </button>
-        </div>
       </div>
 
-      <div className="mt-8">
-        <h3 className="text-xl font-semibold mb-4">Events</h3>
-        <div className="space-y-4">
-          {trip.events.map((event) => (
-            <div key={event.id} className="card">
-              <div className="flex">
-                {['stays', 'destinations'].includes(event.type) && event.thumbnailUrl && (
-                  <img
-                    src={event.thumbnailUrl}
-                    alt={event.type}
-                    className="w-48 h-32 object-cover rounded-l-lg"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'https://via.placeholder.com/200x150?text=No+Image';
-                      target.onerror = null;
-                    }}
-                  />
-                )}
-                <div className="p-4 flex-1">
-                  <div className="flex justify-between">
-                    <h4 className="text-lg font-semibold capitalize">
-                      {event.type}
-                    </h4>
-                    <div>
-                      <button
-                        onClick={() => handleEditEvent(event)}
-                        className="text-blue-600 hover:text-blue-800 mr-4"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteEvent(trip.id, event.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                  {event.type === 'arrival' || event.type === 'departure' ? (
-                    <div className="mt-2">
-                      <p>Flight: {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}</p>
-                      <p>Airport: {(event as ArrivalDepartureEvent).airport}</p>
-                      {event.location && <p>Location: {event.location}</p>}
-                    </div>
-                  ) : event.type === 'stays' ? (
-                    <div className="mt-2">
-                      <p>{(event as StaysEvent).accommodationName}</p>
-                      <p>{(event as StaysEvent).address}</p>
-                      {event.location && <p>Location: {event.location}</p>}
-                    </div>
-                  ) : (
-                    <div className="mt-2">
-                      <p>{(event as DestinationsEvent).placeName}</p>
-                      <p>{(event as DestinationsEvent).address}</p>
-                      {event.location && <p>Location: {event.location}</p>}
-                    </div>
-                  )}
-                </div>
-              </div>
+      {/* Trip metadata */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
+        <div className="px-4 py-5 sm:px-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Trip Details</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Created by {trip.owner.name}
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md">
-            <h3 className="text-xl font-semibold mb-4">
-              {isEditingEvent ? 'Edit Event' : 'Add New Event'}
-            </h3>
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Event Type</label>
-                <select
-                  value={eventType}
-                  onChange={(e) => setEventType(e.target.value as EventType)}
-                  className="input"
-                  disabled={isEditingEvent !== null}
-                >
-                  <option value="arrival">Arrival</option>
-                  <option value="stays">Stays</option>
-                  <option value="destinations">Destinations</option>
-                  <option value="departure">Departure</option>
-                </select>
+            {!isOwner && (
+              <div className="text-sm text-gray-500">
+                Your role: {collaborator?.role || 'Viewer'}
               </div>
-              {renderEventForm()}
-              <div className="flex justify-end gap-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setIsEditingEvent(null);
-                    setEventData({
-                      thumbnailUrl: '',
-                      date: '',
-                      location: '',
-                      flightNumber: '',
-                      airline: '',
-                      time: '',
-                      airport: '',
-                      terminal: '',
-                      gate: '',
-                      bookingReference: '',
-                      accommodationName: '',
-                      address: '',
-                      checkIn: '',
-                      checkOut: '',
-                      reservationNumber: '',
-                      contactInfo: '',
-                      placeName: '',
-                      description: '',
-                      openingHours: '',
-                      notes: '',
-                    });
-                  }}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {isEditingEvent ? 'Save Changes' : 'Add Event'}
-                </button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
-      )}
+        <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+          {trip.notes && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-gray-500">Notes</h4>
+              <p className="mt-1 text-sm text-gray-900">{trip.notes}</p>
+            </div>
+          )}
+          <div className="flex items-center space-x-4">
+            {trip.isPublic && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Public
+              </span>
+            )}
+            {trip.shareableLink && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                Shared
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Events list */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="px-4 py-5 sm:px-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Events</h3>
+        </div>
+        <div className="border-t border-gray-200">
+          <ul className="divide-y divide-gray-200">
+            {trip.events.map((event) => (
+              <li key={event.id} className="px-4 py-4 sm:px-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-indigo-600 capitalize">
+                      {event.type}
+                    </p>
+                    <p className="text-sm text-gray-500">{event.date}</p>
+                  </div>
+                  <div className="text-sm text-gray-500">{event.location}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Modals */}
+      <CollaboratorModal
+        trip={trip}
+        isOpen={isCollaboratorModalOpen}
+        onClose={() => setCollaboratorModalOpen(false)}
+        onUpdate={handleTripUpdate}
+      />
+      <ShareModal
+        trip={trip}
+        isOpen={isShareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        onUpdate={handleTripUpdate}
+      />
     </div>
   );
-} 
+};
+
+export default TripDetails; 

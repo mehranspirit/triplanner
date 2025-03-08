@@ -41,10 +41,28 @@ export interface DestinationsEvent extends BaseEvent {
 
 export type Event = ArrivalDepartureEvent | StaysEvent | DestinationsEvent;
 
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface Collaborator {
+  user: User;
+  role: 'editor' | 'viewer';
+  addedAt: string;
+}
+
 export interface Trip {
   id: string;
   name: string;
-  thumbnailUrl: string;
+  thumbnailUrl?: string;
   notes?: string;
   events: Event[];
+  owner: User;
+  collaborators: Collaborator[];
+  isPublic: boolean;
+  shareableLink?: string;
+  createdAt: string;
+  updatedAt: string;
 } 
