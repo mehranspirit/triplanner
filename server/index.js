@@ -98,16 +98,33 @@ app.put('/api/trips/:id', auth, async (req, res) => {
       return res.status(403).json({ message: 'You do not have permission to edit this trip' });
     }
 
+    // Preserve existing data that shouldn't be overwritten
+    const updateData = {
+      ...req.body,
+      owner: trip.owner,  // Preserve the original owner
+      collaborators: trip.collaborators  // Preserve existing collaborators
+    };
+
     // Update the trip
     const updatedTrip = await Trip.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true }
+      updateData,
+      { new: true, runValidators: true }
     ).populate('owner', 'name email')
      .populate('collaborators.user', 'name email');
 
+    console.log('Trip updated:', {
+      tripId: updatedTrip._id,
+      events: updatedTrip.events.length,
+      collaborators: updatedTrip.collaborators.length
+    });
+
     res.json(updatedTrip);
   } catch (error) {
+    console.error('Error updating trip:', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(400).json({ message: error.message });
   }
 });
