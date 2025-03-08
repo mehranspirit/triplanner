@@ -1,8 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { TripProvider } from './context/TripContext';
 import TripList from './components/TripList';
 import TripDetails from './components/TripDetails';
+import { TripProvider } from './context/TripContext';
 
 function App() {
   return (

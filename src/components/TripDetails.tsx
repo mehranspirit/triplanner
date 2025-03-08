@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { Trip, Event, EventType, ArrivalDepartureEvent, StaysEvent, DestinationsEvent } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import '../styles/TripDetails.css';
 
 export default function TripDetails() {
   const { id } = useParams<{ id: string }>();
