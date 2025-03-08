@@ -93,8 +93,17 @@ app.put('/api/trips/:id', auth, async (req, res) => {
 
 app.delete('/api/trips/:id', auth, async (req, res) => {
   try {
-    console.log('Delete request received for trip:', req.params.id);
-    console.log('User ID from token:', req.user._id);
+    console.log('Delete request received:', {
+      tripId: req.params.id,
+      userId: req.user._id,
+      userIdType: typeof req.user._id,
+      headers: req.headers,
+      params: req.params
+    });
+    
+    // Log the trip before deletion attempt
+    const tripBeforeDelete = await Trip.findById(req.params.id);
+    console.log('Trip before deletion attempt:', tripBeforeDelete);
     
     const trip = await Trip.findOneAndDelete({ 
       _id: req.params.id, 
@@ -104,15 +113,28 @@ app.delete('/api/trips/:id', auth, async (req, res) => {
     if (!trip) {
       console.log('Trip not found or user not authorized:', {
         tripId: req.params.id,
-        userId: req.user._id
+        userId: req.user._id,
+        tripBeforeDelete: tripBeforeDelete ? {
+          id: tripBeforeDelete._id,
+          owner: tripBeforeDelete.owner,
+          ownerMatches: tripBeforeDelete.owner.equals(req.user._id)
+        } : null
       });
       return res.status(404).json({ message: 'Trip not found or you are not authorized to delete it' });
     }
     
-    console.log('Trip successfully deleted:', trip._id);
+    console.log('Trip successfully deleted:', {
+      tripId: trip._id,
+      owner: trip.owner
+    });
     res.json({ message: 'Trip deleted successfully' });
   } catch (error) {
-    console.error('Error deleting trip:', error);
+    console.error('Error deleting trip:', {
+      error: error.message,
+      stack: error.stack,
+      tripId: req.params.id,
+      userId: req.user._id
+    });
     res.status(500).json({ message: error.message || 'Failed to delete trip' });
   }
 });
