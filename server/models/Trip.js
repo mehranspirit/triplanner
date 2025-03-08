@@ -33,7 +33,6 @@ const eventSchema = new mongoose.Schema({
 });
 
 const tripSchema = new mongoose.Schema({
-  id: String,
   name: {
     type: String,
     required: true
@@ -71,7 +70,28 @@ const tripSchema = new mongoose.Schema({
     sparse: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: {
+    transform: function(doc, ret) {
+      ret.id = ret._id;
+      delete ret._id;
+      delete ret.__v;
+      if (ret.owner) {
+        ret.owner.id = ret.owner._id;
+        delete ret.owner._id;
+      }
+      if (ret.collaborators) {
+        ret.collaborators = ret.collaborators.map(c => ({
+          ...c,
+          user: {
+            ...c.user,
+            id: c.user._id,
+            _id: undefined
+          }
+        }));
+      }
+    }
+  }
 });
 
 // Method to check if a user has access to this trip

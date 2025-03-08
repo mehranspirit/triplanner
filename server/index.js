@@ -33,7 +33,9 @@ mongoose.connect(process.env.MONGODB_URI)
 // Protected Routes
 app.get('/api/trips', auth, async (req, res) => {
   try {
-    const trips = await Trip.find({ owner: req.user._id });
+    const trips = await Trip.find({ owner: req.user._id })
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
     res.json(trips);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -47,6 +49,7 @@ app.post('/api/trips', auth, async (req, res) => {
       owner: req.user._id
     });
     const savedTrip = await trip.save();
+    await savedTrip.populate('owner', 'name email');
     res.status(201).json(savedTrip);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -55,7 +58,9 @@ app.post('/api/trips', auth, async (req, res) => {
 
 app.get('/api/trips/:id', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({ _id: req.params.id, owner: req.user._id });
+    const trip = await Trip.findOne({ _id: req.params.id, owner: req.user._id })
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
     }
@@ -71,7 +76,8 @@ app.put('/api/trips/:id', auth, async (req, res) => {
       { _id: req.params.id, owner: req.user._id },
       req.body,
       { new: true }
-    );
+    ).populate('owner', 'name email')
+     .populate('collaborators.user', 'name email');
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
     }

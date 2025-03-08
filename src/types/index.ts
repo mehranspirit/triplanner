@@ -45,11 +45,13 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  createdAt?: string;
 }
 
 export interface Collaborator {
   user: User;
   role: 'editor' | 'viewer';
+  addedAt?: string;
 }
 
 export interface Trip {
@@ -65,12 +67,11 @@ export interface Trip {
   shareableLink?: string;
   createdAt: string;
   updatedAt: string;
+  isPublic?: boolean;
 }
 
-export interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
+export interface AuthUser extends User {
+  token?: string;
 }
 
 export interface AuthState {
