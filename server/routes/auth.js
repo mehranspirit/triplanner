@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const router = express.Router();
+const auth = require('../middleware/auth');
 
 // Register
 router.post('/register', async (req, res) => {
@@ -37,6 +38,16 @@ router.post('/login', async (req, res) => {
     res.json({ user: { id: user._id, email: user.email, name: user.name }, token });
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+});
+
+// Get list of users (protected route)
+router.get('/users', auth, async (req, res) => {
+  try {
+    const users = await User.find({}, 'email name createdAt');
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

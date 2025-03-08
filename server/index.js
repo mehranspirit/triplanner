@@ -22,7 +22,7 @@ app.use(cors({
 app.use(express.json());
 
 // Mount auth routes
-app.use('/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
