@@ -96,16 +96,22 @@ const TripDetails: React.FC = () => {
   }
 
   const handleTripEdit = () => {
-    setEditedTrip({ name: trip.name, thumbnailUrl: trip.thumbnailUrl, notes: trip.notes || '' });
+    setEditedTrip({ 
+      name: trip.name, 
+      thumbnailUrl: trip.thumbnailUrl || '', 
+      notes: trip.notes || '' 
+    });
     setIsEditingTrip(true);
   };
 
   const handleTripSave = () => {
+    if (!trip) return;
+    
     updateTrip({
       ...trip,
       name: editedTrip.name,
-      thumbnailUrl: editedTrip.thumbnailUrl,
-      notes: editedTrip.notes,
+      thumbnailUrl: editedTrip.thumbnailUrl || undefined,
+      notes: editedTrip.notes || undefined,
     });
     setIsEditingTrip(false);
   };

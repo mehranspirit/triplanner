@@ -3,21 +3,35 @@ import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { Trip } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '../context/AuthContext';
 
 export default function TripList() {
   const navigate = useNavigate();
   const { state, addTrip, deleteTrip } = useTrip();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTrip, setNewTrip] = useState({ name: '', thumbnailUrl: '' });
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trip: Trip = {
+    if (!user) return;
+
+    const trip: Omit<Trip, '_id'> = {
       id: uuidv4(),
       name: newTrip.name,
-      thumbnailUrl: newTrip.thumbnailUrl,
+      thumbnailUrl: newTrip.thumbnailUrl || '',
       events: [],
+      owner: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      },
+      collaborators: [],
+      isPublic: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
+
     await addTrip(trip);
     setNewTrip({ name: '', thumbnailUrl: '' });
     setIsModalOpen(false);
