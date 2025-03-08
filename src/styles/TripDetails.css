@@ -1,0 +1,19 @@
+.card {
+  @apply bg-white shadow rounded-lg overflow-hidden mb-4;
+}
+
+.input {
+  @apply mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50;
+}
+
+.btn {
+  @apply px-4 py-2 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2;
+}
+
+.btn-primary {
+  @apply bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:ring-gray-500;
+} 
