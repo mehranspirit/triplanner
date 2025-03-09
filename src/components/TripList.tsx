@@ -36,7 +36,8 @@ export default function TripList() {
           email: user.email
         },
         collaborators: [],
-        shareableLink: undefined
+        shareableLink: undefined,
+        isPublic: false
       };
 
       const createdTrip = await api.createTrip(newTripData);
