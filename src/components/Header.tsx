@@ -1,15 +1,30 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const getTabClassName = (path: string) => {
+    const isActive = location.pathname === path;
+    return isActive
+      ? "border-indigo-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+      : "text-gray-500 hover:text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300 text-sm font-medium";
+  };
+
+  const getMobileTabClassName = (path: string) => {
+    const isActive = location.pathname === path;
+    return isActive
+      ? "bg-indigo-50 border-indigo-500 text-indigo-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+      : "border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800 block pl-3 pr-4 py-2 border-l-4 text-base font-medium";
   };
 
   return (
@@ -25,13 +40,13 @@ const Header: React.FC = () => {
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link
                 to="/trips"
-                className="border-indigo-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                className={getTabClassName('/trips')}
               >
                 My Trips
               </Link>
               <Link
                 to="/users"
-                className="text-gray-500 hover:text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300 text-sm font-medium"
+                className={getTabClassName('/users')}
               >
                 Users
               </Link>
@@ -110,13 +125,13 @@ const Header: React.FC = () => {
           <div className="pt-2 pb-3 space-y-1">
             <Link
               to="/trips"
-              className="bg-indigo-50 border-indigo-500 text-indigo-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+              className={getMobileTabClassName('/trips')}
             >
               My Trips
             </Link>
             <Link
               to="/users"
-              className="border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+              className={getMobileTabClassName('/users')}
             >
               Users
             </Link>

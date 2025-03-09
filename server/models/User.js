@@ -18,15 +18,21 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  resetToken: String,
+  resetTokenExpiry: Date
 }, {
   toJSON: {
     transform: function(doc, ret) {
-      ret.id = ret._id;
-      delete ret._id;
+      ret._id = ret._id;
+      ret.isAdmin = ret.isAdmin || false;
       delete ret.__v;
       delete ret.password;
     }
@@ -43,6 +49,18 @@ userSchema.pre('save', async function(next) {
 // Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Set initial admin user
+userSchema.statics.initializeAdmin = async function() {
+  const adminEmail = 'mehran.rajaian@gmail.com';
+  const admin = await this.findOne({ email: adminEmail });
+  
+  if (admin && !admin.isAdmin) {
+    admin.isAdmin = true;
+    await admin.save();
+    console.log('Admin privileges granted to:', adminEmail);
+  }
 };
 
 module.exports = mongoose.model('User', userSchema); 

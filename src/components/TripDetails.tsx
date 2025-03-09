@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { Trip, Event, EventType, ArrivalDepartureEvent, StaysEvent, DestinationsEvent } from '../types';
+import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
+
+const DEFAULT_THUMBNAILS = {
+  arrival: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=300&auto=format',
+  departure: 'https://images.unsplash.com/photo-1542296332-2e4473faf563?q=80&w=300&auto=format',
+  stay: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300&auto=format',
+  destination: 'https://images.unsplash.com/photo-1527631746610-bca00a040d60?q=80&w=300&auto=format'
+};
 
 const TripDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -49,21 +56,66 @@ const TripDetails: React.FC = () => {
   });
   const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [airportSuggestions, setAirportSuggestions] = useState<Array<{name: string, iata: string}>>([]);
+  const [showAirportSuggestions, setShowAirportSuggestions] = useState(false);
+  const airportInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchAirports = async (query: string) => {
+    if (query.length < 2) {
+      setAirportSuggestions([]);
+      return;
+    }
+    try {
+      const response = await fetch(`https://api.api-ninjas.com/v1/airports?name=${query}`, {
+        headers: {
+          'X-Api-Key': import.meta.env.VITE_API_NINJAS_KEY
+        }
+      });
+      const data = await response.json();
+      const airports = data
+        .filter((airport: any) => airport.iata && airport.name)
+        .map((airport: any) => ({
+          name: `${airport.name} (${airport.iata})`,
+          iata: airport.iata
+        }));
+      setAirportSuggestions(airports);
+      setShowAirportSuggestions(true);
+    } catch (error) {
+      console.error('Error fetching airports:', error);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (airportInputRef.current && !airportInputRef.current.contains(event.target as Node)) {
+        setShowAirportSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchTrip = async () => {
-      if (!id) {
-        setError('Trip ID is missing');
+      if (!id || id === 'undefined') {
+        console.error('Trip ID is missing or invalid:', id);
+        setError('Trip ID is missing or invalid');
         setLoading(false);
         return;
       }
 
       try {
+        console.log('Fetching trip with ID:', id);
         const fetchedTrip = await api.getTrip(id);
         if (!fetchedTrip) {
+          console.error('Trip not found for ID:', id);
           setError('Trip not found');
           return;
         }
+        console.log('Successfully fetched trip:', fetchedTrip);
         setTrip(fetchedTrip);
         setEditedTrip(fetchedTrip);
         setError('');
@@ -123,7 +175,7 @@ const TripDetails: React.FC = () => {
   };
 
   const handleTripSave = async () => {
-    if (!trip?.id || !editedTrip) {
+    if (!trip?._id || !editedTrip) {
       setError('Trip data is missing');
       return;
     }
@@ -137,14 +189,14 @@ const TripDetails: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     let newEvent: Event;
 
     const baseEventData = {
       id: isEditingEvent || uuidv4(),
       type: eventType,
-      thumbnailUrl: ['stays', 'destinations'].includes(eventType) ? eventData.thumbnailUrl : '',
+      thumbnailUrl: ['stay', 'destination'].includes(eventType) ? eventData.thumbnailUrl : '',
       date: eventData.date,
       location: eventData.location || undefined,
       notes: eventData.notes || undefined,
@@ -165,69 +217,78 @@ const TripDetails: React.FC = () => {
           bookingReference: eventData.bookingReference || undefined,
         } as ArrivalDepartureEvent;
         break;
-      case 'stays':
+      case 'stay':
         newEvent = {
           ...baseEventData,
-          type: 'stays',
+          type: 'stay',
           accommodationName: eventData.accommodationName,
           address: eventData.address,
           checkIn: eventData.checkIn,
           checkOut: eventData.checkOut,
           reservationNumber: eventData.reservationNumber || undefined,
           contactInfo: eventData.contactInfo || undefined,
-        } as StaysEvent;
+        } as StayEvent;
         break;
-      case 'destinations':
+      case 'destination':
         newEvent = {
           ...baseEventData,
-          type: 'destinations',
+          type: 'destination',
           placeName: eventData.placeName,
           address: eventData.address,
           description: eventData.description,
           openingHours: eventData.openingHours || undefined,
-        } as DestinationsEvent;
+        } as DestinationEvent;
         break;
       default:
         return;
     }
 
-    if (isEditingEvent) {
-      if (!trip.id) {
-        setError('Trip ID is missing');
-        return;
+    try {
+      if (isEditingEvent) {
+        if (!trip._id) {
+          setError('Trip ID is missing');
+          return;
+        }
+        await updateEvent(trip._id, newEvent);
+        const updatedTrip = { ...trip, events: trip.events.map(e => e.id === newEvent.id ? newEvent : e) };
+        setTrip(updatedTrip);
+      } else {
+        if (!trip._id) {
+          setError('Trip ID is missing');
+          return;
+        }
+        await addEvent(trip._id, newEvent);
+        const updatedTrip = { ...trip, events: [...trip.events, newEvent] };
+        setTrip(updatedTrip);
       }
-      updateEvent(trip.id, newEvent);
-    } else {
-      if (!trip.id) {
-        setError('Trip ID is missing');
-        return;
-      }
-      addEvent(trip.id, newEvent);
+      
+      setIsModalOpen(false);
+      setIsEditingEvent(null);
+      setEventData({
+        thumbnailUrl: '',
+        date: '',
+        location: '',
+        flightNumber: '',
+        airline: '',
+        time: '',
+        airport: '',
+        terminal: '',
+        gate: '',
+        bookingReference: '',
+        accommodationName: '',
+        address: '',
+        checkIn: '',
+        checkOut: '',
+        reservationNumber: '',
+        contactInfo: '',
+        placeName: '',
+        description: '',
+        openingHours: '',
+        notes: '',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update event');
     }
-    setIsModalOpen(false);
-    setIsEditingEvent(null);
-    setEventData({
-      thumbnailUrl: '',
-      date: '',
-      location: '',
-      flightNumber: '',
-      airline: '',
-      time: '',
-      airport: '',
-      terminal: '',
-      gate: '',
-      bookingReference: '',
-      accommodationName: '',
-      address: '',
-      checkIn: '',
-      checkOut: '',
-      reservationNumber: '',
-      contactInfo: '',
-      placeName: '',
-      description: '',
-      openingHours: '',
-      notes: '',
-    });
   };
 
   const handleEditEvent = (event: Event) => {
@@ -248,20 +309,20 @@ const TripDetails: React.FC = () => {
             gate: (event as ArrivalDepartureEvent).gate || '',
             bookingReference: (event as ArrivalDepartureEvent).bookingReference || '',
           }
-        : event.type === 'stays'
+        : event.type === 'stay'
         ? {
-            accommodationName: (event as StaysEvent).accommodationName || '',
-            address: (event as StaysEvent).address || '',
-            checkIn: (event as StaysEvent).checkIn || '',
-            checkOut: (event as StaysEvent).checkOut || '',
-            reservationNumber: (event as StaysEvent).reservationNumber || '',
-            contactInfo: (event as StaysEvent).contactInfo || '',
+            accommodationName: (event as StayEvent).accommodationName || '',
+            address: (event as StayEvent).address || '',
+            checkIn: (event as StayEvent).checkIn || '',
+            checkOut: (event as StayEvent).checkOut || '',
+            reservationNumber: (event as StayEvent).reservationNumber || '',
+            contactInfo: (event as StayEvent).contactInfo || '',
           }
         : {
-            placeName: (event as DestinationsEvent).placeName || '',
-            address: (event as DestinationsEvent).address || '',
-            description: (event as DestinationsEvent).description || '',
-            openingHours: (event as DestinationsEvent).openingHours || '',
+            placeName: (event as DestinationEvent).placeName || '',
+            address: (event as DestinationEvent).address || '',
+            description: (event as DestinationEvent).description || '',
+            openingHours: (event as DestinationEvent).openingHours || '',
           }),
     });
     setIsEditingEvent(event.id);
@@ -271,7 +332,7 @@ const TripDetails: React.FC = () => {
   const renderEventForm = () => {
     const commonFields = (
       <>
-        {['stays', 'destinations'].includes(eventType) && (
+        {['stay', 'destination'].includes(eventType) && (
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Thumbnail URL (optional)</label>
             <input
@@ -353,17 +414,35 @@ const TripDetails: React.FC = () => {
                 required
               />
             </div>
-            <div className="mb-4">
+            <div className="mb-4 relative" ref={airportInputRef}>
               <label className="block text-gray-700 mb-2">Airport</label>
               <input
                 type="text"
                 value={eventData.airport}
-                onChange={(e) =>
-                  setEventData({ ...eventData, airport: e.target.value })
-                }
+                onChange={(e) => {
+                  setEventData({ ...eventData, airport: e.target.value });
+                  fetchAirports(e.target.value);
+                }}
                 className="input"
                 required
+                placeholder="Start typing airport name..."
               />
+              {showAirportSuggestions && airportSuggestions.length > 0 && (
+                <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                  {airportSuggestions.map((airport, index) => (
+                    <li
+                      key={airport.iata}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                      onClick={() => {
+                        setEventData({ ...eventData, airport: airport.name });
+                        setShowAirportSuggestions(false);
+                      }}
+                    >
+                      {airport.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Terminal (optional)</label>
@@ -403,10 +482,23 @@ const TripDetails: React.FC = () => {
             </div>
           </>
         );
-      case 'stays':
+      case 'stay':
         return (
           <>
-            {commonFields}
+            {['stay', 'destination'].includes(eventType) && (
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Thumbnail URL (optional)</label>
+                <input
+                  type="url"
+                  value={eventData.thumbnailUrl}
+                  onChange={(e) =>
+                    setEventData({ ...eventData, thumbnailUrl: e.target.value })
+                  }
+                  className="input"
+                  placeholder="Enter image URL or leave empty"
+                />
+              </div>
+            )}
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Accommodation Name</label>
               <input
@@ -414,18 +506,6 @@ const TripDetails: React.FC = () => {
                 value={eventData.accommodationName}
                 onChange={(e) =>
                   setEventData({ ...eventData, accommodationName: e.target.value })
-                }
-                className="input"
-                required
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Address</label>
-              <input
-                type="text"
-                value={eventData.address}
-                onChange={(e) =>
-                  setEventData({ ...eventData, address: e.target.value })
                 }
                 className="input"
                 required
@@ -456,6 +536,30 @@ const TripDetails: React.FC = () => {
               />
             </div>
             <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Address</label>
+              <input
+                type="text"
+                value={eventData.address}
+                onChange={(e) =>
+                  setEventData({ ...eventData, address: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Location (optional)</label>
+              <input
+                type="text"
+                value={eventData.location}
+                onChange={(e) =>
+                  setEventData({ ...eventData, location: e.target.value })
+                }
+                className="input"
+                placeholder="Enter location"
+              />
+            </div>
+            <div className="mb-4">
               <label className="block text-gray-700 mb-2">Reservation Number (optional)</label>
               <input
                 type="text"
@@ -479,9 +583,20 @@ const TripDetails: React.FC = () => {
                 placeholder="Enter contact information"
               />
             </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Notes (optional)</label>
+              <textarea
+                value={eventData.notes}
+                onChange={(e) =>
+                  setEventData({ ...eventData, notes: e.target.value })
+                }
+                className="input"
+                placeholder="Enter any notes"
+              />
+            </div>
           </>
         );
-      case 'destinations':
+      case 'destination':
         return (
           <>
             {commonFields}
@@ -539,9 +654,21 @@ const TripDetails: React.FC = () => {
     }
   };
 
-  const isOwner = user?.id === trip.owner.id;
-  const collaborator = trip.collaborators.find(c => c.user.id === user?.id);
+  const isOwner = user?._id === trip.owner._id;
+  const collaborator = trip.collaborators.find(c => c.user._id === user?._id);
   const canEdit = isOwner || collaborator?.role === 'editor';
+
+  console.log('User and ownership debug:', {
+    userId: user?._id,
+    userIdType: typeof user?._id,
+    ownerId: trip.owner._id,
+    ownerIdType: typeof trip.owner._id,
+    isOwner,
+    user,
+    tripOwner: trip.owner,
+    collaborator,
+    canEdit
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -604,20 +731,92 @@ const TripDetails: React.FC = () => {
       {/* Events list */}
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Events</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Events</h3>
+            {canEdit && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                Add Event
+              </button>
+            )}
+          </div>
         </div>
         <div className="border-t border-gray-200">
           <ul className="divide-y divide-gray-200">
-            {trip.events.map((event) => (
+            {trip.events
+              .sort((a, b) => {
+                const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
+                const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
+                return dateA - dateB;
+              })
+              .map((event) => (
               <li key={event.id} className="px-4 py-4 sm:px-6">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center space-x-4">
+                  <div className="flex-shrink-0">
+                    <img
+                      src={event.thumbnailUrl || DEFAULT_THUMBNAILS[event.type]}
+                      alt={event.type}
+                      className="h-24 w-24 object-cover rounded-lg"
+                    />
+                  </div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-indigo-600 capitalize">
                       {event.type}
                     </p>
-                    <p className="text-sm text-gray-500">{event.date}</p>
+                    {event.type === 'stay' ? (
+                      <div>
+                        <p className="text-sm text-gray-900">{(event as StayEvent).accommodationName}</p>
+                        <p className="text-sm text-gray-500">
+                          Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ) : event.type === 'destination' ? (
+                      <div>
+                        <p className="text-sm text-gray-900">{(event as DestinationEvent).placeName}</p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-gray-900">
+                          {(event as ArrivalDepartureEvent).airport}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm text-gray-500">{event.location}</div>
+                  {canEdit && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditEvent(event)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (trip._id) {
+                            deleteEvent(trip._id, event.id);
+                            setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               </li>
             ))}
@@ -625,9 +824,71 @@ const TripDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* Event Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">
+                {isEditingEvent ? 'Edit Event' : 'Add Event'}
+              </h2>
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setIsEditingEvent(null);
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Event Type</label>
+                <select
+                  value={eventType}
+                  onChange={(e) => setEventType(e.target.value as EventType)}
+                  className="input"
+                >
+                  <option value="arrival">Arrival</option>
+                  <option value="departure">Departure</option>
+                  <option value="stay">Stay</option>
+                  <option value="destination">Destination</option>
+                </select>
+              </div>
+
+              {renderEventForm()}
+
+              <div className="flex justify-end space-x-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setIsEditingEvent(null);
+                  }}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {isEditingEvent ? 'Save Changes' : 'Add Event'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       <CollaboratorModal
-        trip={trip}
+        trip={{
+          ...trip,
+          _id: trip._id || id || '' // Ensure _id is always a string
+        }}
         isOpen={isCollaboratorModalOpen}
         onClose={() => setIsCollaboratorModalOpen(false)}
         onUpdate={handleTripUpdate}

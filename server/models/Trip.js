@@ -4,7 +4,7 @@ const eventSchema = new mongoose.Schema({
   id: String,
   type: {
     type: String,
-    enum: ['arrival', 'stays', 'destinations', 'departure'],
+    enum: ['arrival', 'stay', 'destination', 'departure'],
     required: true
   },
   thumbnailUrl: String,
@@ -19,14 +19,14 @@ const eventSchema = new mongoose.Schema({
   terminal: String,
   gate: String,
   bookingReference: String,
-  // Stays fields
+  // Stay fields
   accommodationName: String,
   address: String,
   checkIn: String,
   checkOut: String,
   reservationNumber: String,
   contactInfo: String,
-  // Destinations fields
+  // Destination fields
   placeName: String,
   description: String,
   openingHours: String
@@ -66,27 +66,28 @@ const tripSchema = new mongoose.Schema({
   },
   shareableLink: {
     type: String,
-    unique: true,
     sparse: true
   }
 }, {
   timestamps: true,
   toJSON: {
     transform: function(doc, ret) {
-      ret.id = ret._id;
-      delete ret._id;
+      ret._id = ret._id;
       delete ret.__v;
       if (ret.owner) {
-        ret.owner.id = ret.owner._id;
-        delete ret.owner._id;
+        ret.owner = {
+          _id: ret.owner._id,
+          name: ret.owner.name,
+          email: ret.owner.email
+        };
       }
       if (ret.collaborators) {
         ret.collaborators = ret.collaborators.map(c => ({
           ...c,
           user: {
-            ...c.user,
-            id: c.user._id,
-            _id: undefined
+            _id: c.user._id,
+            name: c.user.name,
+            email: c.user.email
           }
         }));
       }

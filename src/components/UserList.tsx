@@ -1,17 +1,24 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface User {
   _id: string;
   email: string;
   name: string;
   createdAt: string;
+  isAdmin?: boolean;
 }
 
 export const UserList = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const { user: currentUser, logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -28,6 +35,30 @@ export const UserList = () => {
 
     fetchUsers();
   }, []);
+
+  const handleDeleteClick = (user: User) => {
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+
+    try {
+      await api.deleteUser(userToDelete._id);
+      setUsers(users.filter(u => u._id !== userToDelete._id));
+      setShowDeleteModal(false);
+      setUserToDelete(null);
+
+      // If the user deleted their own account, log them out
+      if (userToDelete._id === currentUser?._id) {
+        logout();
+        navigate('/login');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete user');
+    }
+  };
 
   if (loading) {
     return (
@@ -56,6 +87,8 @@ export const UserList = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -72,11 +105,67 @@ export const UserList = () => {
                     {new Date(user.createdAt).toLocaleDateString()}
                   </div>
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-500">
+                    {user.isAdmin ? (
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                        Admin
+                      </span>
+                    ) : (
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        User
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {(currentUser?.isAdmin || currentUser?._id === user._id) && (
+                    <button
+                      onClick={() => handleDeleteClick(user)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete Account
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && userToDelete && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+          <div className="bg-white p-8 rounded-lg shadow-xl max-w-md mx-auto">
+            <h3 className="text-lg font-bold mb-4">Delete Account</h3>
+            <p className="mb-6">
+              {currentUser?.isAdmin && currentUser._id !== userToDelete._id ? (
+                `Are you sure you want to delete ${userToDelete.name}'s account? This action cannot be undone and will delete all their trips and remove them from all collaborations.`
+              ) : (
+                'Are you sure you want to delete your account? This action cannot be undone and will delete all your trips and remove you from all collaborations.'
+              )}
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setUserToDelete(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }; 

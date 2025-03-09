@@ -36,7 +36,9 @@ function tripReducer(state: TripState, action: TripAction): TripState {
     case 'SET_TRIPS':
       return {
         ...state,
-        trips: action.payload,
+        trips: action.payload.filter((trip, index, self) => 
+          index === self.findIndex((t) => t._id === trip._id)
+        ),
         loading: false,
         error: null,
       };
@@ -60,19 +62,19 @@ function tripReducer(state: TripState, action: TripAction): TripState {
       return {
         ...state,
         trips: state.trips.map((trip) =>
-          trip.id === action.payload.id ? action.payload : trip
+          trip._id === action.payload._id ? action.payload : trip
         ),
       };
     case 'DELETE_TRIP':
       return {
         ...state,
-        trips: state.trips.filter((trip) => trip.id !== action.payload),
+        trips: state.trips.filter((trip) => trip._id !== action.payload),
       };
     case 'ADD_EVENT':
       return {
         ...state,
         trips: state.trips.map((trip) =>
-          trip.id === action.payload.tripId
+          trip._id === action.payload.tripId
             ? { ...trip, events: [...trip.events, action.payload.event] }
             : trip
         ),
@@ -81,7 +83,7 @@ function tripReducer(state: TripState, action: TripAction): TripState {
       return {
         ...state,
         trips: state.trips.map((trip) =>
-          trip.id === action.payload.tripId
+          trip._id === action.payload.tripId
             ? {
                 ...trip,
                 events: trip.events.map((event) =>
@@ -95,12 +97,10 @@ function tripReducer(state: TripState, action: TripAction): TripState {
       return {
         ...state,
         trips: state.trips.map((trip) =>
-          trip.id === action.payload.tripId
+          trip._id === action.payload.tripId
             ? {
                 ...trip,
-                events: trip.events.filter(
-                  (event) => event.id !== action.payload.eventId
-                ),
+                events: trip.events.filter((event) => event.id !== action.payload.eventId),
               }
             : trip
         ),
@@ -110,7 +110,7 @@ function tripReducer(state: TripState, action: TripAction): TripState {
   }
 }
 
-export function TripProvider({ children }: { children: ReactNode }) {
+export const TripProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(tripReducer, {
     trips: [],
     loading: false,
@@ -132,14 +132,28 @@ export function TripProvider({ children }: { children: ReactNode }) {
 
   const addTrip = async (trip: Trip) => {
     try {
-      const newTrip = await api.createTrip(trip);
+      console.log('Adding trip to context:', trip);
+      
+      if (!trip._id) {
+        console.error('Trip is missing ID:', trip);
+        throw new Error('Trip is missing ID');
+      }
+
       // Check if the trip already exists in state
-      const exists = state.trips.some(t => t.id === newTrip.id);
+      const exists = state.trips.some(t => t._id === trip._id);
+      console.log('Trip exists in state:', exists);
+      
       if (!exists) {
-        dispatch({ type: 'ADD_TRIP', payload: newTrip });
+        dispatch({ type: 'ADD_TRIP', payload: trip });
+        console.log('Trip added to state:', trip);
+      } else {
+        console.log('Trip already exists in state, updating instead');
+        dispatch({ type: 'UPDATE_TRIP', payload: trip });
       }
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to create trip' });
+      console.error('Error in addTrip:', error);
+      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to add trip' });
+      throw error;
     }
   };
 
@@ -166,7 +180,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
 
   const addEvent = async (tripId: string, event: Event) => {
     try {
-      const trip = state.trips.find((t) => t.id === tripId);
+      const trip = state.trips.find((t) => t._id === tripId);
       if (!trip) throw new Error('Trip not found');
       
       const updatedTrip = await api.updateTrip({
@@ -182,7 +196,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
 
   const updateEvent = async (tripId: string, event: Event) => {
     try {
-      const trip = state.trips.find((t) => t.id === tripId);
+      const trip = state.trips.find((t) => t._id === tripId);
       if (!trip) throw new Error('Trip not found');
       
       const updatedTrip = await api.updateTrip({
@@ -198,7 +212,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
 
   const deleteEvent = async (tripId: string, eventId: string) => {
     try {
-      const trip = state.trips.find((t) => t.id === tripId);
+      const trip = state.trips.find((t) => t._id === tripId);
       if (!trip) throw new Error('Trip not found');
       
       const updatedTrip = await api.updateTrip({
@@ -227,12 +241,12 @@ export function TripProvider({ children }: { children: ReactNode }) {
       {children}
     </TripContext.Provider>
   );
-}
+};
 
-export function useTrip() {
+export const useTrip = () => {
   const context = useContext(TripContext);
   if (context === undefined) {
     throw new Error('useTrip must be used within a TripProvider');
   }
   return context;
-} 
+}; 

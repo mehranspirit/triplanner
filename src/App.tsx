@@ -6,6 +6,8 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import Header from './components/Header';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import ForgotPassword from './components/auth/ForgotPassword';
+import ResetPassword from './components/auth/ResetPassword';
 import TripList from './components/TripList';
 import TripDetails from './components/TripDetails';
 import UserProfile from './components/UserProfile';
@@ -31,6 +33,8 @@ const App: React.FC = () => {
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
             
             {/* Protected routes */}
             <Route
@@ -44,7 +48,7 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/trip/:id"
+              path="/trips/:id"
               element={
                 <ProtectedRoute>
                   <AuthenticatedLayout>

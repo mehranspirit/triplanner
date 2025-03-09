@@ -1,9 +1,37 @@
-export type EventType = 'arrival' | 'departure' | 'stays' | 'destinations';
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+}
+
+export interface Trip {
+  _id: string;
+  name: string;
+  description?: string;
+  thumbnailUrl?: string;
+  startDate?: string;
+  endDate?: string;
+  events: Event[];
+  owner: User;
+  collaborators: Collaborator[];
+  shareableLink?: string;
+  createdAt: string;
+  updatedAt: string;
+  isPublic: boolean;
+}
+
+export interface Collaborator {
+  user: User;
+  role: 'editor' | 'viewer';
+  addedAt: string;
+}
+
+export type EventType = 'arrival' | 'departure' | 'stay' | 'destination';
 
 export interface BaseEvent {
   id: string;
   type: EventType;
-  thumbnailUrl: string;
+  thumbnailUrl?: string;
   date: string;
   location?: string;
   notes?: string;
@@ -20,8 +48,8 @@ export interface ArrivalDepartureEvent extends BaseEvent {
   bookingReference?: string;
 }
 
-export interface StaysEvent extends BaseEvent {
-  type: 'stays';
+export interface StayEvent extends BaseEvent {
+  type: 'stay';
   accommodationName: string;
   address: string;
   checkIn: string;
@@ -30,45 +58,15 @@ export interface StaysEvent extends BaseEvent {
   contactInfo?: string;
 }
 
-export interface DestinationsEvent extends BaseEvent {
-  type: 'destinations';
+export interface DestinationEvent extends BaseEvent {
+  type: 'destination';
   placeName: string;
   address: string;
   description: string;
   openingHours?: string;
-  notes?: string;
 }
 
-export type Event = ArrivalDepartureEvent | StaysEvent | DestinationsEvent;
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  createdAt?: string;
-}
-
-export interface Collaborator {
-  user: User;
-  role: 'editor' | 'viewer';
-  addedAt?: string;
-}
-
-export interface Trip {
-  id: string;
-  name: string;
-  description?: string;
-  thumbnailUrl?: string;
-  startDate?: string;
-  endDate?: string;
-  events: Event[];
-  owner: User;
-  collaborators: Collaborator[];
-  shareableLink?: string;
-  createdAt: string;
-  updatedAt: string;
-  isPublic?: boolean;
-}
+export type Event = ArrivalDepartureEvent | StayEvent | DestinationEvent;
 
 export interface AuthUser extends User {
   token?: string;

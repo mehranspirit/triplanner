@@ -16,10 +16,14 @@ export default function TripList() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      setError('User must be logged in to create a trip');
+      return;
+    }
 
     try {
-      const newTripData: Omit<Trip, 'id' | 'createdAt' | 'updatedAt'> = {
+      console.log('Creating new trip with data:', newTrip);
+      const newTripData: Omit<Trip, '_id' | 'createdAt' | 'updatedAt'> = {
         name: newTrip.name,
         thumbnailUrl: newTrip.thumbnailUrl || undefined,
         description: '',
@@ -27,7 +31,7 @@ export default function TripList() {
         endDate: '',
         events: [],
         owner: {
-          id: user.id,
+          _id: user._id,
           name: user.name,
           email: user.email
         },
@@ -36,10 +40,14 @@ export default function TripList() {
       };
 
       const createdTrip = await api.createTrip(newTripData);
-      addTrip(createdTrip);
+      console.log('Trip created successfully:', createdTrip);
+      await addTrip(createdTrip);
+      console.log('Trip added to state');
       setNewTrip({ name: '', thumbnailUrl: '' });
       setIsModalOpen(false);
+      setError(null);
     } catch (err) {
+      console.error('Error creating trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to create trip');
     }
   };
@@ -51,8 +59,7 @@ export default function TripList() {
     }
 
     try {
-      await api.deleteTrip(tripId);
-      deleteTrip(tripId);
+      await deleteTrip(tripId);
       setError(null);
     } catch (err) {
       console.error('Error deleting trip:', err);
@@ -105,34 +112,33 @@ export default function TripList() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {state.trips.map((trip) => (
-          <div key={trip.id} className="card hover:shadow-lg">
-            <img
-              src={trip.thumbnailUrl || 'https://via.placeholder.com/400x300?text=No+Image'}
-              alt={trip.name}
-              className="w-full h-48 object-cover rounded-t-lg"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = 'https://via.placeholder.com/400x300?text=No+Image';
-                target.onerror = null;
-              }}
-            />
-            <div className="p-4">
-              <h3 className="text-xl font-semibold text-gray-900">{trip.name}</h3>
-              <p className="text-gray-600 mt-2">
-                {trip.events.length} events planned
-              </p>
-              <div className="mt-4 flex justify-between">
+          <div
+            key={trip._id}
+            className="bg-white overflow-hidden shadow rounded-lg"
+          >
+            {trip.thumbnailUrl && (
+              <div className="h-48 w-full">
+                <img
+                  src={trip.thumbnailUrl}
+                  alt={trip.name}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            )}
+            <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg font-medium text-gray-900">{trip.name}</h3>
+              <div className="mt-2 flex justify-between items-center">
                 <button
-                  onClick={() => navigate(`/trip/${trip.id}`)}
-                  className="btn btn-primary"
+                  onClick={() => navigate(`/trips/${trip._id}`)}
+                  className="text-indigo-600 hover:text-indigo-900"
                 >
                   View Details
                 </button>
                 <button
-                  onClick={() => handleDeleteTrip(trip.id)}
-                  className="btn btn-secondary"
+                  onClick={() => handleDeleteTrip(trip._id)}
+                  className="text-red-600 hover:text-red-900"
                 >
                   Delete
                 </button>

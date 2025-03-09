@@ -20,13 +20,13 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     e.preventDefault();
     setError('');
 
-    if (!trip.id) {
+    if (!trip._id) {
       setError('Trip ID is missing');
       return;
     }
 
     try {
-      const updatedTrip = await api.addCollaborator(trip.id, email, role);
+      const updatedTrip = await api.addCollaborator(trip._id, email, role);
       onUpdate(updatedTrip);
       setEmail('');
       setRole('viewer');
@@ -36,13 +36,13 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   };
 
   const handleRemoveCollaborator = async (userId: string) => {
-    if (!trip.id) {
+    if (!trip._id) {
       setError('Trip ID is missing');
       return;
     }
 
     try {
-      const updatedTrip = await api.removeCollaborator(trip.id, userId);
+      const updatedTrip = await api.removeCollaborator(trip._id, userId);
       onUpdate(updatedTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove collaborator');
@@ -50,13 +50,13 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   };
 
   const handleRoleChange = async (userId: string, newRole: 'editor' | 'viewer') => {
-    if (!trip.id) {
+    if (!trip._id) {
       setError('Trip ID is missing');
       return;
     }
 
     try {
-      const updatedTrip = await api.updateCollaboratorRole(trip.id, userId, newRole);
+      const updatedTrip = await api.updateCollaboratorRole(trip._id, userId, newRole);
       onUpdate(updatedTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update role');
@@ -105,7 +105,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
           <h4 className="font-medium mb-2">Current Collaborators</h4>
           <ul className="space-y-2">
             {trip.collaborators.map((collaborator) => (
-              <li key={collaborator.user.id} className="flex items-center justify-between">
+              <li key={collaborator.user._id} className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">{collaborator.user.name}</p>
                   <p className="text-sm text-gray-500">{collaborator.user.email}</p>
@@ -115,7 +115,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
                     value={collaborator.role}
                     onChange={(e) =>
                       handleRoleChange(
-                        collaborator.user.id,
+                        collaborator.user._id,
                         e.target.value as 'editor' | 'viewer'
                       )
                     }
@@ -125,7 +125,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
                     <option value="editor">Editor</option>
                   </select>
                   <button
-                    onClick={() => handleRemoveCollaborator(collaborator.user.id)}
+                    onClick={() => handleRemoveCollaborator(collaborator.user._id)}
                     className="text-red-600 hover:text-red-800"
                   >
                     Remove
