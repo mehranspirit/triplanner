@@ -1,16 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svgjs="http://svgjs.dev/svgjs" width="32" height="32"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="32" height="32">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="32" height="32">
   <defs>
-    <linearGradient id="SvgjsLinearGradient1003" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stopcolor="#4CAF50" stopopacity="1"></stop>
-      <stop offset="100%" stopcolor="#2196F3" stopopacity="1"></stop>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4CAF50" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#2196F3" stop-opacity="1"/>
     </linearGradient>
-    <radialGradient id="SvgjsRadialGradient1002" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stopcolor="#FF4500" stopopacity="1"></stop>
-      <stop offset="100%" stopcolor="#FFD700" stopopacity="1"></stop>
+    <radialGradient id="sunsetGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF4500" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#FFD700" stop-opacity="1"/>
     </radialGradient>
   </defs>
-  <path d="M100 20 C70 20 40 50 40 80 C40 130 100 180 100 180 C100 180 160 130 160 80 C160 50 130 20 100 20 Z" fill="url(#grad1)"></path>
-  <circle cx="100" cy="80" r="25" fill="url(#sunsetGradient)"></circle>
-</svg><style>@media (prefers-color-scheme: light) { :root { filter: none; } }
-@media (prefers-color-scheme: dark) { :root { filter: none; } }
-</style></svg>
+  <path d="M100 20 C70 20 40 50 40 80 C40 130 100 180 100 180 C100 180 160 130 160 80 C160 50 130 20 100 20 Z" fill="url(#grad1)"/>
+  <circle cx="100" cy="80" r="25" fill="url(#sunsetGradient)"/>
+</svg>
