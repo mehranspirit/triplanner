@@ -42,11 +42,49 @@ mongoose.connect(process.env.MONGODB_URI)
 // Protected Routes
 app.get('/api/trips', auth, async (req, res) => {
   try {
-    const trips = await Trip.find({ owner: req.user._id })
+    console.log('Fetching trips for user:', {
+      userId: req.user._id,
+      email: req.user.email
+    });
+
+    const trips = await Trip.find({
+      $or: [
+        { owner: req.user._id },
+        { 'collaborators.user': req.user._id }
+      ]
+    })
       .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email');
-    res.json(trips);
+      .populate('collaborators.user', 'name email')
+      .lean()
+      .exec();
+
+    // Transform the response to ensure consistent _id usage
+    const transformedTrips = trips.map(trip => ({
+      ...trip,
+      _id: trip._id.toString(),
+      owner: {
+        _id: trip.owner._id.toString(),
+        name: trip.owner.name,
+        email: trip.owner.email
+      },
+      collaborators: trip.collaborators.map(c => ({
+        ...c,
+        user: {
+          _id: c.user._id.toString(),
+          name: c.user.name,
+          email: c.user.email
+        }
+      }))
+    }));
+
+    console.log('Found trips:', {
+      count: transformedTrips.length,
+      tripIds: transformedTrips.map(t => t._id)
+    });
+
+    res.json(transformedTrips);
   } catch (error) {
+    console.error('Error fetching trips:', error);
     res.status(500).json({ message: error.message });
   }
 });
