@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { Trip, Event } from '../types';
 import { api } from '../services/api';
+import { useAuth } from './AuthContext';
 
 interface TripState {
   trips: Trip[];
@@ -117,18 +118,29 @@ export const TripProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     error: null,
   });
 
+  const { user } = useAuth();
+
   useEffect(() => {
     const fetchTrips = async () => {
+      // Only fetch trips if we have a logged-in user
+      if (!user) {
+        return;
+      }
+
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
+        console.log('Fetching trips for user:', user._id);
         const trips = await api.getTrips();
+        console.log('Fetched trips:', trips);
         dispatch({ type: 'SET_TRIPS', payload: trips });
       } catch (error) {
+        console.error('Error fetching trips:', error);
         dispatch({ type: 'SET_ERROR', payload: 'Failed to fetch trips' });
       }
     };
+
     fetchTrips();
-  }, []);
+  }, [user?._id]); // Re-fetch when user ID changes
 
   const addTrip = async (trip: Trip) => {
     try {
