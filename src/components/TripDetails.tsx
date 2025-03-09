@@ -750,21 +750,21 @@ const TripDetails: React.FC = () => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-full md:max-w-7xl mx-auto">
       <div className="relative">
         {/* Full width thumbnail image with overlay */}
-        <div className="px-4 sm:px-6 lg:px-8">
-          <div className="w-full h-[300px] relative rounded-lg overflow-hidden">
+        <div className="px-0 sm:px-0 md:px-4">
+          <div className="w-full h-[300px] relative rounded-none md:rounded-lg overflow-hidden">
             <img
               src={trip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
               alt={trip.name}
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-            <div className="absolute bottom-0 left-0 right-0 p-6">
-              <h1 className="text-4xl font-bold text-white mb-2">{trip.name}</h1>
+            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
+              <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{trip.name}</h1>
               {trip.description && (
-                <p className="text-xl text-white/90">{trip.description}</p>
+                <p className="text-lg sm:text-xl text-white/90">{trip.description}</p>
               )}
             </div>
           </div>
@@ -772,22 +772,22 @@ const TripDetails: React.FC = () => {
 
         {/* Action buttons */}
         {isOwner && (
-          <div className="absolute top-4 right-8 sm:right-10 lg:right-12 flex space-x-2">
+          <div className="absolute top-4 right-4 sm:right-6 md:right-8 flex space-x-2">
             <button
               onClick={handleTripEdit}
-              className="px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors"
+              className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base"
             >
               Edit Trip
             </button>
             <button
               onClick={() => setIsCollaboratorModalOpen(true)}
-              className="px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors"
+              className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base"
             >
               Manage Collaborators
             </button>
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors"
+              className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base"
             >
               Share Trip
             </button>
@@ -796,10 +796,10 @@ const TripDetails: React.FC = () => {
 
         {/* Edit Trip Modal */}
         {isEditingTrip && editedTrip && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-0 sm:p-4 z-50">
+            <div className="bg-white w-full sm:rounded-lg shadow-xl sm:max-w-3xl sm:w-full max-h-screen sm:max-h-[90vh] overflow-y-auto">
               <form onSubmit={(e) => { e.preventDefault(); handleTripSave(); }}>
-                <div className="px-6 py-4 border-b border-gray-200">
+                <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-semibold text-gray-900">Edit Trip</h2>
                     <button
@@ -815,7 +815,7 @@ const TripDetails: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="px-6 py-4">
+                <div className="px-4 sm:px-6 py-4">
                   <div className="space-y-4">
                     {/* Preview current thumbnail */}
                     <div className="aspect-video w-full overflow-hidden rounded-lg">
@@ -859,7 +859,7 @@ const TripDetails: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-2">
+                <div className="px-4 sm:px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-2">
                   <button
                     type="button"
                     onClick={() => setIsEditingTrip(false)}
@@ -881,9 +881,9 @@ const TripDetails: React.FC = () => {
       </div>
 
       {/* Trip metadata */}
-      <div className="px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow rounded-lg mt-6 mb-6">
-          <div className="px-4 py-5 sm:px-6">
+      <div className="px-0 sm:px-0 md:px-4">
+        <div className="bg-white shadow rounded-none md:rounded-lg mt-0 sm:mt-6 mb-0 sm:mb-6">
+          <div className="px-4 sm:px-6 py-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">
@@ -907,7 +907,7 @@ const TripDetails: React.FC = () => {
         </div>
 
         {/* Events list */}
-        <div className="bg-white shadow rounded-lg">
+        <div className="bg-white shadow rounded-none md:rounded-lg">
           <div className="px-4 py-5 sm:px-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium text-gray-900">Events</h3>
