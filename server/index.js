@@ -375,6 +375,74 @@ app.post('/api/trips/:id/collaborators', auth, async (req, res) => {
   }
 });
 
+// Remove a collaborator from a trip
+app.delete('/api/trips/:id/collaborators/:userId', auth, async (req, res) => {
+  try {
+    console.log('Remove collaborator request received:', {
+      tripId: req.params.id,
+      collaboratorId: req.params.userId,
+      requestingUserId: req.user._id
+    });
+
+    // Find the trip
+    const trip = await Trip.findById(req.params.id)
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
+    
+    if (!trip) {
+      console.log('Trip not found:', req.params.id);
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+
+    // Check if user is the owner
+    if (!trip.owner._id.equals(req.user._id)) {
+      console.log('Remove collaborator permission denied:', {
+        tripOwner: trip.owner._id,
+        requestingUser: req.user._id
+      });
+      return res.status(403).json({ message: 'Only the trip owner can remove collaborators' });
+    }
+
+    // Check if the collaborator exists
+    const collaboratorIndex = trip.collaborators.findIndex(c => 
+      c.user._id.toString() === req.params.userId
+    );
+
+    if (collaboratorIndex === -1) {
+      console.log('Collaborator not found:', {
+        tripId: req.params.id,
+        collaboratorId: req.params.userId
+      });
+      return res.status(404).json({ message: 'Collaborator not found' });
+    }
+
+    // Remove the collaborator
+    trip.collaborators.splice(collaboratorIndex, 1);
+
+    // Save and populate the updated trip
+    const updatedTrip = await trip.save();
+    const populatedTrip = await Trip.findById(updatedTrip._id)
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
+
+    console.log('Collaborator removed successfully:', {
+      tripId: populatedTrip._id,
+      collaboratorId: req.params.userId,
+      remainingCollaborators: populatedTrip.collaborators.length
+    });
+
+    res.json(populatedTrip);
+  } catch (error) {
+    console.error('Error removing collaborator:', {
+      error: error.message,
+      stack: error.stack,
+      tripId: req.params.id,
+      collaboratorId: req.params.userId
+    });
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Generate a share link for a trip
 app.post('/api/trips/:id/share', auth, async (req, res) => {
   try {

@@ -308,7 +308,7 @@ export const api = {
   removeCollaborator: async (tripId: string, userId: string): Promise<Trip> => {
     if (!tripId) throw new Error('Trip ID is required');
     if (!userId) throw new Error('User ID is required');
-    const response = await fetch(`${API_URL}/trips/${tripId}/collaborators/${userId}`, {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
