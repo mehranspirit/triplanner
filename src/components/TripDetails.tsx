@@ -750,28 +750,89 @@ const TripDetails: React.FC = () => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <div className="flex flex-col space-y-6">
-          <div className="flex items-start space-x-6">
-            <div className="flex-shrink-0">
-              <img
-                src={trip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
-                alt={trip.name}
-                className="h-48 w-48 object-cover rounded-lg shadow-md"
-              />
+    <div className="max-w-7xl mx-auto">
+      <div className="relative">
+        {/* Full width thumbnail image with overlay */}
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="w-full h-[300px] relative rounded-lg overflow-hidden">
+            <img
+              src={trip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
+              alt={trip.name}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <div className="absolute bottom-0 left-0 right-0 p-6">
+              <h1 className="text-4xl font-bold text-white mb-2">{trip.name}</h1>
+              {trip.description && (
+                <p className="text-xl text-white/90">{trip.description}</p>
+              )}
             </div>
-            <div className="flex-1">
-              {isEditingTrip && editedTrip ? (
-                <form onSubmit={(e) => { e.preventDefault(); handleTripSave(); }}>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        {isOwner && (
+          <div className="absolute top-4 right-8 sm:right-10 lg:right-12 flex space-x-2">
+            <button
+              onClick={handleTripEdit}
+              className="px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors"
+            >
+              Edit Trip
+            </button>
+            <button
+              onClick={() => setIsCollaboratorModalOpen(true)}
+              className="px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors"
+            >
+              Manage Collaborators
+            </button>
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              className="px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors"
+            >
+              Share Trip
+            </button>
+          </div>
+        )}
+
+        {/* Edit Trip Modal */}
+        {isEditingTrip && editedTrip && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <form onSubmit={(e) => { e.preventDefault(); handleTripSave(); }}>
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-gray-900">Edit Trip</h2>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTrip(false)}
+                      className="text-gray-400 hover:text-gray-500"
+                    >
+                      <span className="sr-only">Close</span>
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="px-6 py-4">
                   <div className="space-y-4">
+                    {/* Preview current thumbnail */}
+                    <div className="aspect-video w-full overflow-hidden rounded-lg">
+                      <img
+                        src={editedTrip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
+                        alt={editedTrip.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Trip Name</label>
                       <input
                         type="text"
                         value={editedTrip.name}
                         onChange={(e) => setEditedTrip({ ...editedTrip, name: e.target.value })}
-                        className="input mt-1"
+                        className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         required
                       />
                     </div>
@@ -781,7 +842,7 @@ const TripDetails: React.FC = () => {
                         type="url"
                         value={editedTrip.thumbnailUrl || ''}
                         onChange={(e) => setEditedTrip({ ...editedTrip, thumbnailUrl: e.target.value })}
-                        className="input mt-1"
+                        className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="Enter image URL"
                       />
                     </div>
@@ -790,181 +851,170 @@ const TripDetails: React.FC = () => {
                       <textarea
                         value={editedTrip.description || ''}
                         onChange={(e) => setEditedTrip({ ...editedTrip, description: e.target.value })}
-                        className="input mt-1"
+                        className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         rows={3}
                         placeholder="Enter trip description"
                       />
                     </div>
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingTrip(false)}
-                        className="btn btn-secondary"
-                      >
-                        Cancel
-                      </button>
-                      <button type="submit" className="btn btn-primary">
-                        Save Changes
-                      </button>
-                    </div>
                   </div>
-                </form>
-              ) : (
-                <>
-                  <h1 className="text-4xl font-bold text-gray-900">{trip.name}</h1>
-                  {trip.description && (
-                    <p className="mt-4 text-xl text-gray-600">{trip.description}</p>
-                  )}
-                </>
-              )}
+                </div>
+
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTrip(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-md shadow-sm hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-          {isOwner && !isEditingTrip && (
-            <div className="flex space-x-4">
-              <button
-                onClick={handleTripEdit}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                Edit Trip
-              </button>
-              <button
-                onClick={() => setIsCollaboratorModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                Manage Collaborators
-              </button>
-              <button
-                onClick={() => setIsShareModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Share Trip
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Trip metadata */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
-        <div className="px-4 py-5 sm:px-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Trip Details</h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                Created by {trip.owner.name} • {new Date(trip.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
+      <div className="px-4 sm:px-6 lg:px-8">
+        <div className="bg-white shadow rounded-lg mt-6 mb-6">
+          <div className="px-4 py-5 sm:px-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">
+                  Created by {trip.owner.name} • {new Date(trip.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+              </div>
+              {!isOwner && (
+                <div className="text-sm text-gray-500">
+                  Your role: {collaborator?.role || 'Viewer'}
+                </div>
+              )}
             </div>
-            {!isOwner && (
-              <div className="text-sm text-gray-500">
-                Your role: {collaborator?.role || 'Viewer'}
+            {trip.shareableLink && (
+              <div className="mt-2">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Shared
+                </span>
               </div>
             )}
           </div>
         </div>
-        <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
-          <div className="flex items-center space-x-4">
-            {trip.shareableLink && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                Shared
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* Events list */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Events</h3>
-            {canEdit && (
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                Add Event
-              </button>
-            )}
+        {/* Events list */}
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:px-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium text-gray-900">Events</h3>
+              {canEdit && (
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Add Event
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="border-t border-gray-200">
-          <ul className="divide-y divide-gray-200">
-            {trip.events
-              .sort((a, b) => {
-                const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
-                const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
-                return dateA - dateB;
-              })
-              .map((event) => (
-              <li key={event.id} className="px-4 py-4 sm:px-6">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    <img
-                      src={event.thumbnailUrl || DEFAULT_THUMBNAILS[event.type]}
-                      alt={event.type}
-                      className="h-24 w-24 object-cover rounded-lg"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-indigo-600 capitalize">
-                      {event.type}
-                    </p>
-                    {event.type === 'stay' ? (
-                      <div>
-                        <p className="text-sm text-gray-900">{(event as StayEvent).accommodationName}</p>
-                        <p className="text-sm text-gray-500">
-                          Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    ) : event.type === 'destination' ? (
-                      <div>
-                        <p className="text-sm text-gray-900">{(event as DestinationEvent).placeName}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-gray-900">
-                          {(event as ArrivalDepartureEvent).airport}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
-                        </p>
+          <div className="border-t border-gray-200">
+            <ul className="divide-y divide-gray-200">
+              {trip.events
+                .sort((a, b) => {
+                  const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
+                  const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
+                  return dateA - dateB;
+                })
+                .map((event) => (
+                <li key={event.id} className="px-4 py-4 sm:px-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      <img
+                        src={event.thumbnailUrl || DEFAULT_THUMBNAILS[event.type]}
+                        alt={event.type}
+                        className="h-24 w-24 object-cover rounded-lg"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-indigo-600 capitalize">
+                        {event.type}
+                      </p>
+                      {event.type === 'stay' ? (
+                        <div>
+                          <p className="text-sm text-gray-900">{(event as StayEvent).accommodationName}</p>
+                          <p className="text-sm text-gray-500">
+                            Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {event.notes && (
+                            <p className="text-sm text-gray-500 mt-1 truncate">
+                              Notes: {event.notes}
+                            </p>
+                          )}
+                        </div>
+                      ) : event.type === 'destination' ? (
+                        <div>
+                          <p className="text-sm text-gray-900">{(event as DestinationEvent).placeName}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {event.notes && (
+                            <p className="text-sm text-gray-500 mt-1 truncate">
+                              Notes: {event.notes}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm text-gray-900">
+                            {(event as ArrivalDepartureEvent).airport}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
+                          </p>
+                          {event.notes && (
+                            <p className="text-sm text-gray-500 mt-1 truncate">
+                              Notes: {event.notes}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {canEdit && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEditEvent(event)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (trip._id) {
+                              deleteEvent(trip._id, event.id);
+                              setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
                       </div>
                     )}
                   </div>
-                  {canEdit && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEditEvent(event)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (trip._id) {
-                            deleteEvent(trip._id, event.id);
-                            setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
-                          }
-                        }}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
 
