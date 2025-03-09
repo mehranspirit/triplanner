@@ -9,11 +9,79 @@ import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
 
+// Cache for storing thumbnail URLs
+const thumbnailCache: { [key: string]: string } = {};
+
 const DEFAULT_THUMBNAILS = {
-  arrival: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=300&auto=format',
-  departure: 'https://images.unsplash.com/photo-1542296332-2e4473faf563?q=80&w=300&auto=format',
-  stay: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=300&auto=format',
-  destination: 'https://images.unsplash.com/photo-1527631746610-bca00a040d60?q=80&w=300&auto=format'
+  arrival: 'https://images.pexels.com/photos/358319/pexels-photo-358319.jpeg?auto=compress&cs=tinysrgb&w=300',
+  departure: 'https://images.pexels.com/photos/723240/pexels-photo-723240.jpeg?auto=compress&cs=tinysrgb&w=300',
+  stay: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=300',
+  destination: 'https://images.pexels.com/photos/1483053/pexels-photo-1483053.jpeg?auto=compress&cs=tinysrgb&w=300'
+};
+
+// Predefined thumbnails as fallback
+const PREDEFINED_THUMBNAILS: { [key: string]: string } = {
+  beach: 'https://images.pexels.com/photos/1032650/pexels-photo-1032650.jpeg?auto=compress&cs=tinysrgb&w=800',
+  mountain: 'https://images.pexels.com/photos/417173/pexels-photo-417173.jpeg?auto=compress&cs=tinysrgb&w=800',
+  city: 'https://images.pexels.com/photos/466685/pexels-photo-466685.jpeg?auto=compress&cs=tinysrgb&w=800',
+  paris: 'https://images.pexels.com/photos/699466/pexels-photo-699466.jpeg?auto=compress&cs=tinysrgb&w=800',
+  italy: 'https://images.pexels.com/photos/1797161/pexels-photo-1797161.jpeg?auto=compress&cs=tinysrgb&w=800',
+  japan: 'https://images.pexels.com/photos/590478/pexels-photo-590478.jpeg?auto=compress&cs=tinysrgb&w=800',
+  camping: 'https://images.pexels.com/photos/2666598/pexels-photo-2666598.jpeg?auto=compress&cs=tinysrgb&w=800',
+  ski: 'https://images.pexels.com/photos/848599/pexels-photo-848599.jpeg?auto=compress&cs=tinysrgb&w=800',
+  default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
+};
+
+const getDefaultThumbnail = async (tripName: string): Promise<string> => {
+  // Check cache first
+  if (thumbnailCache[tripName]) {
+    return thumbnailCache[tripName];
+  }
+
+  // Check predefined thumbnails
+  const lowercaseName = tripName.toLowerCase();
+  for (const [keyword, url] of Object.entries(PREDEFINED_THUMBNAILS)) {
+    if (lowercaseName.includes(keyword)) {
+      thumbnailCache[tripName] = url;
+      return url;
+    }
+  }
+
+  try {
+    // Remove common words and get keywords from trip name
+    const keywords = tripName
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(' ')
+      .filter(word => !['trip', 'to', 'in', 'at', 'the', 'a', 'an'].includes(word))
+      .join(' ');
+
+    // Try to fetch from Pexels API
+    const response = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(keywords)}&per_page=1&orientation=landscape`,
+      {
+        headers: {
+          'Authorization': import.meta.env.VITE_PEXELS_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch from Pexels');
+    }
+
+    const data = await response.json();
+    if (data.photos && data.photos.length > 0) {
+      const imageUrl = data.photos[0].src.large2x;
+      thumbnailCache[tripName] = imageUrl;
+      return imageUrl;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch custom thumbnail:', error);
+  }
+
+  // Fallback to default travel image
+  return PREDEFINED_THUMBNAILS.default;
 };
 
 const TripDetails: React.FC = () => {
@@ -29,6 +97,7 @@ const TripDetails: React.FC = () => {
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [isEditingEvent, setIsEditingEvent] = useState<string | null>(null);
   const [editedTrip, setEditedTrip] = useState<Trip | null>(null);
+  const [tripThumbnail, setTripThumbnail] = useState<string>('');
   const [eventData, setEventData] = useState({
     thumbnailUrl: '',
     date: '',
@@ -129,6 +198,16 @@ const TripDetails: React.FC = () => {
 
     fetchTrip();
   }, [id]);
+
+  useEffect(() => {
+    const loadThumbnail = async () => {
+      if (trip && !trip.thumbnailUrl) {
+        const thumbnail = await getDefaultThumbnail(trip.name);
+        setTripThumbnail(thumbnail);
+      }
+    };
+    loadThumbnail();
+  }, [trip?.name, trip?.thumbnailUrl]);
 
   const handleTripUpdate = (updatedTrip: Trip) => {
     setTrip(updatedTrip);
@@ -391,7 +470,7 @@ const TripDetails: React.FC = () => {
           <>
             {commonFields}
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Flight Number</label>
+              <label className="block text-gray-700 mb-2">Flight Number (optional)</label>
               <input
                 type="text"
                 value={eventData.flightNumber}
@@ -399,11 +478,11 @@ const TripDetails: React.FC = () => {
                   setEventData({ ...eventData, flightNumber: e.target.value })
                 }
                 className="input"
-                required
+                placeholder="Enter flight number"
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Airline</label>
+              <label className="block text-gray-700 mb-2">Airline (optional)</label>
               <input
                 type="text"
                 value={eventData.airline}
@@ -411,7 +490,7 @@ const TripDetails: React.FC = () => {
                   setEventData({ ...eventData, airline: e.target.value })
                 }
                 className="input"
-                required
+                placeholder="Enter airline name"
               />
             </div>
             <div className="mb-4 relative" ref={airportInputRef}>
@@ -536,7 +615,7 @@ const TripDetails: React.FC = () => {
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Address</label>
+              <label className="block text-gray-700 mb-2">Address (optional)</label>
               <input
                 type="text"
                 value={eventData.address}
@@ -544,7 +623,7 @@ const TripDetails: React.FC = () => {
                   setEventData({ ...eventData, address: e.target.value })
                 }
                 className="input"
-                required
+                placeholder="Enter address"
               />
             </div>
             <div className="mb-4">
@@ -613,7 +692,7 @@ const TripDetails: React.FC = () => {
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Address</label>
+              <label className="block text-gray-700 mb-2">Address (optional)</label>
               <input
                 type="text"
                 value={eventData.address}
@@ -621,7 +700,7 @@ const TripDetails: React.FC = () => {
                   setEventData({ ...eventData, address: e.target.value })
                 }
                 className="input"
-                required
+                placeholder="Enter address"
               />
             </div>
             <div className="mb-4">
@@ -672,11 +751,82 @@ const TripDetails: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">{trip.name}</h1>
-        <div className="flex space-x-4">
-          {isOwner && (
-            <>
+      <div className="mb-8">
+        <div className="flex flex-col space-y-6">
+          <div className="flex items-start space-x-6">
+            <div className="flex-shrink-0">
+              <img
+                src={trip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
+                alt={trip.name}
+                className="h-48 w-48 object-cover rounded-lg shadow-md"
+              />
+            </div>
+            <div className="flex-1">
+              {isEditingTrip && editedTrip ? (
+                <form onSubmit={(e) => { e.preventDefault(); handleTripSave(); }}>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Trip Name</label>
+                      <input
+                        type="text"
+                        value={editedTrip.name}
+                        onChange={(e) => setEditedTrip({ ...editedTrip, name: e.target.value })}
+                        className="input mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Thumbnail URL</label>
+                      <input
+                        type="url"
+                        value={editedTrip.thumbnailUrl || ''}
+                        onChange={(e) => setEditedTrip({ ...editedTrip, thumbnailUrl: e.target.value })}
+                        className="input mt-1"
+                        placeholder="Enter image URL"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Description</label>
+                      <textarea
+                        value={editedTrip.description || ''}
+                        onChange={(e) => setEditedTrip({ ...editedTrip, description: e.target.value })}
+                        className="input mt-1"
+                        rows={3}
+                        placeholder="Enter trip description"
+                      />
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingTrip(false)}
+                        className="btn btn-secondary"
+                      >
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary">
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <h1 className="text-4xl font-bold text-gray-900">{trip.name}</h1>
+                  {trip.description && (
+                    <p className="mt-4 text-xl text-gray-600">{trip.description}</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          {isOwner && !isEditingTrip && (
+            <div className="flex space-x-4">
+              <button
+                onClick={handleTripEdit}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                Edit Trip
+              </button>
               <button
                 onClick={() => setIsCollaboratorModalOpen(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
@@ -689,7 +839,7 @@ const TripDetails: React.FC = () => {
               >
                 Share Trip
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -701,7 +851,7 @@ const TripDetails: React.FC = () => {
             <div>
               <h3 className="text-lg leading-6 font-medium text-gray-900">Trip Details</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                Created by {trip.owner.name}
+                Created by {trip.owner.name} • {new Date(trip.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
             {!isOwner && (
@@ -712,12 +862,6 @@ const TripDetails: React.FC = () => {
           </div>
         </div>
         <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
-          {trip.description && (
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-gray-500">Description</h4>
-              <p className="mt-1 text-sm text-gray-900">{trip.description}</p>
-            </div>
-          )}
           <div className="flex items-center space-x-4">
             {trip.shareableLink && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">

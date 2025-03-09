@@ -39,8 +39,8 @@ export interface BaseEvent {
 
 export interface ArrivalDepartureEvent extends BaseEvent {
   type: 'arrival' | 'departure';
-  flightNumber: string;
-  airline: string;
+  flightNumber?: string;
+  airline?: string;
   time: string;
   airport: string;
   terminal?: string;
@@ -51,7 +51,7 @@ export interface ArrivalDepartureEvent extends BaseEvent {
 export interface StayEvent extends BaseEvent {
   type: 'stay';
   accommodationName: string;
-  address: string;
+  address?: string;
   checkIn: string;
   checkOut: string;
   reservationNumber?: string;
@@ -61,7 +61,7 @@ export interface StayEvent extends BaseEvent {
 export interface DestinationEvent extends BaseEvent {
   type: 'destination';
   placeName: string;
-  address: string;
+  address?: string;
   description: string;
   openingHours?: string;
 }

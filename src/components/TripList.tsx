@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { Trip } from '../types';
@@ -6,13 +6,98 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 
+// Cache for storing thumbnail URLs
+const thumbnailCache: { [key: string]: string } = {};
+
+// Predefined thumbnails as fallback
+const PREDEFINED_THUMBNAILS: { [key: string]: string } = {
+  beach: 'https://images.pexels.com/photos/1032650/pexels-photo-1032650.jpeg?auto=compress&cs=tinysrgb&w=800',
+  mountain: 'https://images.pexels.com/photos/417173/pexels-photo-417173.jpeg?auto=compress&cs=tinysrgb&w=800',
+  city: 'https://images.pexels.com/photos/466685/pexels-photo-466685.jpeg?auto=compress&cs=tinysrgb&w=800',
+  paris: 'https://images.pexels.com/photos/699466/pexels-photo-699466.jpeg?auto=compress&cs=tinysrgb&w=800',
+  italy: 'https://images.pexels.com/photos/1797161/pexels-photo-1797161.jpeg?auto=compress&cs=tinysrgb&w=800',
+  japan: 'https://images.pexels.com/photos/590478/pexels-photo-590478.jpeg?auto=compress&cs=tinysrgb&w=800',
+  camping: 'https://images.pexels.com/photos/2666598/pexels-photo-2666598.jpeg?auto=compress&cs=tinysrgb&w=800',
+  ski: 'https://images.pexels.com/photos/848599/pexels-photo-848599.jpeg?auto=compress&cs=tinysrgb&w=800',
+  default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
+};
+
+const getDefaultThumbnail = async (tripName: string): Promise<string> => {
+  // Check cache first
+  if (thumbnailCache[tripName]) {
+    return thumbnailCache[tripName];
+  }
+
+  // Check predefined thumbnails
+  const lowercaseName = tripName.toLowerCase();
+  for (const [keyword, url] of Object.entries(PREDEFINED_THUMBNAILS)) {
+    if (lowercaseName.includes(keyword)) {
+      thumbnailCache[tripName] = url;
+      return url;
+    }
+  }
+
+  try {
+    // Remove common words and get keywords from trip name
+    const keywords = tripName
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(' ')
+      .filter(word => !['trip', 'to', 'in', 'at', 'the', 'a', 'an'].includes(word))
+      .join(' ');
+
+    // Try to fetch from Pexels API
+    const response = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(keywords)}&per_page=1&orientation=landscape`,
+      {
+        headers: {
+          'Authorization': import.meta.env.VITE_PEXELS_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch from Pexels');
+    }
+
+    const data = await response.json();
+    if (data.photos && data.photos.length > 0) {
+      const imageUrl = data.photos[0].src.large2x;
+      thumbnailCache[tripName] = imageUrl;
+      return imageUrl;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch custom thumbnail:', error);
+  }
+
+  // Fallback to default travel image
+  return PREDEFINED_THUMBNAILS.default;
+};
+
 export default function TripList() {
   const navigate = useNavigate();
-  const { state, addTrip, deleteTrip } = useTrip();
+  const { state, addTrip, deleteTrip, updateTrip } = useTrip();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newTrip, setNewTrip] = useState({ name: '', thumbnailUrl: '' });
+  const [newTrip, setNewTrip] = useState({ name: '', thumbnailUrl: '', description: '' });
   const { user } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [editingTripId, setEditingTripId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState({ name: '', thumbnailUrl: '', description: '' });
+  const [tripThumbnails, setTripThumbnails] = useState<{ [key: string]: string }>({});
+
+  // Load thumbnails for trips
+  useEffect(() => {
+    const loadThumbnails = async () => {
+      const thumbnails: { [key: string]: string } = {};
+      for (const trip of state.trips) {
+        if (!trip.thumbnailUrl) {
+          thumbnails[trip._id] = await getDefaultThumbnail(trip.name);
+        }
+      }
+      setTripThumbnails(thumbnails);
+    };
+    loadThumbnails();
+  }, [state.trips]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +111,7 @@ export default function TripList() {
       const newTripData: Omit<Trip, '_id' | 'createdAt' | 'updatedAt'> = {
         name: newTrip.name,
         thumbnailUrl: newTrip.thumbnailUrl || undefined,
-        description: '',
+        description: newTrip.description || '',
         startDate: '',
         endDate: '',
         events: [],
@@ -44,13 +129,46 @@ export default function TripList() {
       console.log('Trip created successfully:', createdTrip);
       await addTrip(createdTrip);
       console.log('Trip added to state');
-      setNewTrip({ name: '', thumbnailUrl: '' });
+      setNewTrip({ name: '', thumbnailUrl: '', description: '' });
       setIsModalOpen(false);
       setError(null);
     } catch (err) {
       console.error('Error creating trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to create trip');
     }
+  };
+
+  const handleEditSubmit = async (tripId: string) => {
+    try {
+      const tripToUpdate = state.trips.find(t => t._id === tripId);
+      if (!tripToUpdate) {
+        setError('Trip not found');
+        return;
+      }
+
+      const updatedTrip = {
+        ...tripToUpdate,
+        name: editFormData.name,
+        thumbnailUrl: editFormData.thumbnailUrl || undefined,
+        description: editFormData.description || ''
+      };
+
+      await updateTrip(updatedTrip);
+      setEditingTripId(null);
+      setError(null);
+    } catch (err) {
+      console.error('Error updating trip:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update trip');
+    }
+  };
+
+  const startEditing = (trip: Trip) => {
+    setEditFormData({
+      name: trip.name,
+      thumbnailUrl: trip.thumbnailUrl || '',
+      description: trip.description || ''
+    });
+    setEditingTripId(trip._id);
   };
 
   const handleDeleteTrip = async (tripId: string | undefined) => {
@@ -119,32 +237,92 @@ export default function TripList() {
             key={trip._id}
             className="bg-white overflow-hidden shadow rounded-lg"
           >
-            {trip.thumbnailUrl && (
-              <div className="h-48 w-full">
-                <img
-                  src={trip.thumbnailUrl}
-                  alt={trip.name}
-                  className="h-full w-full object-cover"
-                />
+            {editingTripId === trip._id ? (
+              <div className="p-4">
+                <form onSubmit={(e) => { e.preventDefault(); handleEditSubmit(trip._id); }}>
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Trip Name</label>
+                    <input
+                      type="text"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      className="input"
+                      required
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Thumbnail URL</label>
+                    <input
+                      type="url"
+                      value={editFormData.thumbnailUrl}
+                      onChange={(e) => setEditFormData({ ...editFormData, thumbnailUrl: e.target.value })}
+                      className="input"
+                      placeholder="Enter image URL"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      value={editFormData.description}
+                      onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                      className="input"
+                      placeholder="Enter description"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingTripId(null)}
+                      className="btn btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                      Save
+                    </button>
+                  </div>
+                </form>
               </div>
+            ) : (
+              <>
+                <div className="h-48 w-full">
+                  <img
+                    src={trip.thumbnailUrl || tripThumbnails[trip._id] || PREDEFINED_THUMBNAILS.default}
+                    alt={trip.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>
+                  {trip.description && (
+                    <p className="mt-2 text-sm text-gray-600 line-clamp-2">{trip.description}</p>
+                  )}
+                  <div className="mt-4 flex justify-between items-center">
+                    <div className="space-x-2">
+                      <button
+                        onClick={() => navigate(`/trips/${trip._id}`)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => startEditing(trip)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteTrip(trip._id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg font-medium text-gray-900">{trip.name}</h3>
-              <div className="mt-2 flex justify-between items-center">
-                <button
-                  onClick={() => navigate(`/trips/${trip._id}`)}
-                  className="text-indigo-600 hover:text-indigo-900"
-                >
-                  View Details
-                </button>
-                <button
-                  onClick={() => handleDeleteTrip(trip._id)}
-                  className="text-red-600 hover:text-red-900"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
           </div>
         ))}
       </div>
@@ -176,6 +354,18 @@ export default function TripList() {
                   }
                   className="input"
                   placeholder="Enter image URL or leave empty"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Description (optional)</label>
+                <textarea
+                  value={newTrip.description}
+                  onChange={(e) =>
+                    setNewTrip({ ...newTrip, description: e.target.value })
+                  }
+                  className="input"
+                  placeholder="Enter description"
+                  rows={3}
                 />
               </div>
               <div className="flex justify-end gap-4">
