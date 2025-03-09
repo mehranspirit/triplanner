@@ -34,4 +34,27 @@ body {
   .card {
     @apply bg-white rounded-lg shadow-md p-4;
   }
+
+  /* Responsive container classes */
+  .container-mobile {
+    @apply px-4 w-full mx-auto sm:px-6 lg:px-8 max-w-7xl;
+  }
+
+  /* Responsive text classes */
+  .text-mobile {
+    @apply text-sm sm:text-base;
+  }
+  
+  .heading-mobile {
+    @apply text-xl sm:text-2xl md:text-3xl font-bold;
+  }
+
+  /* Responsive spacing classes */
+  .section-padding {
+    @apply py-4 sm:py-6 md:py-8;
+  }
+
+  .card-padding {
+    @apply p-3 sm:p-4 md:p-6;
+  }
 } 

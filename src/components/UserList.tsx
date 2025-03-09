@@ -80,7 +80,9 @@ export const UserList = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <h2 className="text-2xl font-bold mb-6">Registered Users</h2>
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+      
+      {/* Desktop table view */}
+      <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -93,7 +95,7 @@ export const UserList = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {users.map((user) => (
-              <tr key={user._id} className="hover:bg-gray-50">
+              <tr key={user._id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{user.name}</div>
                 </td>
@@ -106,25 +108,19 @@ export const UserList = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">
-                    {user.isAdmin ? (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                        Admin
-                      </span>
-                    ) : (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                        User
-                      </span>
-                    )}
-                  </div>
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {user.isAdmin ? 'Admin' : 'User'}
+                  </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   {(currentUser?.isAdmin || currentUser?._id === user._id) && (
                     <button
                       onClick={() => handleDeleteClick(user)}
                       className="text-red-600 hover:text-red-900"
                     >
-                      Delete Account
+                      Delete
                     </button>
                   )}
                 </td>
@@ -132,6 +128,38 @@ export const UserList = () => {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-4">
+        {users.map((user) => (
+          <div key={user._id} className="bg-white shadow rounded-lg p-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">{user.name}</h3>
+                <p className="text-sm text-gray-500">{user.email}</p>
+              </div>
+              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+              }`}>
+                {user.isAdmin ? 'Admin' : 'User'}
+              </span>
+            </div>
+            <div className="mt-2 text-sm text-gray-500">
+              Joined {new Date(user.createdAt).toLocaleDateString()}
+            </div>
+            {(currentUser?.isAdmin || currentUser?._id === user._id) && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={() => handleDeleteClick(user)}
+                  className="text-red-600 hover:text-red-900 text-sm font-medium"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Delete Confirmation Modal */}
