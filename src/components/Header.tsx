@@ -33,8 +33,27 @@ const Header: React.FC = () => {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link to="/trips" className="text-2xl font-bold text-indigo-600">
-                Triplanner
+              <Link to="/trips" className="flex items-center space-x-2">
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  viewBox="0 0 200 200" 
+                  width={32}
+                  height={32}
+                  className="flex-shrink-0"
+                  style={{ border: '2px solid blue' }}
+                >
+                  <path 
+                    d="M100 20 C70 20 40 50 40 80 C40 130 100 180 100 180 C100 180 160 130 160 80 C160 50 130 20 100 20 Z" 
+                    fill="#4CAF50"
+                  />
+                  <circle 
+                    cx="100" 
+                    cy="80" 
+                    r="25" 
+                    fill="#FF4500"
+                  />
+                </svg>
+                <span className="text-2xl font-bold text-indigo-600">Triplanner</span>
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
