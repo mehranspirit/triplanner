@@ -38,45 +38,84 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
 
+        console.log('Stored credentials:', { 
+          hasToken: !!storedToken, 
+          hasUser: !!storedUser 
+        });
+
         if (!storedToken || !storedUser) {
+          console.log('No stored credentials found');
           setIsLoading(false);
           return;
         }
 
+        // Parse stored user first to validate JSON
+        let parsedUser: User;
+        try {
+          parsedUser = JSON.parse(storedUser);
+          // Set initial state with stored data
+          setToken(storedToken);
+          setUser(parsedUser);
+        } catch (e) {
+          console.error('Failed to parse stored user:', e);
+          throw new Error('Invalid stored user data');
+        }
+
         // Validate token with the backend
+        console.log('Validating token with backend...');
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/validate`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${storedToken}`,
-            'Cache-Control': 'no-cache'
-          },
-          credentials: 'include' // Include cookies in the request
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
         });
 
+        console.log('Validation response status:', response.status);
+
         if (!response.ok) {
-          throw new Error('Invalid token');
+          const errorData = await response.text();
+          console.error('Validation failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            data: errorData
+          });
+          throw new Error('Token validation failed');
         }
 
-        // Get the refreshed user data from the response
         const data = await response.json();
-        
-        // Update the token if a new one was provided
-        const newToken = data.token || storedToken;
-        
-        // Update localStorage with potentially refreshed data
-        localStorage.setItem('token', newToken);
-        localStorage.setItem('user', JSON.stringify(data.user || JSON.parse(storedUser)));
+        console.log('Validation response data:', data);
 
-        // Update state with the latest data
-        setToken(newToken);
-        setUser(data.user || JSON.parse(storedUser));
+        if (data.valid === false) {
+          throw new Error('Token is invalid');
+        }
+
+        // If we get here, the token is valid
+        // Keep using the stored data unless the server explicitly provides new data
+        if (data.token) {
+          console.log('Updating token from server');
+          localStorage.setItem('token', data.token);
+          setToken(data.token);
+        }
+
+        if (data.user) {
+          console.log('Updating user data from server');
+          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(data.user);
+        }
+
       } catch (error) {
-        console.warn('Token validation failed:', error);
-        // Clear all auth data on validation failure
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setToken(null);
-        setUser(null);
+        console.error('Authentication error:', error);
+        // Only clear auth data if it's an actual auth error
+        if (error instanceof Error && 
+            (error.message.includes('token') || error.message.includes('auth'))) {
+          console.log('Clearing auth data due to validation error');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setToken(null);
+          setUser(null);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -86,6 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = (newToken: string, newUser: User) => {
+    console.log('Logging in with new credentials');
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('token', newToken);
@@ -93,22 +133,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    // Clear all auth data
+    console.log('Logging out...');
+    // First clear local state
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
-    // Call logout endpoint to invalidate the token on the server
-    fetch(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      credentials: 'include'
-    }).catch(error => {
-      console.warn('Logout request failed:', error);
-    });
+    // Then notify the server
+    const currentToken = token; // Capture the token before it's cleared
+    if (currentToken) {
+      fetch(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${currentToken}`,
+          'Content-Type': 'application/json'
+        }
+      }).catch(error => {
+        console.warn('Logout request failed:', error);
+      });
+    }
   };
 
   const value = {
