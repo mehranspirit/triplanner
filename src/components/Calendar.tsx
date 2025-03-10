@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTrip } from '../context/TripContext';
 import { Trip, Event, StayEvent } from '../types';
 import { Link } from 'react-router-dom';
+import CalendarMap from './CalendarMap';
 
 // Add the default thumbnail constant
 const PREDEFINED_THUMBNAILS = {
@@ -454,39 +455,53 @@ const Calendar: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Trip Calendar</h1>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setSelectedYear(selectedYear - 1)}
-            className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            ←
-          </button>
-          <span className="text-lg font-medium">{selectedYear}</span>
-          <button
-            onClick={() => setSelectedYear(selectedYear + 1)}
-            className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            →
-          </button>
+    <div className="space-y-6">
+      {/* Map View */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Trip Locations</h2>
+          <CalendarMap trips={state.trips} />
         </div>
       </div>
-      
-      {state.loading ? (
-        <div className="flex justify-center items-center h-32">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+
+      {/* Trip List */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Upcoming Trips</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900">Trip Calendar</h1>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setSelectedYear(selectedYear - 1)}
+                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                ←
+              </button>
+              <span className="text-lg font-medium">{selectedYear}</span>
+              <button
+                onClick={() => setSelectedYear(selectedYear + 1)}
+                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                →
+              </button>
+            </div>
+          </div>
+          
+          {state.loading ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : state.error ? (
+            <div className="text-red-600 text-center">{state.error}</div>
+          ) : tripDurations.length === 0 ? (
+            <div className="text-gray-500 text-center py-8">No trips found</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 12 }, (_, i) => renderMonth(i))}
+            </div>
+          )}
         </div>
-      ) : state.error ? (
-        <div className="text-red-600 text-center">{state.error}</div>
-      ) : tripDurations.length === 0 ? (
-        <div className="text-gray-500 text-center py-8">No trips found</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 12 }, (_, i) => renderMonth(i))}
-        </div>
-      )}
+      </div>
     </div>
   );
 };

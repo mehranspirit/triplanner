@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
+import TripMap from './TripMap';
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
@@ -750,29 +751,27 @@ const TripDetails: React.FC = () => {
   });
 
   return (
-    <div className="max-w-full md:max-w-7xl mx-auto">
+    <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 space-y-6">
       <div className="relative">
         {/* Full width thumbnail image with overlay */}
-        <div className="px-0 sm:px-0 md:px-4">
-          <div className="w-full h-[300px] relative rounded-none md:rounded-lg overflow-hidden">
-            <img
-              src={trip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
-              alt={trip.name}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-              <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{trip.name}</h1>
-              {trip.description && (
-                <p className="text-lg sm:text-xl text-white/90">{trip.description}</p>
-              )}
-            </div>
+        <div className="w-full h-[300px] relative rounded-none md:rounded-lg overflow-hidden">
+          <img
+            src={trip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
+            alt={trip.name}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+          <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{trip.name}</h1>
+            {trip.description && (
+              <p className="text-lg sm:text-xl text-white/90">{trip.description}</p>
+            )}
           </div>
         </div>
 
         {/* Action buttons */}
         {isOwner && (
-          <div className="absolute top-4 right-4 sm:right-6 md:right-8 flex space-x-2">
+          <div className="absolute top-4 right-4 sm:right-6 flex space-x-2">
             <button
               onClick={handleTripEdit}
               className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base"
@@ -793,119 +792,10 @@ const TripDetails: React.FC = () => {
             </button>
           </div>
         )}
-
-        {/* Edit Trip Modal */}
-        {isEditingTrip && editedTrip && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-0 sm:p-4 z-50">
-            <div className="bg-white w-full sm:rounded-lg shadow-xl sm:max-w-3xl sm:w-full max-h-screen sm:max-h-[90vh] overflow-y-auto">
-              <form onSubmit={(e) => { e.preventDefault(); handleTripSave(); }}>
-                <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-gray-900">Edit Trip</h2>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingTrip(false)}
-                      className="text-gray-400 hover:text-gray-500"
-                    >
-                      <span className="sr-only">Close</span>
-                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="px-4 sm:px-6 py-4">
-                  <div className="space-y-4">
-                    {/* Preview current thumbnail */}
-                    <div className="aspect-video w-full overflow-hidden rounded-lg">
-                      <img
-                        src={editedTrip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
-                        alt={editedTrip.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Trip Name</label>
-                      <input
-                        type="text"
-                        value={editedTrip.name}
-                        onChange={(e) => setEditedTrip({ ...editedTrip, name: e.target.value })}
-                        className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Thumbnail URL</label>
-                      <input
-                        type="url"
-                        value={editedTrip.thumbnailUrl || ''}
-                        onChange={(e) => setEditedTrip({ ...editedTrip, thumbnailUrl: e.target.value })}
-                        className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Enter image URL"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Description</label>
-                      <textarea
-                        value={editedTrip.description || ''}
-                        onChange={(e) => setEditedTrip({ ...editedTrip, description: e.target.value })}
-                        className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        rows={3}
-                        placeholder="Enter trip description"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-4 sm:px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingTrip(false)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-md shadow-sm hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm transition-colors"
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Trip metadata */}
-      <div className="px-0 sm:px-0 md:px-4">
-        <div className="bg-white shadow rounded-none md:rounded-lg mt-0 sm:mt-6 mb-0 sm:mb-6">
-          <div className="px-4 sm:px-6 py-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">
-                  Created by {trip.owner.name} • {new Date(trip.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                </p>
-              </div>
-              {!isOwner && (
-                <div className="text-sm text-gray-500">
-                  Your role: {collaborator?.role || 'Viewer'}
-                </div>
-              )}
-            </div>
-            {trip.shareableLink && (
-              <div className="mt-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  Shared
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
+      {/* Events and Map section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Events list */}
         <div className="bg-white shadow rounded-none md:rounded-lg">
           <div className="px-4 py-5 sm:px-6">
@@ -930,107 +820,135 @@ const TripDetails: React.FC = () => {
                   return dateA - dateB;
                 })
                 .map((event) => (
-                <li key={event.id} className="px-4 py-4 sm:px-6">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0">
-                      <img
-                        src={event.thumbnailUrl || DEFAULT_THUMBNAILS[event.type]}
-                        alt={event.type}
-                        className="h-24 w-24 object-cover rounded-lg"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-indigo-600 capitalize">
-                        {event.type}
-                      </p>
-                      {event.type === 'stay' ? (
-                        <div>
-                          <p className="text-sm text-gray-900">{(event as StayEvent).accommodationName}</p>
-                          <p className="text-sm text-gray-500">
-                            Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          {event.notes && (
-                            <p className="text-sm text-gray-500 mt-1 truncate">
-                              Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                /(https?:\/\/[^\s]+)/g,
-                                '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                              ) }} />
-                            </p>
-                          )}
-                        </div>
-                      ) : event.type === 'destination' ? (
-                        <div>
-                          <p className="text-sm text-gray-900">{(event as DestinationEvent).placeName}</p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          {event.notes && (
-                            <p className="text-sm text-gray-500 mt-1 truncate">
-                              Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                /(https?:\/\/[^\s]+)/g,
-                                '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                              ) }} />
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-sm text-gray-900">
-                            {(event as ArrivalDepartureEvent).airport}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
-                          </p>
-                          {event.notes && (
-                            <p className="text-sm text-gray-500 mt-1 truncate">
-                              Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                /(https?:\/\/[^\s]+)/g,
-                                '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                              ) }} />
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {canEdit && (
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEditEvent(event)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (trip._id) {
-                              deleteEvent(trip._id, event.id);
-                              setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
-                            }
-                          }}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
+                  <li key={event.id} className="px-4 py-4 sm:px-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                      <div className="flex-shrink-0">
+                        <img
+                          src={event.thumbnailUrl || DEFAULT_THUMBNAILS[event.type]}
+                          alt={event.type}
+                          className="h-20 w-20 object-cover rounded-lg"
+                        />
                       </div>
-                    )}
-                  </div>
-                </li>
-              ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-indigo-600 capitalize">
+                            {event.type}
+                          </p>
+                          {canEdit && (
+                            <div className="flex space-x-2 ml-2">
+                              <button
+                                onClick={() => handleEditEvent(event)}
+                                className="text-indigo-600 hover:text-indigo-900 text-sm"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (trip._id) {
+                                    deleteEvent(trip._id, event.id);
+                                    setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-900 text-sm"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {event.type === 'stay' ? (
+                          <div className="mt-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {(event as StayEvent).accommodationName}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {(event as StayEvent).address && (
+                              <p className="text-xs text-gray-500 mt-1 truncate">
+                                {(event as StayEvent).address}
+                              </p>
+                            )}
+                            {event.notes && (
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                  /(https?:\/\/[^\s]+)/g,
+                                  '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                ) }} />
+                              </p>
+                            )}
+                          </div>
+                        ) : event.type === 'destination' ? (
+                          <div className="mt-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {(event as DestinationEvent).placeName}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {(event as DestinationEvent).address && (
+                              <p className="text-xs text-gray-500 mt-1 truncate">
+                                {(event as DestinationEvent).address}
+                              </p>
+                            )}
+                            {event.notes && (
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                  /(https?:\/\/[^\s]+)/g,
+                                  '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                ) }} />
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mt-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {(event as ArrivalDepartureEvent).airport}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
+                            </p>
+                            {event.notes && (
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                  /(https?:\/\/[^\s]+)/g,
+                                  '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                ) }} />
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
             </ul>
+          </div>
+        </div>
+
+        {/* Map view */}
+        <div className="bg-white shadow rounded-none md:rounded-lg relative" style={{ zIndex: 0 }}>
+          <div className="px-4 py-5 sm:px-6">
+            <h3 className="text-lg font-medium text-gray-900">Trip Map</h3>
+          </div>
+          <div className="border-t border-gray-200">
+            <div className="h-[600px]">
+              <TripMap trip={trip} />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Event Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 overflow-y-auto" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto relative">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
                 {isEditingEvent ? 'Edit Event' : 'Add Event'}
@@ -1086,22 +1004,107 @@ const TripDetails: React.FC = () => {
         </div>
       )}
 
-      {/* Modals */}
-      <CollaboratorModal
-        trip={{
-          ...trip,
-          _id: trip._id || id || '' // Ensure _id is always a string
-        }}
-        isOpen={isCollaboratorModalOpen}
-        onClose={() => setIsCollaboratorModalOpen(false)}
-        onUpdate={handleTripUpdate}
-      />
-      <ShareModal
-        trip={trip}
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        onUpdate={handleTripUpdate}
-      />
+      {/* Edit Trip Modal */}
+      {isEditingTrip && editedTrip && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 overflow-y-auto" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Edit Trip</h2>
+              <button
+                onClick={() => setIsEditingTrip(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Preview current thumbnail */}
+              <div className="aspect-w-16 aspect-h-9 rounded-lg overflow-hidden">
+                <img
+                  src={editedTrip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
+                  alt={editedTrip.name}
+                  className="object-cover"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Trip Name</label>
+                  <input
+                    type="text"
+                    value={editedTrip.name}
+                    onChange={(e) => setEditedTrip({ ...editedTrip, name: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Thumbnail URL</label>
+                  <input
+                    type="url"
+                    value={editedTrip.thumbnailUrl || ''}
+                    onChange={(e) => setEditedTrip({ ...editedTrip, thumbnailUrl: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="Enter image URL"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    value={editedTrip.description || ''}
+                    onChange={(e) => setEditedTrip({ ...editedTrip, description: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    rows={3}
+                    placeholder="Enter trip description"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTrip(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTripSave}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collaborator and Share Modals */}
+      <div style={{ zIndex: 9999 }}>
+        <CollaboratorModal
+          trip={{
+            ...trip,
+            _id: trip._id || id || ''
+          }}
+          isOpen={isCollaboratorModalOpen}
+          onClose={() => setIsCollaboratorModalOpen(false)}
+          onUpdate={handleTripUpdate}
+        />
+        <ShareModal
+          trip={trip}
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          onUpdate={handleTripUpdate}
+        />
+      </div>
     </div>
   );
 };
