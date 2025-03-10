@@ -39,26 +39,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedUser = localStorage.getItem('user');
 
         if (!storedToken || !storedUser) {
-          throw new Error('No stored credentials');
+          setIsLoading(false);
+          return;
         }
 
         // Validate token with the backend
-        const response = await fetch('http://localhost:3000/api/auth/validate', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/validate`, {
+          method: 'GET',
           headers: {
             'Authorization': `Bearer ${storedToken}`,
+            'Cache-Control': 'no-cache'
           },
+          credentials: 'include' // Include cookies in the request
         });
 
         if (!response.ok) {
           throw new Error('Invalid token');
         }
 
-        // Token is valid, restore the session
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+        // Get the refreshed user data from the response
+        const data = await response.json();
+        
+        // Update the token if a new one was provided
+        const newToken = data.token || storedToken;
+        
+        // Update localStorage with potentially refreshed data
+        localStorage.setItem('token', newToken);
+        localStorage.setItem('user', JSON.stringify(data.user || JSON.parse(storedUser)));
+
+        // Update state with the latest data
+        setToken(newToken);
+        setUser(data.user || JSON.parse(storedUser));
       } catch (error) {
-        // If validation fails, clear the stored data
         console.warn('Token validation failed:', error);
+        // Clear all auth data on validation failure
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setToken(null);
@@ -79,10 +93,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    // Clear all auth data
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    
+    // Call logout endpoint to invalidate the token on the server
+    fetch(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      credentials: 'include'
+    }).catch(error => {
+      console.warn('Logout request failed:', error);
+    });
   };
 
   const value = {
