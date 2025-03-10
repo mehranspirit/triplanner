@@ -7,6 +7,25 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
+// Validate token
+router.get('/validate', auth, async (req, res) => {
+  try {
+    // If we get here, it means the auth middleware passed
+    // and the token is valid
+    res.json({ 
+      valid: true,
+      user: {
+        _id: req.user._id,
+        email: req.user.email,
+        name: req.user.name,
+        isAdmin: req.user.isAdmin
+      }
+    });
+  } catch (error) {
+    res.status(401).json({ message: 'Invalid token' });
+  }
+});
+
 // Register
 router.post('/register', async (req, res) => {
   try {

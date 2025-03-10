@@ -47,6 +47,12 @@ const Header: React.FC = () => {
                 My Trips
               </Link>
               <Link
+                to="/calendar"
+                className={getTabClassName('/calendar')}
+              >
+                Calendar
+              </Link>
+              <Link
                 to="/users"
                 className={getTabClassName('/users')}
               >
@@ -137,6 +143,13 @@ const Header: React.FC = () => {
             onClick={() => setIsMenuOpen(false)}
           >
             My Trips
+          </Link>
+          <Link
+            to="/calendar"
+            className={getMobileTabClassName('/calendar')}
+            onClick={() => setIsMenuOpen(false)}
+          >
+            Calendar
           </Link>
           <Link
             to="/users"

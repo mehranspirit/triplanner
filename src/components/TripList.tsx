@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
-import { Trip } from '../types';
-import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
+import { Trip, StayEvent } from '../types';
+import { v4 as uuidv4 } from 'uuid';
+import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
 
-// Predefined thumbnails as fallback
-const PREDEFINED_THUMBNAILS: { [key: string]: string } = {
+const PREDEFINED_THUMBNAILS = {
   beach: 'https://images.pexels.com/photos/1032650/pexels-photo-1032650.jpeg?auto=compress&cs=tinysrgb&w=800',
   mountain: 'https://images.pexels.com/photos/417173/pexels-photo-417173.jpeg?auto=compress&cs=tinysrgb&w=800',
   city: 'https://images.pexels.com/photos/466685/pexels-photo-466685.jpeg?auto=compress&cs=tinysrgb&w=800',
@@ -74,6 +74,12 @@ const getDefaultThumbnail = async (tripName: string): Promise<string> => {
   return PREDEFINED_THUMBNAILS.default;
 };
 
+interface TripDuration {
+  startDate: Date;
+  endDate: Date;
+  duration: number;
+}
+
 export default function TripList() {
   const navigate = useNavigate();
   const { state, addTrip, deleteTrip, updateTrip } = useTrip();
@@ -84,6 +90,7 @@ export default function TripList() {
   const [editingTripId, setEditingTripId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState({ name: '', thumbnailUrl: '', description: '' });
   const [tripThumbnails, setTripThumbnails] = useState<{ [key: string]: string }>({});
+  const [tripDurations, setTripDurations] = useState<{ [key: string]: TripDuration }>({});
 
   // Load thumbnails for trips
   useEffect(() => {
@@ -98,6 +105,72 @@ export default function TripList() {
     };
     loadThumbnails();
   }, [state.trips]);
+
+  // Calculate trip durations
+  useEffect(() => {
+    const calculateTripDurations = () => {
+      const durations: { [key: string]: TripDuration } = {};
+      
+      state.trips.forEach(trip => {
+        let startDate: Date | null = null;
+        let endDate: Date | null = null;
+
+        // Sort events by date
+        const sortedEvents = [...trip.events].sort((a, b) => {
+          const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
+          const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
+          return dateA - dateB;
+        });
+
+        sortedEvents.forEach(event => {
+          const eventDate = event.type === 'stay' 
+            ? new Date((event as StayEvent).checkIn)
+            : new Date(event.date);
+
+          if (!startDate || eventDate < startDate) {
+            startDate = eventDate;
+          }
+
+          // For stay events, use checkout date as potential end date
+          if (event.type === 'stay') {
+            const checkoutDate = new Date((event as StayEvent).checkOut);
+            if (!endDate || checkoutDate > endDate) {
+              endDate = checkoutDate;
+            }
+          } else {
+            if (!endDate || eventDate > endDate) {
+              endDate = eventDate;
+            }
+          }
+        });
+
+        // If no events, use current date
+        if (!startDate) startDate = new Date();
+        if (!endDate) endDate = startDate;
+
+        const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        durations[trip._id] = {
+          startDate,
+          endDate,
+          duration
+        };
+      });
+
+      setTripDurations(durations);
+    };
+
+    calculateTripDurations();
+  }, [state.trips]);
+
+  const formatDateRange = (start: Date, end: Date) => {
+    const options: Intl.DateTimeFormatOptions = { 
+      month: 'short', 
+      day: 'numeric',
+      year: start.getFullYear() !== end.getFullYear() ? 'numeric' : undefined
+    };
+    return `${start.toLocaleDateString('en-US', options)} - ${end.toLocaleDateString('en-US', options)}${end.getFullYear() !== start.getFullYear() ? `, ${end.getFullYear()}` : ''}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -295,6 +368,14 @@ export default function TripList() {
                 </div>
                 <div className="px-4 py-5 sm:p-6">
                   <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>
+                  {tripDurations[trip._id] && (
+                    <p className="text-sm text-gray-600 mt-1">
+                      {formatDateRange(tripDurations[trip._id].startDate, tripDurations[trip._id].endDate)}
+                      <span className="ml-2 text-gray-500">
+                        • {tripDurations[trip._id].duration} {tripDurations[trip._id].duration === 1 ? 'day' : 'days'}
+                      </span>
+                    </p>
+                  )}
                   {trip.description && (
                     <p className="mt-2 text-sm text-gray-600 line-clamp-2">{trip.description}</p>
                   )}
