@@ -6,12 +6,12 @@ import Logo from './Logo';
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
 const Header: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const isMainAdmin = user?.email === ADMIN_EMAIL;
+  const isMainAdmin = !isLoading && user?.email === ADMIN_EMAIL;
 
   const handleLogout = () => {
     logout();
