@@ -3,6 +3,8 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
+
 interface User {
   _id: string;
   email: string;
@@ -19,6 +21,8 @@ export const UserList = () => {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const { user: currentUser, logout } = useAuth();
   const navigate = useNavigate();
+
+  const isMainAdmin = currentUser?.email === ADMIN_EMAIL;
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -57,6 +61,27 @@ export const UserList = () => {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete user');
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newIsAdmin: boolean) => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ isAdmin: newIsAdmin })
+      });
+
+      setUsers(users.map(user => 
+        user._id === userId 
+          ? { ...user, isAdmin: newIsAdmin }
+          : user
+      ));
+    } catch (err) {
+      setError('Failed to update user role');
     }
   };
 
@@ -108,14 +133,25 @@ export const UserList = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {user.isAdmin ? 'Admin' : 'User'}
-                  </span>
+                  {isMainAdmin && user.email !== ADMIN_EMAIL ? (
+                    <select
+                      value={user.isAdmin ? 'admin' : 'user'}
+                      onChange={(e) => handleRoleChange(user._id, e.target.value === 'admin')}
+                      className="block w-24 text-sm font-semibold rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  ) : (
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {user.isAdmin ? 'Admin' : 'User'}
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  {(currentUser?.isAdmin || currentUser?._id === user._id) && (
+                  {(isMainAdmin || currentUser?._id === user._id) && user.email !== ADMIN_EMAIL && (
                     <button
                       onClick={() => handleDeleteClick(user)}
                       className="text-red-600 hover:text-red-900"
@@ -139,16 +175,27 @@ export const UserList = () => {
                 <h3 className="text-lg font-medium text-gray-900">{user.name}</h3>
                 <p className="text-sm text-gray-500">{user.email}</p>
               </div>
-              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-              }`}>
-                {user.isAdmin ? 'Admin' : 'User'}
-              </span>
+              {isMainAdmin && user.email !== ADMIN_EMAIL ? (
+                <select
+                  value={user.isAdmin ? 'admin' : 'user'}
+                  onChange={(e) => handleRoleChange(user._id, e.target.value === 'admin')}
+                  className="block w-24 text-sm font-semibold rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              ) : (
+                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                  user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {user.isAdmin ? 'Admin' : 'User'}
+                </span>
+              )}
             </div>
             <div className="mt-2 text-sm text-gray-500">
               Joined {new Date(user.createdAt).toLocaleDateString()}
             </div>
-            {(currentUser?.isAdmin || currentUser?._id === user._id) && (
+            {(isMainAdmin || currentUser?._id === user._id) && user.email !== ADMIN_EMAIL && (
               <div className="mt-3 flex justify-end">
                 <button
                   onClick={() => handleDeleteClick(user)}
@@ -164,7 +211,7 @@ export const UserList = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && userToDelete && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-md mx-auto">
             <h3 className="text-lg font-bold mb-4">Delete Account</h3>
             <p className="mb-6">
