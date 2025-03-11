@@ -21,7 +21,7 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   preflightContinue: false,
@@ -42,7 +42,8 @@ app.patch('/api/users/:userId/role', auth, async (req, res) => {
         isAdmin: req.user.isAdmin
       },
       params: req.params,
-      body: req.body
+      body: req.body,
+      headers: req.headers
     });
 
     // Check if the current user is the main admin
@@ -96,7 +97,13 @@ app.patch('/api/users/:userId/role', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error updating user role:', error);
+    console.error('Error updating user role:', {
+      error: error.message,
+      stack: error.stack,
+      requestBody: req.body,
+      requestParams: req.params,
+      requestUser: req.user
+    });
     res.status(500).json({ message: 'Error updating user role' });
   }
 });
