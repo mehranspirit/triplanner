@@ -76,9 +76,9 @@ router.post('/login', async (req, res) => {
 // Get list of users (protected route)
 router.get('/users', auth, async (req, res) => {
   try {
-    // Check if the current user is the main admin
-    if (req.user.email !== ADMIN_EMAIL) {
-      return res.status(403).json({ message: 'Only the main admin can access user list' });
+    // Check if the current user is an admin
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ message: 'Only admins can access user list' });
     }
 
     console.log('Fetching users, current user:', {
