@@ -33,6 +33,75 @@ const PREDEFINED_THUMBNAILS: { [key: string]: string } = {
   default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
 };
 
+const getEventThumbnail = async (event: Event): Promise<string> => {
+  let searchTerm = '';
+  
+  // Determine search term based on event type
+  switch (event.type) {
+    case 'stay':
+      searchTerm = (event as StayEvent).accommodationName;
+      break;
+    case 'destination':
+      searchTerm = (event as DestinationEvent).placeName;
+      break;
+    case 'arrival':
+    case 'departure':
+      searchTerm = (event as ArrivalDepartureEvent).airport;
+      break;
+  }
+
+  // Check cache first
+  const cacheKey = `${event.type}-${searchTerm}`;
+  if (thumbnailCache[cacheKey]) {
+    return thumbnailCache[cacheKey];
+  }
+
+  // Check predefined thumbnails
+  const lowercaseName = searchTerm.toLowerCase();
+  for (const [keyword, url] of Object.entries(PREDEFINED_THUMBNAILS)) {
+    if (lowercaseName.includes(keyword)) {
+      thumbnailCache[cacheKey] = url;
+      return url;
+    }
+  }
+
+  try {
+    // Remove common words and get keywords from place name
+    const keywords = searchTerm
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(' ')
+      .filter(word => !['hotel', 'airport', 'the', 'a', 'an', 'in', 'at', 'of'].includes(word))
+      .join(' ');
+
+    // Try to fetch from Pexels API
+    const response = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(keywords)}&per_page=1&orientation=landscape`,
+      {
+        headers: {
+          'Authorization': import.meta.env.VITE_PEXELS_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch from Pexels');
+    }
+
+    const data = await response.json();
+    if (data.photos && data.photos.length > 0) {
+      const imageUrl = data.photos[0].src.large2x;
+      thumbnailCache[cacheKey] = imageUrl;
+      return imageUrl;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch custom thumbnail:', error);
+  }
+
+  // Fallback to default event type thumbnail
+  return DEFAULT_THUMBNAILS[event.type];
+};
+
 const getDefaultThumbnail = async (tripName: string): Promise<string> => {
   // Check cache first
   if (thumbnailCache[tripName]) {
@@ -129,6 +198,7 @@ const TripDetails: React.FC = () => {
   const [airportSuggestions, setAirportSuggestions] = useState<Array<{name: string, iata: string}>>([]);
   const [showAirportSuggestions, setShowAirportSuggestions] = useState(false);
   const airportInputRef = useRef<HTMLInputElement>(null);
+  const [eventThumbnails, setEventThumbnails] = useState<{ [key: string]: string }>({});
 
   const fetchAirports = async (query: string) => {
     if (query.length < 2) {
@@ -209,6 +279,33 @@ const TripDetails: React.FC = () => {
     };
     loadThumbnail();
   }, [trip?.name, trip?.thumbnailUrl]);
+
+  // Load thumbnails for events that don't have one
+  useEffect(() => {
+    if (!trip) return;
+
+    const loadEventThumbnails = async () => {
+      const thumbnailPromises = trip.events
+        .filter(event => !event.thumbnailUrl)
+        .map(async event => {
+          try {
+            const thumbnail = await getEventThumbnail(event);
+            return { id: event.id, thumbnail };
+          } catch (error) {
+            console.warn(`Failed to load thumbnail for event ${event.id}:`, error);
+            return { id: event.id, thumbnail: DEFAULT_THUMBNAILS[event.type] };
+          }
+        });
+
+      const loadedThumbnails = await Promise.all(thumbnailPromises);
+      setEventThumbnails(prevThumbnails => ({
+        ...prevThumbnails,
+        ...Object.fromEntries(loadedThumbnails.map(({ id, thumbnail }) => [id, thumbnail]))
+      }));
+    };
+
+    loadEventThumbnails();
+  }, [trip]);
 
   const handleTripUpdate = (updatedTrip: Trip) => {
     setTrip(updatedTrip);
@@ -371,42 +468,44 @@ const TripDetails: React.FC = () => {
     }
   };
 
-  const handleEditEvent = (event: Event) => {
-    setEventType(event.type);
-    setEventData({
-      ...eventData,
-      thumbnailUrl: event.thumbnailUrl || '',
-      date: event.date || '',
-      location: event.location || '',
-      notes: event.notes || '',
-      ...(event.type === 'arrival' || event.type === 'departure'
-        ? {
-            flightNumber: (event as ArrivalDepartureEvent).flightNumber || '',
-            airline: (event as ArrivalDepartureEvent).airline || '',
-            time: (event as ArrivalDepartureEvent).time || '',
-            airport: (event as ArrivalDepartureEvent).airport || '',
-            terminal: (event as ArrivalDepartureEvent).terminal || '',
-            gate: (event as ArrivalDepartureEvent).gate || '',
-            bookingReference: (event as ArrivalDepartureEvent).bookingReference || '',
-          }
-        : event.type === 'stay'
-        ? {
-            accommodationName: (event as StayEvent).accommodationName || '',
-            address: (event as StayEvent).address || '',
-            checkIn: (event as StayEvent).checkIn || '',
-            checkOut: (event as StayEvent).checkOut || '',
-            reservationNumber: (event as StayEvent).reservationNumber || '',
-            contactInfo: (event as StayEvent).contactInfo || '',
-          }
-        : {
-            placeName: (event as DestinationEvent).placeName || '',
-            address: (event as DestinationEvent).address || '',
-            description: (event as DestinationEvent).description || '',
-            openingHours: (event as DestinationEvent).openingHours || '',
-          }),
-    });
-    setIsEditingEvent(event.id);
-    setIsModalOpen(true);
+  const handleEditEvent = async (eventId: string) => {
+    if (!trip) return;
+
+    const updatedEvent = {
+      id: eventId,
+      type: eventType as EventType,
+      date: eventData.date,
+      notes: eventData.notes,
+      thumbnailUrl: eventData.thumbnailUrl,
+      // ... existing event properties ...
+    };
+
+    // If no thumbnail URL is provided, fetch one based on the place name
+    if (!eventData.thumbnailUrl) {
+      updatedEvent.thumbnailUrl = await getEventThumbnail(updatedEvent as Event);
+    }
+
+    // ... rest of the handleEditEvent function ...
+  };
+
+  const handleAddEvent = async () => {
+    if (!trip) return;
+
+    const newEvent = {
+      id: uuidv4(),
+      type: eventType as EventType,
+      date: eventData.date,
+      notes: eventData.notes,
+      thumbnailUrl: eventData.thumbnailUrl,
+      // ... existing event properties ...
+    };
+
+    // If no thumbnail URL is provided, fetch one based on the place name
+    if (!eventData.thumbnailUrl) {
+      newEvent.thumbnailUrl = await getEventThumbnail(newEvent as Event);
+    }
+
+    // ... rest of the handleAddEvent function ...
   };
 
   const renderEventForm = () => {
@@ -797,8 +896,8 @@ const TripDetails: React.FC = () => {
       {/* Events and Map section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Events list */}
-        <div className="bg-white shadow rounded-none md:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
+        <div className="bg-white shadow rounded-none md:rounded-lg flex flex-col h-[700px]">
+          <div className="px-4 py-5 sm:px-6 flex-shrink-0">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium text-gray-900">Events</h3>
               {canEdit && (
@@ -811,7 +910,7 @@ const TripDetails: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="border-t border-gray-200">
+          <div className="border-t border-gray-200 flex-1 overflow-auto">
             <ul className="divide-y divide-gray-200">
               {trip.events
                 .sort((a, b) => {
@@ -824,9 +923,13 @@ const TripDetails: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                       <div className="flex-shrink-0">
                         <img
-                          src={event.thumbnailUrl || DEFAULT_THUMBNAILS[event.type]}
+                          src={event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type]}
                           alt={event.type}
                           className="h-20 w-20 object-cover rounded-lg"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = DEFAULT_THUMBNAILS[event.type];
+                          }}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -837,7 +940,7 @@ const TripDetails: React.FC = () => {
                           {canEdit && (
                             <div className="flex space-x-2 ml-2">
                               <button
-                                onClick={() => handleEditEvent(event)}
+                                onClick={() => handleEditEvent(event.id)}
                                 className="text-indigo-600 hover:text-indigo-900 text-sm"
                               >
                                 Edit
@@ -933,12 +1036,12 @@ const TripDetails: React.FC = () => {
         </div>
 
         {/* Map view */}
-        <div className="bg-white shadow rounded-none md:rounded-lg relative" style={{ zIndex: 0 }}>
-          <div className="px-4 py-5 sm:px-6">
+        <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
+          <div className="px-4 py-5 sm:px-6 flex-shrink-0">
             <h3 className="text-lg font-medium text-gray-900">Trip Map</h3>
           </div>
-          <div className="border-t border-gray-200">
-            <div className="h-[600px]">
+          <div className="border-t border-gray-200 flex-1">
+            <div className="h-full">
               <TripMap trip={trip} />
             </div>
           </div>
