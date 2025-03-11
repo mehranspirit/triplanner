@@ -82,29 +82,17 @@ export const UserList = () => {
       setError(null);
       setSuccess(null);
       
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users/${userId}/role`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ isAdmin: newIsAdmin })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user role');
-      }
-
+      const updatedUser = await api.changeUserRole(userId, newIsAdmin);
+      
       setUsers(users.map(user => 
         user._id === userId 
-          ? { ...user, isAdmin: newIsAdmin }
+          ? { ...user, isAdmin: updatedUser.isAdmin }
           : user
       ));
       
-      const updatedUser = users.find(u => u._id === userId);
-      setSuccess(`Successfully updated ${updatedUser?.name}'s role to ${newIsAdmin ? 'admin' : 'user'}`);
+      setSuccess(`Successfully updated ${updatedUser.name}'s role to ${updatedUser.isAdmin ? 'admin' : 'user'}`);
     } catch (err) {
+      console.error('Error in handleRoleChange:', err);
       setError(err instanceof Error ? err.message : 'Failed to update user role');
     }
   };

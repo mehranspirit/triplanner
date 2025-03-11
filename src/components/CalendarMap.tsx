@@ -5,13 +5,21 @@ import L from 'leaflet';
 import type { Map as LeafletMap } from 'leaflet';
 import { Trip } from '../types';
 
-// Fix for default marker icon
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+// Create custom marker icons
+const createMarkerIcon = (color: string) => {
+  return new L.Icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+};
+
+const greyMarker = createMarkerIcon('grey');
+const greenMarker = createMarkerIcon('green');
+const blueMarker = createMarkerIcon('blue');
 
 interface CalendarMapProps {
   trips: Trip[];
@@ -32,6 +40,19 @@ const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const mapRef = useRef<LeafletMap | null>(null);
+
+  const getTripMarkerIcon = (startDate: Date, endDate: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (endDate < today) {
+      return greyMarker; // Past trip
+    } else if (startDate <= today && today <= endDate) {
+      return greenMarker; // Ongoing trip
+    } else {
+      return blueMarker; // Upcoming trip
+    }
+  };
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -138,7 +159,11 @@ const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         {locations.map((location) => (
-          <Marker key={location.tripId} position={[location.lat, location.lon]}>
+          <Marker 
+            key={location.tripId} 
+            position={[location.lat, location.lon]}
+            icon={getTripMarkerIcon(location.startDate, location.endDate)}
+          >
             <Popup>
               <div className="font-semibold">{location.tripName}</div>
               <div className="text-sm text-gray-600">

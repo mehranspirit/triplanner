@@ -80,6 +80,34 @@ interface TripDuration {
   duration: number;
 }
 
+interface CategorizedTrips {
+  ongoing: Trip[];
+  upcoming: Trip[];
+  past: Trip[];
+}
+
+const categorizeTripsByDate = (trips: Trip[], durations: { [key: string]: TripDuration }): CategorizedTrips => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return trips.reduce((acc: CategorizedTrips, trip: Trip) => {
+    const duration = durations[trip._id];
+    if (!duration) return acc;
+
+    const { startDate, endDate } = duration;
+    
+    if (startDate <= today && today <= endDate) {
+      acc.ongoing.push(trip);
+    } else if (startDate > today) {
+      acc.upcoming.push(trip);
+    } else {
+      acc.past.push(trip);
+    }
+    
+    return acc;
+  }, { ongoing: [], upcoming: [], past: [] });
+};
+
 export default function TripList() {
   const navigate = useNavigate();
   const { state, addTrip, deleteTrip, updateTrip } = useTrip();
@@ -259,6 +287,119 @@ export default function TripList() {
     }
   };
 
+  const renderTripCard = (trip: Trip) => (
+    <div
+      key={trip._id}
+      className="bg-white overflow-hidden shadow rounded-lg"
+    >
+      {editingTripId === trip._id ? (
+        <div className="p-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleEditSubmit(trip._id); }}>
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Trip Name</label>
+              <input
+                type="text"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Thumbnail URL</label>
+              <input
+                type="url"
+                value={editFormData.thumbnailUrl}
+                onChange={(e) => setEditFormData({ ...editFormData, thumbnailUrl: e.target.value })}
+                className="input"
+                placeholder="Enter image URL"
+              />
+            </div>
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={editFormData.description}
+                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                className="input"
+                placeholder="Enter description"
+                rows={2}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setEditingTripId(null)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <>
+          <div className="h-48 w-full">
+            <img
+              src={trip.thumbnailUrl || tripThumbnails[trip._id] || PREDEFINED_THUMBNAILS.default}
+              alt={trip.name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>
+            {tripDurations[trip._id] && (
+              <p className="text-sm text-gray-600 mt-1">
+                {formatDateRange(tripDurations[trip._id].startDate, tripDurations[trip._id].endDate)}
+                <span className="ml-2 text-gray-500">
+                  • {tripDurations[trip._id].duration} {tripDurations[trip._id].duration === 1 ? 'day' : 'days'}
+                </span>
+              </p>
+            )}
+            {trip.description && (
+              <p className="mt-2 text-sm text-gray-600 line-clamp-2">{trip.description}</p>
+            )}
+            <div className="mt-4 flex justify-between items-center">
+              <div className="space-x-2">
+                <button
+                  onClick={() => navigate(`/trips/${trip._id}`)}
+                  className="text-indigo-600 hover:text-indigo-900"
+                >
+                  View Details
+                </button>
+                <button
+                  onClick={() => startEditing(trip)}
+                  className="text-indigo-600 hover:text-indigo-900"
+                >
+                  Edit
+                </button>
+              </div>
+              <button
+                onClick={() => handleDeleteTrip(trip._id)}
+                className="text-red-600 hover:text-red-900"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const renderTripSection = (title: string, trips: Trip[]) => (
+    trips.length > 0 && (
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">{title}</h3>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {trips.map(renderTripCard)}
+        </div>
+      </div>
+    )
+  );
+
   if (state.loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -275,6 +416,8 @@ export default function TripList() {
       </div>
     );
   }
+
+  const categorizedTrips = categorizeTripsByDate(state.trips, tripDurations);
 
   return (
     <div>
@@ -304,109 +447,9 @@ export default function TripList() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {state.trips.map((trip) => (
-          <div
-            key={trip._id}
-            className="bg-white overflow-hidden shadow rounded-lg"
-          >
-            {editingTripId === trip._id ? (
-              <div className="p-4">
-                <form onSubmit={(e) => { e.preventDefault(); handleEditSubmit(trip._id); }}>
-                  <div className="mb-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Trip Name</label>
-                    <input
-                      type="text"
-                      value={editFormData.name}
-                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                      className="input"
-                      required
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Thumbnail URL</label>
-                    <input
-                      type="url"
-                      value={editFormData.thumbnailUrl}
-                      onChange={(e) => setEditFormData({ ...editFormData, thumbnailUrl: e.target.value })}
-                      className="input"
-                      placeholder="Enter image URL"
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea
-                      value={editFormData.description}
-                      onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                      className="input"
-                      placeholder="Enter description"
-                      rows={2}
-                    />
-                  </div>
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingTripId(null)}
-                      className="btn btn-secondary"
-                    >
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn btn-primary">
-                      Save
-                    </button>
-                  </div>
-                </form>
-              </div>
-            ) : (
-              <>
-                <div className="h-48 w-full">
-                  <img
-                    src={trip.thumbnailUrl || tripThumbnails[trip._id] || PREDEFINED_THUMBNAILS.default}
-                    alt={trip.name}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <div className="px-4 py-5 sm:p-6">
-                  <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>
-                  {tripDurations[trip._id] && (
-                    <p className="text-sm text-gray-600 mt-1">
-                      {formatDateRange(tripDurations[trip._id].startDate, tripDurations[trip._id].endDate)}
-                      <span className="ml-2 text-gray-500">
-                        • {tripDurations[trip._id].duration} {tripDurations[trip._id].duration === 1 ? 'day' : 'days'}
-                      </span>
-                    </p>
-                  )}
-                  {trip.description && (
-                    <p className="mt-2 text-sm text-gray-600 line-clamp-2">{trip.description}</p>
-                  )}
-                  <div className="mt-4 flex justify-between items-center">
-                    <div className="space-x-2">
-                      <button
-                        onClick={() => navigate(`/trips/${trip._id}`)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        View Details
-                      </button>
-                      <button
-                        onClick={() => startEditing(trip)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteTrip(trip._id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
+      {renderTripSection('Ongoing Trips', categorizedTrips.ongoing)}
+      {renderTripSection('Upcoming Trips', categorizedTrips.upcoming)}
+      {renderTripSection('Past Trips', categorizedTrips.past)}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">

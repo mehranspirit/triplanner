@@ -39,6 +39,25 @@ export const api = {
     }));
   },
 
+  // Change user role
+  changeUserRole: async (userId: string, isAdmin: boolean): Promise<User> => {
+    console.log('Changing user role:', { userId, isAdmin });
+    const response = await fetch(`${API_URL}/api/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ isAdmin })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to update user role');
+    }
+    
+    const data = await response.json();
+    console.log('Role change response:', data);
+    return data.user;
+  },
+
   // Get all trips
   getTrips: async (): Promise<Trip[]> => {
     const response = await fetch(`${API_URL}/api/trips`, {

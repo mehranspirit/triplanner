@@ -128,6 +128,11 @@ const TripBar: React.FC<{
   const [showFullDateRange, setShowFullDateRange] = useState(true);
   const [showDateText, setShowDateText] = useState(true);
 
+  // Check if trip is in the past
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isPastTrip = trip.endDate < today;
+
   useEffect(() => {
     if (contentRef.current && dateRangeRef.current && titleRef.current) {
       const monthWidth = contentRef.current.parentElement?.clientWidth || 0;
@@ -202,11 +207,11 @@ ${trip.duration} day${trip.duration !== 1 ? 's' : ''}`;
     >
       {/* Top half - Text content */}
       <div ref={contentRef} className="absolute top-0 left-0 right-0 h-1/2 bg-white p-2 z-10">
-        <div ref={titleRef} className="font-medium text-sm text-gray-900 whitespace-nowrap">
+        <div ref={titleRef} className={`font-medium text-sm ${isPastTrip ? 'text-gray-600' : 'text-gray-900'} whitespace-nowrap`}>
           {trip.trip.name}
         </div>
         {showDateText && (
-          <div ref={dateRangeRef} className="text-xs text-gray-500 truncate">
+          <div ref={dateRangeRef} className={`text-xs ${isPastTrip ? 'text-gray-400' : 'text-gray-500'} truncate`}>
             {showFullDateRange 
               ? formatDateRange(trip.startDate, trip.endDate)
               : formatStartDate(trip.startDate)
@@ -220,7 +225,7 @@ ${trip.duration} day${trip.duration !== 1 ? 's' : ''}`;
         <img
           src={trip.thumbnail}
           alt={trip.trip.name}
-          className="w-full h-full object-cover"
+          className={`w-full h-full object-cover ${isPastTrip ? 'grayscale' : ''}`}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.src = PREDEFINED_THUMBNAILS.default;
@@ -416,6 +421,13 @@ const Calendar: React.FC = () => {
 
     const seasonColors = getSeasonColors(month);
 
+    // Calculate today's position if it's in this month
+    const today = new Date();
+    const isCurrentMonth = today.getMonth() === month && today.getFullYear() === selectedYear;
+    const todayPosition = isCurrentMonth ? 
+      ((today.getTime() - monthStart.getTime()) / (monthEnd.getTime() - monthStart.getTime())) * 100 : 
+      null;
+
     return (
       <div key={month} className="rounded-lg shadow overflow-hidden h-full bg-white">
         <div className={`p-3 border-b ${seasonColors.border}`}>
@@ -426,6 +438,20 @@ const Calendar: React.FC = () => {
         <div className="p-3">
           <div className={`relative rounded-lg ${seasonColors.bg} bg-opacity-75`} 
                style={{ height: `${availableHeight}px` }}>
+            {/* Today's date line */}
+            {todayPosition !== null && (
+              <div 
+                className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-30"
+                style={{ 
+                  left: `${todayPosition}%`,
+                  boxShadow: '0 0 4px rgba(239, 68, 68, 0.5)'
+                }}
+              >
+                <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
+                  Today
+                </div>
+              </div>
+            )}
             {monthTrips.map((trip, index) => {
               const position = calculateTripPosition(trip, monthStart, monthEnd);
               const verticalPosition = verticalPositions.get(trip.trip._id) || 0;
@@ -457,7 +483,7 @@ const Calendar: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Map View */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow rounded-lg overflow-hidden relative" style={{ zIndex: 0 }}>
         <div className="p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Trip Locations</h2>
           <CalendarMap trips={state.trips} />
@@ -467,7 +493,6 @@ const Calendar: React.FC = () => {
       {/* Trip List */}
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Upcoming Trips</h2>
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-semibold text-gray-900">Trip Calendar</h1>
             <div className="flex items-center space-x-2">
