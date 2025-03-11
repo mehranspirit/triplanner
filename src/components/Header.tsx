@@ -3,11 +3,15 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 
+const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
+
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const isMainAdmin = user?.email === ADMIN_EMAIL;
 
   const handleLogout = () => {
     logout();
@@ -52,12 +56,14 @@ const Header: React.FC = () => {
               >
                 Calendar
               </Link>
-              <Link
-                to="/users"
-                className={getTabClassName('/users')}
-              >
-                Users
-              </Link>
+              {isMainAdmin && (
+                <Link
+                  to="/users"
+                  className={getTabClassName('/users')}
+                >
+                  Users
+                </Link>
+              )}
             </div>
           </div>
 
@@ -151,13 +157,15 @@ const Header: React.FC = () => {
           >
             Calendar
           </Link>
-          <Link
-            to="/users"
-            className={getMobileTabClassName('/users')}
-            onClick={() => setIsMenuOpen(false)}
-          >
-            Users
-          </Link>
+          {isMainAdmin && (
+            <Link
+              to="/users"
+              className={getMobileTabClassName('/users')}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Users
+            </Link>
+          )}
         </div>
         <div className="pt-4 pb-3 border-t border-gray-200">
           <div className="flex items-center px-4">
