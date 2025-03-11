@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { TripProvider } from './context/TripContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import AdminRoute from './components/auth/AdminRoute';
 import Header from './components/Header';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
@@ -62,11 +63,11 @@ const App: React.FC = () => {
             <Route
               path="/users"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AuthenticatedLayout>
                     <UserList />
                   </AuthenticatedLayout>
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
