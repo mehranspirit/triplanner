@@ -17,7 +17,7 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
     </div>;
   }
 
-  if (!isAuthenticated || user?.email !== ADMIN_EMAIL) {
+  if (!isAuthenticated || (!user?.isAdmin && user?.email !== ADMIN_EMAIL)) {
     return <Navigate to="/trips" replace />;
   }
 

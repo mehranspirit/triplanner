@@ -17,12 +17,14 @@ export const UserList = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const { user: currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
   const isMainAdmin = currentUser?.email === ADMIN_EMAIL;
+  const isAdmin = currentUser?.isAdmin || isMainAdmin;
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -39,6 +41,17 @@ export const UserList = () => {
 
     fetchUsers();
   }, []);
+
+  // Clear messages after 5 seconds
+  useEffect(() => {
+    if (success || error) {
+      const timer = setTimeout(() => {
+        setSuccess(null);
+        setError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, error]);
 
   const handleDeleteClick = (user: User) => {
     setUserToDelete(user);
@@ -66,7 +79,10 @@ export const UserList = () => {
 
   const handleRoleChange = async (userId: string, newIsAdmin: boolean) => {
     try {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userId}/role`, {
+      setError(null);
+      setSuccess(null);
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/users/${userId}/role`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -75,13 +91,21 @@ export const UserList = () => {
         body: JSON.stringify({ isAdmin: newIsAdmin })
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update user role');
+      }
+
       setUsers(users.map(user => 
         user._id === userId 
           ? { ...user, isAdmin: newIsAdmin }
           : user
       ));
+      
+      const updatedUser = users.find(u => u._id === userId);
+      setSuccess(`Successfully updated ${updatedUser?.name}'s role to ${newIsAdmin ? 'admin' : 'user'}`);
     } catch (err) {
-      setError('Failed to update user role');
+      setError(err instanceof Error ? err.message : 'Failed to update user role');
     }
   };
 
@@ -105,6 +129,12 @@ export const UserList = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <h2 className="text-2xl font-bold mb-6">Registered Users</h2>
+      
+      {success && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <span className="block sm:inline">{success}</span>
+        </div>
+      )}
       
       {/* Desktop table view */}
       <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">

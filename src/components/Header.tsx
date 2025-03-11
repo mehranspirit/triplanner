@@ -12,6 +12,7 @@ const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const isMainAdmin = !isLoading && user?.email === ADMIN_EMAIL;
+  const isAdmin = !isLoading && (user?.isAdmin || isMainAdmin);
 
   const handleLogout = () => {
     logout();
@@ -56,7 +57,7 @@ const Header: React.FC = () => {
               >
                 Calendar
               </Link>
-              {isMainAdmin && (
+              {isAdmin && (
                 <Link
                   to="/users"
                   className={getTabClassName('/users')}
@@ -157,7 +158,7 @@ const Header: React.FC = () => {
           >
             Calendar
           </Link>
-          {isMainAdmin && (
+          {isAdmin && (
             <Link
               to="/users"
               className={getMobileTabClassName('/users')}
