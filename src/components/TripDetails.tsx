@@ -1110,12 +1110,12 @@ const TripDetails: React.FC = () => {
       {/* Edit Trip Modal */}
       {isEditingTrip && editedTrip && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 overflow-y-auto" style={{ zIndex: 9999 }}>
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Edit Trip</h2>
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Edit Trip</h2>
               <button
                 onClick={() => setIsEditingTrip(false)}
-                className="text-gray-400 hover:text-gray-500"
+                className="text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <span className="sr-only">Close</span>
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1124,63 +1124,64 @@ const TripDetails: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Preview current thumbnail */}
-              <div className="aspect-w-16 aspect-h-9 rounded-lg overflow-hidden">
+              <div className="aspect-w-16 aspect-h-9 rounded-xl overflow-hidden bg-gray-100">
                 <img
                   src={editedTrip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
                   alt={editedTrip.name}
-                  className="object-cover"
+                  className="object-cover w-full h-full"
                 />
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Trip Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Trip Name</label>
                   <input
                     type="text"
                     value={editedTrip.name}
                     onChange={(e) => setEditedTrip({ ...editedTrip, name: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-shadow"
                     required
+                    placeholder="Enter trip name"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Thumbnail URL</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Thumbnail URL</label>
                   <input
                     type="url"
                     value={editedTrip.thumbnailUrl || ''}
                     onChange={(e) => setEditedTrip({ ...editedTrip, thumbnailUrl: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    placeholder="Enter image URL"
+                    className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-shadow"
+                    placeholder="Enter image URL (optional)"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                   <textarea
                     value={editedTrip.description || ''}
                     onChange={(e) => setEditedTrip({ ...editedTrip, description: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    rows={3}
-                    placeholder="Enter trip description"
+                    className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-shadow"
+                    rows={4}
+                    placeholder="Enter trip description (optional)"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-2 mt-4">
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => setIsEditingTrip(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleTripSave}
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="px-6 py-3 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                 >
                   Save Changes
                 </button>
