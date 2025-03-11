@@ -28,48 +28,6 @@ router.get('/validate', auth, async (req, res) => {
   }
 });
 
-// Change user role (protected route, admin only)
-router.patch('/users/:userId/role', auth, async (req, res) => {
-  try {
-    // Check if the current user is the main admin
-    if (req.user.email !== ADMIN_EMAIL) {
-      return res.status(403).json({ message: 'Only the main admin can change user roles' });
-    }
-
-    const { userId } = req.params;
-    const { isAdmin } = req.body;
-
-    // Find the user to update
-    const userToUpdate = await User.findById(userId);
-    
-    if (!userToUpdate) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Don't allow changing the main admin's role
-    if (userToUpdate.email === ADMIN_EMAIL) {
-      return res.status(403).json({ message: 'Cannot change the main admin\'s role' });
-    }
-
-    // Update the user's role
-    userToUpdate.isAdmin = isAdmin;
-    await userToUpdate.save();
-
-    res.json({ 
-      message: 'User role updated successfully',
-      user: {
-        _id: userToUpdate._id,
-        email: userToUpdate.email,
-        name: userToUpdate.name,
-        isAdmin: userToUpdate.isAdmin
-      }
-    });
-  } catch (error) {
-    console.error('Error updating user role:', error);
-    res.status(500).json({ message: 'Error updating user role' });
-  }
-});
-
 // Register
 router.post('/register', async (req, res) => {
   try {
