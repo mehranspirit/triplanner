@@ -7,6 +7,8 @@ const authRoutes = require('./routes/auth');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 
+const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
+
 const app = express();
 
 // Middleware
@@ -33,29 +35,56 @@ app.use('/api/auth', authRoutes);
 // Add role change endpoint directly in index.js
 app.patch('/api/users/:userId/role', auth, async (req, res) => {
   try {
+    console.log('Role change request received:', {
+      requestUser: {
+        id: req.user._id,
+        email: req.user.email,
+        isAdmin: req.user.isAdmin
+      },
+      params: req.params,
+      body: req.body
+    });
+
     // Check if the current user is the main admin
     if (req.user.email !== ADMIN_EMAIL) {
+      console.log('Permission denied: User is not main admin');
       return res.status(403).json({ message: 'Only the main admin can change user roles' });
     }
 
     const { userId } = req.params;
     const { isAdmin } = req.body;
 
+    console.log('Finding user to update:', { userId });
     // Find the user to update
     const userToUpdate = await User.findById(userId);
     
     if (!userToUpdate) {
+      console.log('User not found:', { userId });
       return res.status(404).json({ message: 'User not found' });
     }
 
+    console.log('Found user to update:', {
+      id: userToUpdate._id,
+      email: userToUpdate.email,
+      currentIsAdmin: userToUpdate.isAdmin,
+      newIsAdmin: isAdmin
+    });
+
     // Don't allow changing the main admin's role
     if (userToUpdate.email === ADMIN_EMAIL) {
+      console.log('Attempted to change main admin role');
       return res.status(403).json({ message: 'Cannot change the main admin\'s role' });
     }
 
     // Update the user's role
     userToUpdate.isAdmin = isAdmin;
     await userToUpdate.save();
+
+    console.log('Successfully updated user role:', {
+      id: userToUpdate._id,
+      email: userToUpdate.email,
+      newIsAdmin: userToUpdate.isAdmin
+    });
 
     res.json({ 
       message: 'User role updated successfully',
