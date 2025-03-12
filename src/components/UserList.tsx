@@ -151,13 +151,13 @@ export const UserList = () => {
                         className="border border-gray-200"
                       />
                     </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                    <div className="ml-4 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{user.name}</div>
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{user.email}</div>
+                  <div className="text-sm text-gray-500 truncate max-w-xs">{user.email}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-500">
@@ -209,11 +209,11 @@ export const UserList = () => {
                 size="md"
                 className="border border-gray-200"
               />
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">{user.name}</h3>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <h3 className="text-lg font-medium text-gray-900 truncate">{user.name}</h3>
+                    <p className="text-sm text-gray-500 truncate">{user.email}</p>
                   </div>
                   {isMainAdmin && user.email !== ADMIN_EMAIL ? (
                     <select

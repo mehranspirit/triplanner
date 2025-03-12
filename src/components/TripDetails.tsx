@@ -945,7 +945,7 @@ const TripDetails: React.FC = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
           
           {/* Owner and Collaborator Avatars */}
-          <div className="absolute bottom-20 right-4 sm:right-6 flex -space-x-3 z-20">
+          <div className="absolute bottom-6 right-4 sm:right-6 flex -space-x-3 z-10">
             {/* Owner Avatar */}
             {trip.owner._id !== user?._id && (
               <div className="relative group">
@@ -979,7 +979,7 @@ const TripDetails: React.FC = () => {
           </div>
           
           {user && trip.owner._id !== user._id && (
-            <div className="absolute top-4 right-4 z-20">
+            <div className="absolute top-4 right-4 z-10">
               <div className="flex flex-col items-end gap-2 bg-black/40 backdrop-blur-sm p-3 rounded-lg">
                 <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-white text-indigo-700 shadow-sm">
                   Shared
@@ -1034,7 +1034,7 @@ const TripDetails: React.FC = () => {
       </div>
 
       {/* Events and Map section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-20">
         {/* Events list */}
         <div className="bg-white shadow rounded-none md:rounded-lg flex flex-col h-[700px]">
           <div className="px-4 py-5 sm:px-6 flex-shrink-0">
@@ -1190,7 +1190,7 @@ const TripDetails: React.FC = () => {
 
       {/* Event Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 overflow-y-auto" style={{ zIndex: 9999 }}>
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto relative">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
