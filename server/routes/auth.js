@@ -6,6 +6,7 @@ const auth = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const upload = require('../middleware/upload');
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
@@ -20,7 +21,8 @@ router.get('/validate', auth, async (req, res) => {
         _id: req.user._id,
         email: req.user.email,
         name: req.user.name,
-        isAdmin: req.user.isAdmin
+        isAdmin: req.user.isAdmin,
+        photoUrl: req.user.photoUrl
       }
     });
   } catch (error) {
@@ -29,7 +31,7 @@ router.get('/validate', auth, async (req, res) => {
 });
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', upload.single('photo'), async (req, res) => {
   try {
     const { email, password, name } = req.body;
     const existingUser = await User.findOne({ email });
@@ -38,11 +40,31 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
-    const user = new User({ email, password, name });
+    const userData = {
+      email,
+      password,
+      name
+    };
+
+    // If a photo was uploaded, add the URL to the user data
+    if (req.file) {
+      userData.photoUrl = `/uploads/photos/${req.file.filename}`;
+    }
+
+    const user = new User(userData);
     await user.save();
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
-    res.status(201).json({ user: { _id: user._id, email: user.email, name: user.name }, token });
+    res.status(201).json({ 
+      user: { 
+        _id: user._id, 
+        email: user.email, 
+        name: user.name,
+        isAdmin: user.isAdmin,
+        photoUrl: user.photoUrl
+      }, 
+      token 
+    });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -64,7 +86,8 @@ router.post('/login', async (req, res) => {
         _id: user._id, 
         email: user.email, 
         name: user.name,
-        isAdmin: user.isAdmin 
+        isAdmin: user.isAdmin,
+        photoUrl: user.photoUrl
       }, 
       token 
     });
@@ -87,7 +110,7 @@ router.get('/users', auth, async (req, res) => {
       isAdmin: req.user.isAdmin
     });
     
-    const users = await User.find({}, 'email name createdAt isAdmin');
+    const users = await User.find({}, 'email name createdAt isAdmin photoUrl');
     console.log('Users found:', users);
     
     res.json(users);

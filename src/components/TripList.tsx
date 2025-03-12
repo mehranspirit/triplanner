@@ -6,6 +6,7 @@ import { Trip, StayEvent } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api';
+import Avatar from '../components/Avatar';
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
@@ -368,6 +369,45 @@ export default function TripList() {
                 </div>
               </div>
             )}
+            {/* Owner and Collaborator Avatars */}
+            <div className="absolute bottom-2 right-2 flex -space-x-2 z-10">
+              {/* Owner Avatar */}
+              {trip.owner._id !== user?._id && (
+                <div className="relative group">
+                  <Avatar
+                    photoUrl={trip.owner.photoUrl || null}
+                    name={trip.owner.name}
+                    size="sm"
+                    className="ring-2 ring-white"
+                  />
+                  <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {trip.owner.name} • Owner
+                  </div>
+                </div>
+              )}
+              {/* Collaborator Avatars */}
+              {trip.collaborators
+                .filter(collaborator => collaborator.user._id !== user?._id)
+                .slice(0, 3)
+                .map((collaborator) => (
+                <div key={collaborator.user._id} className="relative group">
+                  <Avatar
+                    photoUrl={collaborator.user.photoUrl || null}
+                    name={collaborator.user.name}
+                    size="sm"
+                    className="ring-2 ring-white"
+                  />
+                  <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {collaborator.user.name} • {collaborator.role}
+                  </div>
+                </div>
+              ))}
+              {trip.collaborators.filter(c => c.user._id !== user?._id).length > 3 && (
+                <div className="relative flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full ring-2 ring-white">
+                  <span className="text-xs text-gray-600">+{trip.collaborators.filter(c => c.user._id !== user?._id).length - 3}</span>
+                </div>
+              )}
+            </div>
           </div>
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>

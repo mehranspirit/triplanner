@@ -2,6 +2,7 @@ export interface User {
   _id: string;
   name: string;
   email: string;
+  photoUrl?: string | null;
 }
 
 export interface Trip {

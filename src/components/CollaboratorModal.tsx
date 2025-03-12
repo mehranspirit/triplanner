@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Trip } from '../types';
 import { api } from '../services/api';
+import Avatar from './Avatar';
 
 interface CollaboratorModalProps {
   trip: Trip;
@@ -108,10 +109,18 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
           <h4 className="font-medium mb-2">Current Collaborators</h4>
           <ul className="space-y-2">
             {trip.collaborators.map((collaborator) => (
-              <li key={collaborator.user._id} className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{collaborator.user.name}</p>
-                  <p className="text-sm text-gray-500">{collaborator.user.email}</p>
+              <li key={collaborator.user._id} className="flex items-center justify-between py-2">
+                <div className="flex items-center space-x-3">
+                  <Avatar
+                    photoUrl={collaborator.user.photoUrl || null}
+                    name={collaborator.user.name}
+                    size="sm"
+                    className="ring-2 ring-gray-200"
+                  />
+                  <div>
+                    <p className="font-medium">{collaborator.user.name}</p>
+                    <p className="text-sm text-gray-500">{collaborator.user.email}</p>
+                  </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <select

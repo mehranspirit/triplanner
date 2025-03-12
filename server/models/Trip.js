@@ -79,7 +79,8 @@ const tripSchema = new mongoose.Schema({
         ret.owner = {
           _id: ret.owner._id,
           name: ret.owner.name,
-          email: ret.owner.email
+          email: ret.owner.email,
+          photoUrl: ret.owner.photoUrl
         };
       }
       if (ret.collaborators) {
@@ -88,7 +89,8 @@ const tripSchema = new mongoose.Schema({
           user: {
             _id: c.user._id,
             name: c.user.name,
-            email: c.user.email
+            email: c.user.email,
+            photoUrl: c.user.photoUrl
           }
         }));
       }

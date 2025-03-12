@@ -17,6 +17,7 @@ interface User {
   name: string;
   createdAt: string;
   isAdmin?: boolean;
+  photoUrl?: string | null;
 }
 
 interface API {
@@ -108,13 +109,15 @@ export const api: API = {
         owner: {
           _id: trip.owner._id,
           name: trip.owner.name,
-          email: trip.owner.email
+          email: trip.owner.email,
+          photoUrl: trip.owner.photoUrl || null
         },
-        collaborators: (trip.collaborators || []).map((c: { user: { _id?: string, name: string, email: string }, role: 'editor' | 'viewer', addedAt: string }) => ({
+        collaborators: (trip.collaborators || []).map((c: { user: { _id?: string, name: string, email: string, photoUrl?: string | null }, role: 'editor' | 'viewer', addedAt: string }) => ({
           user: {
             _id: c.user._id,
             name: c.user.name,
-            email: c.user.email
+            email: c.user.email,
+            photoUrl: c.user.photoUrl || null
           },
           role: c.role,
           addedAt: c.addedAt
@@ -154,13 +157,15 @@ export const api: API = {
       owner: {
         _id: trip.owner._id,
         name: trip.owner.name,
-        email: trip.owner.email
+        email: trip.owner.email,
+        photoUrl: trip.owner.photoUrl || null
       },
-      collaborators: (trip.collaborators || []).map((c: { user: { _id?: string, id?: string, name: string, email: string }, role: 'editor' | 'viewer', addedAt: string }) => ({
+      collaborators: (trip.collaborators || []).map((c: { user: { _id?: string, id?: string, name: string, email: string, photoUrl?: string | null }, role: 'editor' | 'viewer', addedAt: string }) => ({
         user: {
           _id: c.user._id,
           name: c.user.name,
-          email: c.user.email
+          email: c.user.email,
+          photoUrl: c.user.photoUrl || null
         },
         role: c.role,
         addedAt: c.addedAt

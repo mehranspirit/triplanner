@@ -6,16 +6,53 @@ const Trip = require('./models/Trip');
 const authRoutes = require('./routes/auth');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const ensureUploadsDir = require('./utils/ensureUploadsDir');
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
+
+// Ensure uploads directory exists
+ensureUploadsDir();
+
+// Configure multer for handling file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, 'uploads/photos');
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed'));
+    }
+    cb(null, true);
+  }
+});
 
 const app = express();
 
 // Middleware
 app.use(cors({
   origin: function(origin, callback) {
-    const allowedOrigins = process.env.CORS_ORIGIN.split(',');
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173'];
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -27,7 +64,100 @@ app.use(cors({
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));
+
 app.use(express.json());
+
+// Log all requests
+app.use((req, res, next) => {
+  console.log('Incoming request:', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    timestamp: new Date().toISOString()
+  });
+  next();
+});
+
+// Serve uploaded files statically with proper CORS headers
+app.use('/uploads', (req, res, next) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173'];
+  
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.set({
+      'Access-Control-Allow-Origin': origin || allowedOrigins[0],
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': 'true',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+  }
+
+  console.log('Static file request:', {
+    path: req.path,
+    origin: req.headers.origin,
+    allowedOrigins,
+    timestamp: new Date().toISOString()
+  });
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
+
+// Photo upload endpoint
+app.post('/api/users/profile/photo', auth, upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Get the current user
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      // Delete the uploaded file if user not found
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete old photo if it exists
+    if (user.photoUrl) {
+      const oldPhotoPath = path.join(__dirname, user.photoUrl.replace(/^\/uploads/, 'uploads'));
+      if (fs.existsSync(oldPhotoPath)) {
+        fs.unlinkSync(oldPhotoPath);
+      }
+    }
+
+    // Update user's photoUrl with relative path
+    const relativePhotoPath = path.relative(
+      path.join(__dirname, 'uploads'),
+      req.file.path
+    );
+    user.photoUrl = `/uploads/${relativePhotoPath.replace(/\\/g, '/')}`;
+    await user.save();
+
+    console.log('Photo uploaded successfully:', {
+      filePath: req.file.path,
+      photoUrl: user.photoUrl
+    });
+
+    res.json({ 
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        photoUrl: user.photoUrl
+      }
+    });
+  } catch (error) {
+    // Delete the uploaded file if there was an error
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    console.error('Error uploading photo:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
 
 // Mount auth routes
 app.use('/api/auth', authRoutes);
@@ -131,10 +261,16 @@ app.get('/api/trips', auth, async (req, res) => {
         { 'collaborators.user': req.user._id }
       ]
     })
-      .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email')
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl')
       .lean()
       .exec();
+
+    console.log('Raw trips before transform:', JSON.stringify(trips.map(trip => ({
+      _id: trip._id,
+      owner: trip.owner,
+      collaborators: trip.collaborators
+    })), null, 2));
 
     // Transform the response to ensure consistent _id usage
     const transformedTrips = trips.map(trip => ({
@@ -143,22 +279,25 @@ app.get('/api/trips', auth, async (req, res) => {
       owner: {
         _id: trip.owner._id.toString(),
         name: trip.owner.name,
-        email: trip.owner.email
+        email: trip.owner.email,
+        photoUrl: trip.owner.photoUrl || null
       },
       collaborators: trip.collaborators.map(c => ({
         ...c,
         user: {
           _id: c.user._id.toString(),
           name: c.user.name,
-          email: c.user.email
+          email: c.user.email,
+          photoUrl: c.user.photoUrl || null
         }
       }))
     }));
 
-    console.log('Found trips:', {
-      count: transformedTrips.length,
-      tripIds: transformedTrips.map(t => t._id)
-    });
+    console.log('Transformed trips:', JSON.stringify(transformedTrips.map(trip => ({
+      _id: trip._id,
+      owner: trip.owner,
+      collaborators: trip.collaborators
+    })), null, 2));
 
     res.json(transformedTrips);
   } catch (error) {
@@ -243,10 +382,8 @@ app.get('/api/trips/:id', auth, async (req, res) => {
     }
 
     const trip = await Trip.findById(req.params.id)
-      .populate('owner', 'name email _id')
-      .populate('collaborators.user', 'name email _id')
-      .lean()
-      .exec();
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl');
     
     if (!trip) {
       console.log('Trip not found:', req.params.id);
@@ -271,21 +408,22 @@ app.get('/api/trips/:id', auth, async (req, res) => {
       accessRole
     });
 
-    // Transform the response to ensure consistent _id usage
     const transformedTrip = {
-      ...trip,
+      ...trip.toObject(),
       _id: trip._id.toString(),
       owner: {
         _id: trip.owner._id.toString(),
         name: trip.owner.name,
-        email: trip.owner.email
+        email: trip.owner.email,
+        photoUrl: trip.owner.photoUrl || null
       },
       collaborators: trip.collaborators.map(c => ({
         ...c,
         user: {
           _id: c.user._id.toString(),
           name: c.user.name,
-          email: c.user.email
+          email: c.user.email,
+          photoUrl: c.user.photoUrl || null
         }
       }))
     };
@@ -311,7 +449,7 @@ app.put('/api/trips/:id', auth, async (req, res) => {
   try {
     const trip = await Trip.findById(req.params.id)
       .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email');
+     .populate('collaborators.user', 'name email');
     
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
@@ -417,8 +555,8 @@ app.post('/api/trips/:id/collaborators', auth, async (req, res) => {
 
     // Find the trip
     const trip = await Trip.findById(req.params.id)
-      .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email');
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl');
     
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
@@ -443,8 +581,8 @@ app.post('/api/trips/:id/collaborators', auth, async (req, res) => {
     // Save and populate the updated trip
     const updatedTrip = await trip.save();
     const populatedTrip = await Trip.findById(updatedTrip._id)
-      .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email');
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl');
 
     res.json(populatedTrip);
   } catch (error) {
@@ -735,6 +873,45 @@ app.delete('/api/users/:id', auth, async (req, res) => {
       userId: req.params.id,
       requestingUser: req.user._id
     });
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update user profile
+app.put('/api/users/profile', auth, async (req, res) => {
+  try {
+    const { name, currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user._id);
+
+    // Verify current password if provided
+    if (currentPassword) {
+      const isPasswordValid = await user.comparePassword(currentPassword);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: 'Current password is incorrect' });
+      }
+    }
+
+    // Update user fields while preserving email
+    user.name = name;
+    
+    // Update password if provided
+    if (newPassword) {
+      user.password = newPassword;
+    }
+
+    await user.save();
+
+    res.json({ 
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        photoUrl: user.photoUrl
+      }
+    });
+  } catch (error) {
+    console.error('Error updating profile:', error);
     res.status(500).json({ message: error.message });
   }
 });

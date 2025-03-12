@@ -1,0 +1,24 @@
+.login-background {
+  background: linear-gradient(135deg, 
+    rgba(99, 102, 241, 0.4) 0%,
+    rgba(168, 85, 247, 0.4) 50%,
+    rgba(236, 72, 153, 0.4) 100%
+  );
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: background-image 0.3s ease-in-out;
+}
+
+.login-background.with-image {
+  background: 
+    linear-gradient(135deg, 
+      rgba(99, 102, 241, 0.4) 0%,
+      rgba(168, 85, 247, 0.4) 50%,
+      rgba(236, 72, 153, 0.4) 100%
+    ),
+    var(--background-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+} 

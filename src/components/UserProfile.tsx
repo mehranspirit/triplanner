@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import Avatar from './Avatar';
 
 interface ProfileFormData {
   name: string;
@@ -11,8 +12,9 @@ interface ProfileFormData {
 }
 
 const UserProfile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<ProfileFormData>({
     name: user?.name || '',
     email: user?.email || '',
@@ -23,10 +25,93 @@ const UserProfile: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePhotoClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size should be less than 5MB');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      console.log('UserProfile - Starting photo upload:', {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size
+      });
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/profile/photo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+        credentials: 'include',
+        mode: 'cors'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('UserProfile - Upload failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText
+        });
+        throw new Error(errorText || 'Failed to upload photo');
+      }
+
+      const data = await response.json();
+      console.log('UserProfile - Photo upload successful:', {
+        user: data.user,
+        photoUrl: data.user.photoUrl,
+        timestamp: new Date().toISOString()
+      });
+
+      // Update both the auth context and localStorage
+      updateUser(data.user);
+      
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      setSuccess('Profile photo updated successfully');
+    } catch (err) {
+      console.error('UserProfile - Photo upload error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload photo');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,8 +136,7 @@ const UserProfile: React.FC = () => {
         },
         body: JSON.stringify({
           name: formData.name,
-          email: formData.email,
-          currentPassword: formData.currentPassword,
+          currentPassword: formData.currentPassword || undefined,
           newPassword: formData.newPassword || undefined,
         }),
       });
@@ -63,6 +147,7 @@ const UserProfile: React.FC = () => {
         throw new Error(data.message || 'Failed to update profile');
       }
 
+      updateUser(data.user);
       setSuccess('Profile updated successfully');
       setFormData(prev => ({
         ...prev,
@@ -90,6 +175,33 @@ const UserProfile: React.FC = () => {
               Back to Trips
             </button>
           </div>
+
+          <div className="flex flex-col items-center mb-8">
+            <div 
+              className="relative cursor-pointer group"
+              onClick={handlePhotoClick}
+            >
+              <Avatar 
+                photoUrl={user?.photoUrl || null} 
+                name={user?.name || ''} 
+                size="xl"
+                className="border-2 border-gray-200"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-white text-xs">
+                  {uploadingPhoto ? 'Uploading...' : 'Change Photo'}
+                </span>
+              </div>
+            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handlePhotoChange}
+            />
+          </div>
+
           <div className="mt-2 max-w-xl text-sm text-gray-500">
             <p>Update your profile information and password.</p>
           </div>
@@ -123,14 +235,15 @@ const UserProfile: React.FC = () => {
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email
+                <span className="ml-2 text-xs text-gray-500">(Cannot be changed)</span>
               </label>
               <input
                 type="email"
                 name="email"
                 id="email"
                 value={formData.email}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                disabled
+                className="mt-1 block w-full border border-gray-200 rounded-md shadow-sm py-2 px-3 bg-gray-50 text-gray-500 cursor-not-allowed sm:text-sm"
               />
             </div>
 

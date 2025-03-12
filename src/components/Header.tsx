@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
+import Avatar from './Avatar';
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
@@ -76,11 +77,13 @@ const Header: React.FC = () => {
                   className="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <span className="sr-only">Open user menu</span>
-                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <span className="text-indigo-800 font-medium">
-                      {user?.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
+                  <Avatar 
+                    key={`header-avatar-${user?.photoUrl || 'default'}`}
+                    photoUrl={user?.photoUrl || null}
+                    name={user?.name || ''} 
+                    size="sm"
+                    className="cursor-pointer"
+                  />
                 </button>
               </div>
 
@@ -171,11 +174,12 @@ const Header: React.FC = () => {
         <div className="pt-4 pb-3 border-t border-gray-200">
           <div className="flex items-center px-4">
             <div className="flex-shrink-0">
-              <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                <span className="text-indigo-800 font-medium">
-                  {user?.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
+              <Avatar 
+                key={`header-mobile-avatar-${user?.photoUrl || 'default'}`}
+                photoUrl={user?.photoUrl || null}
+                name={user?.name || ''} 
+                size="md"
+              />
             </div>
             <div className="ml-3">
               <div className="text-base font-medium text-gray-800">

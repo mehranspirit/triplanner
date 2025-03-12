@@ -5,6 +5,7 @@ interface User {
   name: string;
   email: string;
   isAdmin?: boolean;
+  photoUrl?: string | null;
 }
 
 interface AuthContextType {
@@ -12,6 +13,7 @@ interface AuthContextType {
   token: string | null;
   login: (token: string, user: User) => void;
   logout: () => void;
+  updateUser: (updatedUser: User) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -34,13 +36,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const validateToken = async () => {
       try {
-        // Check for existing token and user data in localStorage
         const storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
 
-        console.log('Stored credentials:', { 
+        console.log('AuthProvider - Stored credentials:', { 
           hasToken: !!storedToken, 
-          hasUser: !!storedUser 
+          hasUser: !!storedUser,
+          storedUser: storedUser ? JSON.parse(storedUser) : null
         });
 
         if (!storedToken || !storedUser) {
@@ -49,11 +51,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        // Parse stored user first to validate JSON
         let parsedUser: User;
         try {
           parsedUser = JSON.parse(storedUser);
-          // Set initial state with stored data
           setToken(storedToken);
           setUser(parsedUser);
         } catch (e) {
@@ -61,8 +61,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw new Error('Invalid stored user data');
         }
 
-        // Validate token with the backend
-        console.log('Validating token with backend...');
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/validate`, {
           method: 'GET',
           headers: {
@@ -72,45 +70,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
-        console.log('Validation response status:', response.status);
-
         if (!response.ok) {
-          const errorData = await response.text();
-          console.error('Validation failed:', {
-            status: response.status,
-            statusText: response.statusText,
-            data: errorData
-          });
           throw new Error('Token validation failed');
         }
 
         const data = await response.json();
-        console.log('Validation response data:', data);
 
         if (data.valid === false) {
           throw new Error('Token is invalid');
         }
 
-        // If we get here, the token is valid
-        // Keep using the stored data unless the server explicitly provides new data
         if (data.token) {
-          console.log('Updating token from server');
           localStorage.setItem('token', data.token);
           setToken(data.token);
         }
 
         if (data.user) {
-          console.log('Updating user data from server');
           localStorage.setItem('user', JSON.stringify(data.user));
           setUser(data.user);
         }
 
       } catch (error) {
         console.error('Authentication error:', error);
-        // Only clear auth data if it's an actual auth error
         if (error instanceof Error && 
             (error.message.includes('token') || error.message.includes('auth'))) {
-          console.log('Clearing auth data due to validation error');
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           setToken(null);
@@ -125,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = (newToken: string, newUser: User) => {
-    console.log('Logging in with new credentials');
+    console.log('AuthProvider - Login:', { newUser });
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('token', newToken);
@@ -133,15 +116,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    console.log('Logging out...');
-    // First clear local state
+    console.log('AuthProvider - Logout');
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
-    // Then notify the server
-    const currentToken = token; // Capture the token before it's cleared
+    const currentToken = token;
     if (currentToken) {
       fetch(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {
         method: 'POST',
@@ -155,11 +136,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUser = (updatedUser: User) => {
+    console.log('AuthProvider - Updating user:', { 
+      current: user,
+      updated: updatedUser,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Create a new user object to ensure React detects the change
+    const newUser = { ...updatedUser };
+    setUser(newUser);
+    localStorage.setItem('user', JSON.stringify(newUser));
+    
+    // Verify the update
+    console.log('AuthProvider - User updated:', {
+      newState: newUser,
+      timestamp: new Date().toISOString()
+    });
+  };
+
   const value = {
     user,
     token,
     login,
     logout,
+    updateUser,
     isAuthenticated: !!token,
     isLoading,
   };

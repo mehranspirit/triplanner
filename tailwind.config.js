@@ -20,6 +20,12 @@ export default {
           900: '#0c4a6e',
         },
       },
+      animation: {
+        'spin-slow': 'spin 3s linear infinite',
+      },
+      backgroundImage: {
+        'travel-collage': 'url("/images/travel-collage.jpg")',
+      }
     },
   },
   plugins: [],

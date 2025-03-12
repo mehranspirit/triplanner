@@ -9,6 +9,7 @@ import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
 import TripMap from './TripMap';
+import Avatar from './Avatar';
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
@@ -942,6 +943,41 @@ const TripDetails: React.FC = () => {
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+          
+          {/* Owner and Collaborator Avatars */}
+          <div className="absolute bottom-20 right-4 sm:right-6 flex -space-x-3 z-20">
+            {/* Owner Avatar */}
+            {trip.owner._id !== user?._id && (
+              <div className="relative group">
+                <Avatar
+                  photoUrl={trip.owner.photoUrl || null}
+                  name={trip.owner.name}
+                  size="md"
+                  className="ring-2 ring-white"
+                />
+                <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  {trip.owner.name} • Owner
+                </div>
+              </div>
+            )}
+            {/* Collaborator Avatars */}
+            {trip.collaborators
+              .filter(collaborator => collaborator.user._id !== user?._id)
+              .map((collaborator) => (
+              <div key={collaborator.user._id} className="relative group">
+                <Avatar
+                  photoUrl={collaborator.user.photoUrl || null}
+                  name={collaborator.user.name}
+                  size="md"
+                  className="ring-2 ring-white"
+                />
+                <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  {collaborator.user.name} • {collaborator.role}
+                </div>
+              </div>
+            ))}
+          </div>
+          
           {user && trip.owner._id !== user._id && (
             <div className="absolute top-4 right-4 z-20">
               <div className="flex flex-col items-end gap-2 bg-black/40 backdrop-blur-sm p-3 rounded-lg">

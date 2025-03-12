@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  photoUrl: {
+    type: String,
+    default: null
+  },
   isAdmin: {
     type: Boolean,
     default: false
@@ -33,6 +37,7 @@ const userSchema = new mongoose.Schema({
     transform: function(doc, ret) {
       ret._id = ret._id;
       ret.isAdmin = ret.isAdmin || false;
+      ret.photoUrl = ret.photoUrl || null;
       delete ret.__v;
       delete ret.password;
     }

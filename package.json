@@ -14,7 +14,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "axios": "^1.8.2",
     "leaflet": "^1.9.4",
+    "multer-s3": "^3.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-leaflet": "^5.0.0",

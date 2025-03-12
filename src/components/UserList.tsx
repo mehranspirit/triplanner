@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import Avatar from './Avatar';
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
@@ -11,6 +12,7 @@ interface User {
   name: string;
   createdAt: string;
   isAdmin?: boolean;
+  photoUrl?: string | null;
 }
 
 export const UserList = () => {
@@ -129,7 +131,7 @@ export const UserList = () => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
@@ -140,7 +142,19 @@ export const UserList = () => {
             {users.map((user) => (
               <tr key={user._id}>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <Avatar 
+                        photoUrl={user.photoUrl || null}
+                        name={user.name}
+                        size="sm"
+                        className="border border-gray-200"
+                      />
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-500">{user.email}</div>
@@ -188,41 +202,51 @@ export const UserList = () => {
       <div className="md:hidden space-y-4">
         {users.map((user) => (
           <div key={user._id} className="bg-white shadow rounded-lg p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900">{user.name}</h3>
-                <p className="text-sm text-gray-500">{user.email}</p>
+            <div className="flex items-start space-x-4">
+              <Avatar 
+                photoUrl={user.photoUrl || null}
+                name={user.name}
+                size="md"
+                className="border border-gray-200"
+              />
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">{user.name}</h3>
+                    <p className="text-sm text-gray-500">{user.email}</p>
+                  </div>
+                  {isMainAdmin && user.email !== ADMIN_EMAIL ? (
+                    <select
+                      value={user.isAdmin ? 'admin' : 'user'}
+                      onChange={(e) => handleRoleChange(user._id, e.target.value === 'admin')}
+                      className="block w-24 text-sm font-semibold rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  ) : (
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {user.isAdmin ? 'Admin' : 'User'}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 text-sm text-gray-500">
+                  Joined {new Date(user.createdAt).toLocaleDateString()}
+                </div>
+                {(isMainAdmin || currentUser?._id === user._id) && user.email !== ADMIN_EMAIL && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      onClick={() => handleDeleteClick(user)}
+                      className="text-red-600 hover:text-red-900 text-sm font-medium"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
-              {isMainAdmin && user.email !== ADMIN_EMAIL ? (
-                <select
-                  value={user.isAdmin ? 'admin' : 'user'}
-                  onChange={(e) => handleRoleChange(user._id, e.target.value === 'admin')}
-                  className="block w-24 text-sm font-semibold rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              ) : (
-                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                  user.isAdmin ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {user.isAdmin ? 'Admin' : 'User'}
-                </span>
-              )}
             </div>
-            <div className="mt-2 text-sm text-gray-500">
-              Joined {new Date(user.createdAt).toLocaleDateString()}
-            </div>
-            {(isMainAdmin || currentUser?._id === user._id) && user.email !== ADMIN_EMAIL && (
-              <div className="mt-3 flex justify-end">
-                <button
-                  onClick={() => handleDeleteClick(user)}
-                  className="text-red-600 hover:text-red-900 text-sm font-medium"
-                >
-                  Delete
-                </button>
-              </div>
-            )}
           </div>
         ))}
       </div>
@@ -261,4 +285,6 @@ export const UserList = () => {
       )}
     </div>
   );
-}; 
+};
+
+export default UserList; 
