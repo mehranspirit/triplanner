@@ -119,6 +119,8 @@ export default function TripList() {
   const [editFormData, setEditFormData] = useState({ name: '', thumbnailUrl: '', description: '' });
   const [tripThumbnails, setTripThumbnails] = useState<{ [key: string]: string }>({});
   const [tripDurations, setTripDurations] = useState<{ [key: string]: TripDuration }>({});
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Load thumbnails for trips
   useEffect(() => {
@@ -281,10 +283,17 @@ export default function TripList() {
     try {
       await deleteTrip(tripId);
       setError(null);
+      setShowDeleteModal(false);
+      setTripToDelete(null);
     } catch (err) {
       console.error('Error deleting trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete trip');
     }
+  };
+
+  const openDeleteModal = (trip: Trip) => {
+    setTripToDelete(trip);
+    setShowDeleteModal(true);
   };
 
   const renderTripCard = (trip: Trip) => (
@@ -341,12 +350,24 @@ export default function TripList() {
         </div>
       ) : (
         <>
-          <div className="h-48 w-full">
+          <div className="h-48 w-full relative">
             <img
               src={trip.thumbnailUrl || tripThumbnails[trip._id] || PREDEFINED_THUMBNAILS.default}
               alt={trip.name}
               className="h-full w-full object-cover"
             />
+            {user && trip.owner._id !== user._id && (
+              <div className="absolute top-2 right-2 z-10">
+                <div className="relative group">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-white/90 text-indigo-700 shadow-sm backdrop-blur-sm">
+                    Shared
+                  </span>
+                  <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' ? 'You can edit' : 'View only'}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>
@@ -369,19 +390,23 @@ export default function TripList() {
                 >
                   View Details
                 </button>
-                <button
-                  onClick={() => startEditing(trip)}
-                  className="text-indigo-600 hover:text-indigo-900"
-                >
-                  Edit
-                </button>
+                {(user && trip.owner._id === user._id) && (
+                  <>
+                    <button
+                      onClick={() => startEditing(trip)}
+                      className="text-indigo-600 hover:text-indigo-900"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => openDeleteModal(trip)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
-              <button
-                onClick={() => handleDeleteTrip(trip._id)}
-                className="text-red-600 hover:text-red-900"
-              >
-                Delete
-              </button>
             </div>
           </div>
         </>
@@ -450,6 +475,35 @@ export default function TripList() {
       {renderTripSection('Ongoing Trips', categorizedTrips.ongoing)}
       {renderTripSection('Upcoming Trips', categorizedTrips.upcoming)}
       {renderTripSection('Past Trips', categorizedTrips.past)}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && tripToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md">
+            <h3 className="text-xl font-semibold mb-4">Delete Trip</h3>
+            <p className="mb-6 text-gray-700">
+              Are you sure you want to delete "{tripToDelete.name}"? This action cannot be undone and will remove all events and collaborator access.
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setTripToDelete(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteTrip(tripToDelete._id)}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">

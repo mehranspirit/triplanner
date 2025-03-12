@@ -860,6 +860,52 @@ const TripDetails: React.FC = () => {
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+          {user && trip.owner._id !== user._id && (
+            <div className="absolute top-4 right-4 z-20">
+              <div className="flex flex-col items-end gap-2 bg-black/40 backdrop-blur-sm p-3 rounded-lg">
+                <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-white text-indigo-700 shadow-sm">
+                  Shared
+                </span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="text-sm font-medium text-white">
+                    {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' 
+                      ? 'You can edit this trip' 
+                      : 'You can view this trip'}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('Are you sure you want to leave this trip? You will lose access to it.')) {
+                        try {
+                          if (!trip._id) {
+                            throw new Error('Trip ID is missing');
+                          }
+                          console.log('Attempting to leave trip:', {
+                            tripId: trip._id,
+                            userId: user?._id,
+                            collaborators: trip.collaborators
+                          });
+                          await api.leaveTrip(trip._id);
+                          console.log('Successfully left trip');
+                          navigate('/trips');
+                        } catch (error) {
+                          console.error('Detailed error leaving trip:', {
+                            error,
+                            tripId: trip._id,
+                            userId: user?._id,
+                            message: error instanceof Error ? error.message : 'Unknown error'
+                          });
+                          alert(`Failed to leave trip: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        }
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors duration-200 shadow-sm"
+                  >
+                    Leave Trip
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
             <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{trip.name}</h1>
             {trip.description && (
