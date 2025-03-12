@@ -493,21 +493,81 @@ const TripDetails: React.FC = () => {
   const handleEditEvent = async (eventId: string) => {
     if (!trip) return;
 
-    const updatedEvent = {
-      id: eventId,
-      type: eventType as EventType,
-      date: eventData.date,
-      notes: eventData.notes,
-      thumbnailUrl: eventData.thumbnailUrl,
-      // ... existing event properties ...
-    };
+    const eventToEdit = trip.events.find(e => e.id === eventId);
+    if (!eventToEdit) return;
 
-    // If no thumbnail URL is provided, fetch one based on the place name
-    if (!eventData.thumbnailUrl) {
-      updatedEvent.thumbnailUrl = await getEventThumbnail(updatedEvent as Event);
+    setEventType(eventToEdit.type);
+    setIsEditingEvent(eventId);
+    setIsModalOpen(true);
+
+    // Set common fields
+    setEventData({
+      ...eventData,
+      thumbnailUrl: eventToEdit.thumbnailUrl || '',
+      date: eventToEdit.date,
+      location: eventToEdit.location || '',
+      notes: eventToEdit.notes || '',
+      // Initialize all fields with empty values first
+      flightNumber: '',
+      airline: '',
+      time: '',
+      airport: '',
+      terminal: '',
+      gate: '',
+      bookingReference: '',
+      accommodationName: '',
+      address: '',
+      checkIn: '',
+      checkOut: '',
+      reservationNumber: '',
+      contactInfo: '',
+      placeName: '',
+      description: '',
+      openingHours: '',
+    });
+
+    // Set type-specific fields
+    switch (eventToEdit.type) {
+      case 'arrival':
+      case 'departure': {
+        const event = eventToEdit as ArrivalDepartureEvent;
+        setEventData(prev => ({
+          ...prev,
+          flightNumber: event.flightNumber || '',
+          airline: event.airline || '',
+          time: event.time || '',
+          airport: event.airport || '',
+          terminal: event.terminal || '',
+          gate: event.gate || '',
+          bookingReference: event.bookingReference || '',
+        }));
+        break;
+      }
+      case 'stay': {
+        const event = eventToEdit as StayEvent;
+        setEventData(prev => ({
+          ...prev,
+          accommodationName: event.accommodationName || '',
+          address: event.address || '',
+          checkIn: event.checkIn || '',
+          checkOut: event.checkOut || '',
+          reservationNumber: event.reservationNumber || '',
+          contactInfo: event.contactInfo || '',
+        }));
+        break;
+      }
+      case 'destination': {
+        const event = eventToEdit as DestinationEvent;
+        setEventData(prev => ({
+          ...prev,
+          placeName: event.placeName || '',
+          address: event.address || '',
+          description: event.description || '',
+          openingHours: event.openingHours || '',
+        }));
+        break;
+      }
     }
-
-    // ... rest of the handleEditEvent function ...
   };
 
   const handleAddEvent = async () => {
