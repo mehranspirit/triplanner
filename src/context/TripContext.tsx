@@ -25,6 +25,7 @@ interface TripContextType {
   addTrip: (trip: Trip) => Promise<void>;
   updateTrip: (trip: Trip) => Promise<void>;
   deleteTrip: (tripId: string) => Promise<void>;
+  leaveTrip: (tripId: string) => Promise<void>;
   addEvent: (tripId: string, event: Event) => Promise<void>;
   updateEvent: (tripId: string, event: Event) => Promise<void>;
   deleteEvent: (tripId: string, eventId: string) => Promise<void>;
@@ -190,6 +191,18 @@ export const TripProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const leaveTrip = async (tripId: string) => {
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      await api.leaveTrip(tripId);
+      dispatch({ type: 'DELETE_TRIP', payload: tripId });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to leave trip';
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
+      throw error;
+    }
+  };
+
   const addEvent = async (tripId: string, event: Event) => {
     try {
       const trip = state.trips.find((t) => t._id === tripId);
@@ -245,6 +258,7 @@ export const TripProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addTrip,
         updateTrip,
         deleteTrip,
+        leaveTrip,
         addEvent,
         updateEvent,
         deleteEvent,

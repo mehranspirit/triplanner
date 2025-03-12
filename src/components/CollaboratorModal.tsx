@@ -26,7 +26,8 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
-      const updatedTrip = await api.addCollaborator(trip._id, email, role);
+      await api.addCollaborator(trip._id, email, role);
+      const updatedTrip = await api.getTrip(trip._id);
       onUpdate(updatedTrip);
       setEmail('');
       setRole('viewer');
@@ -42,7 +43,8 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
-      const updatedTrip = await api.removeCollaborator(trip._id, userId);
+      await api.removeCollaborator(trip._id, userId);
+      const updatedTrip = await api.getTrip(trip._id);
       onUpdate(updatedTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove collaborator');
@@ -56,7 +58,8 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
-      const updatedTrip = await api.updateCollaboratorRole(trip._id, userId, newRole);
+      await api.updateCollaboratorRole(trip._id, userId, newRole);
+      const updatedTrip = await api.getTrip(trip._id);
       onUpdate(updatedTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update role');

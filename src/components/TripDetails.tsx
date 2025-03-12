@@ -157,12 +157,13 @@ const getDefaultThumbnail = async (tripName: string): Promise<string> => {
 const TripDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { state, updateTrip, deleteTrip, addEvent, updateEvent, deleteEvent } = useTrip();
+  const { state, updateTrip, deleteTrip, leaveTrip, addEvent, updateEvent, deleteEvent } = useTrip();
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLeaveWarningOpen, setIsLeaveWarningOpen] = useState(false);
   const [eventType, setEventType] = useState<EventType>('arrival');
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [isEditingEvent, setIsEditingEvent] = useState<string | null>(null);
@@ -309,6 +310,27 @@ const TripDetails: React.FC = () => {
 
   const handleTripUpdate = (updatedTrip: Trip) => {
     setTrip(updatedTrip);
+  };
+
+  const handleLeaveTrip = async () => {
+    if (!trip?._id) {
+      setError('Trip ID is missing');
+      return;
+    }
+
+    try {
+      console.log('Attempting to leave trip:', {
+        tripId: trip._id,
+        userId: user?._id,
+        collaborators: trip.collaborators
+      });
+      await leaveTrip(trip._id);
+      console.log('Successfully left trip');
+      navigate('/trips');
+    } catch (err) {
+      console.error('Error leaving trip:', err);
+      setError(err instanceof Error ? err.message : 'Failed to leave trip');
+    }
   };
 
   if (loading) {
@@ -873,31 +895,7 @@ const TripDetails: React.FC = () => {
                       : 'You can view this trip'}
                   </span>
                   <button
-                    onClick={async () => {
-                      if (window.confirm('Are you sure you want to leave this trip? You will lose access to it.')) {
-                        try {
-                          if (!trip._id) {
-                            throw new Error('Trip ID is missing');
-                          }
-                          console.log('Attempting to leave trip:', {
-                            tripId: trip._id,
-                            userId: user?._id,
-                            collaborators: trip.collaborators
-                          });
-                          await api.leaveTrip(trip._id);
-                          console.log('Successfully left trip');
-                          navigate('/trips');
-                        } catch (error) {
-                          console.error('Detailed error leaving trip:', {
-                            error,
-                            tripId: trip._id,
-                            userId: user?._id,
-                            message: error instanceof Error ? error.message : 'Unknown error'
-                          });
-                          alert(`Failed to leave trip: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                        }
-                      }
-                    }}
+                    onClick={() => setIsLeaveWarningOpen(true)}
                     className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors duration-200 shadow-sm"
                   >
                     Leave Trip
@@ -1232,6 +1230,48 @@ const TripDetails: React.FC = () => {
                   Save Changes
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Trip Warning Modal */}
+      {isLeaveWarningOpen && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-gray-900">Leave Trip</h3>
+                <div className="mt-2">
+                  <p className="text-sm text-gray-500">
+                    Are you sure you want to leave this trip? You will lose access to all trip details and will need a new invitation to rejoin.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setIsLeaveWarningOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLeaveWarningOpen(false);
+                  handleLeaveTrip();
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Leave Trip
+              </button>
             </div>
           </div>
         </div>

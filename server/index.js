@@ -511,13 +511,71 @@ app.delete('/api/trips/:id/collaborators/:userId', auth, async (req, res) => {
 
     res.json(populatedTrip);
   } catch (error) {
-    console.error('Error removing collaborator:', {
+    console.error('Error removing collaborator:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Leave a trip (self-removal)
+app.post('/api/trips/:id/leave', auth, async (req, res) => {
+  try {
+    console.log('Leave trip request received:', {
+      tripId: req.params.id,
+      userId: req.user._id
+    });
+
+    // Find the trip
+    const trip = await Trip.findById(req.params.id)
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
+    
+    if (!trip) {
+      console.log('Trip not found:', req.params.id);
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+
+    // Check that the user is not the owner
+    if (trip.owner._id.equals(req.user._id)) {
+      console.log('Owner attempted to leave their own trip:', {
+        tripId: req.params.id,
+        ownerId: req.user._id
+      });
+      return res.status(403).json({ message: 'The owner cannot leave their own trip' });
+    }
+
+    // Find the user's collaborator entry
+    const collaboratorIndex = trip.collaborators.findIndex(c => 
+      c.user._id.toString() === req.user._id.toString()
+    );
+
+    if (collaboratorIndex === -1) {
+      console.log('User is not a collaborator:', {
+        tripId: req.params.id,
+        userId: req.user._id
+      });
+      return res.status(404).json({ message: 'You are not a collaborator on this trip' });
+    }
+
+    // Remove the user from collaborators
+    trip.collaborators.splice(collaboratorIndex, 1);
+
+    // Save the updated trip
+    await trip.save();
+
+    console.log('Successfully left trip:', {
+      tripId: req.params.id,
+      userId: req.user._id
+    });
+
+    res.json({ message: 'Successfully left the trip' });
+  } catch (error) {
+    console.error('Error leaving trip:', {
       error: error.message,
       stack: error.stack,
       tripId: req.params.id,
-      collaboratorId: req.params.userId
+      userId: req.user._id
     });
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Failed to leave trip' });
   }
 });
 
