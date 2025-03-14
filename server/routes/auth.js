@@ -7,6 +7,8 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const upload = require('../middleware/upload');
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { s3Client } = require('../utils/s3Config');
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
@@ -37,6 +39,18 @@ router.post('/register', upload.single('photo'), async (req, res) => {
     const existingUser = await User.findOne({ email });
     
     if (existingUser) {
+      // If a photo was uploaded to S3, delete it
+      if (req.file) {
+        try {
+          const deleteParams = {
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: req.file.key
+          };
+          await s3Client.send(new DeleteObjectCommand(deleteParams));
+        } catch (deleteError) {
+          console.error('Error deleting file from S3:', deleteError);
+        }
+      }
       return res.status(400).json({ message: 'Email already registered' });
     }
 
@@ -46,9 +60,13 @@ router.post('/register', upload.single('photo'), async (req, res) => {
       name
     };
 
-    // If a photo was uploaded, add the URL to the user data
+    // If a photo was uploaded to S3, add the URL to the user data
     if (req.file) {
-      userData.photoUrl = `/uploads/photos/${req.file.filename}`;
+      userData.photoUrl = req.file.location;
+      console.log('Photo uploaded to S3:', {
+        key: req.file.key,
+        location: req.file.location
+      });
     }
 
     const user = new User(userData);
@@ -66,6 +84,18 @@ router.post('/register', upload.single('photo'), async (req, res) => {
       token 
     });
   } catch (error) {
+    // If a photo was uploaded to S3, delete it on error
+    if (req.file) {
+      try {
+        const deleteParams = {
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: req.file.key
+        };
+        await s3Client.send(new DeleteObjectCommand(deleteParams));
+      } catch (deleteError) {
+        console.error('Error deleting file from S3:', deleteError);
+      }
+    }
     res.status(400).json({ message: error.message });
   }
 });

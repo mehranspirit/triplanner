@@ -7,42 +7,18 @@ const authRoutes = require('./routes/auth');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const ensureUploadsDir = require('./utils/ensureUploadsDir');
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { s3Client, uploadToS3, getS3Url, getKeyFromUrl } = require('./utils/s3Config');
+const checkS3Connectivity = require('./utils/ensureUploadsDir');
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
-// Ensure uploads directory exists
-ensureUploadsDir();
-
-// Configure multer for handling file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, 'uploads/photos');
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: function (req, file, cb) {
-    if (!file.mimetype.startsWith('image/')) {
-      return cb(new Error('Only image files are allowed'));
-    }
-    cb(null, true);
+// Check S3 connectivity
+checkS3Connectivity().then(connected => {
+  if (!connected) {
+    console.warn('⚠️ Warning: S3 connectivity check failed. File uploads may not work correctly.');
   }
 });
 
@@ -78,34 +54,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve uploaded files statically with proper CORS headers
-app.use('/uploads', (req, res, next) => {
-  const origin = req.headers.origin;
-  const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173'];
-  
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.set({
-      'Access-Control-Allow-Origin': origin || allowedOrigins[0],
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Credentials': 'true',
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
-  }
-
-  console.log('Static file request:', {
-    path: req.path,
-    origin: req.headers.origin,
-    allowedOrigins,
-    timestamp: new Date().toISOString()
-  });
-  next();
-}, express.static(path.join(__dirname, 'uploads')));
-
 // Photo upload endpoint
-app.post('/api/users/profile/photo', auth, upload.single('photo'), async (req, res) => {
+app.post('/api/users/profile/photo', auth, uploadToS3.single('photo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
@@ -114,29 +64,39 @@ app.post('/api/users/profile/photo', auth, upload.single('photo'), async (req, r
     // Get the current user
     const user = await User.findById(req.user._id);
     if (!user) {
-      // Delete the uploaded file if user not found
-      fs.unlinkSync(req.file.path);
+      // Delete the uploaded file from S3 if user not found
+      try {
+        const deleteParams = {
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: req.file.key
+        };
+        await s3Client.send(new DeleteObjectCommand(deleteParams));
+      } catch (deleteError) {
+        console.error('Error deleting file from S3:', deleteError);
+      }
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Delete old photo if it exists
-    if (user.photoUrl) {
-      const oldPhotoPath = path.join(__dirname, user.photoUrl.replace(/^\/uploads/, 'uploads'));
-      if (fs.existsSync(oldPhotoPath)) {
-        fs.unlinkSync(oldPhotoPath);
+    // Delete old photo from S3 if it exists
+    if (user.photoUrl && user.photoUrl.includes(process.env.AWS_BUCKET_NAME)) {
+      try {
+        const oldPhotoKey = getKeyFromUrl(user.photoUrl);
+        const deleteParams = {
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: oldPhotoKey
+        };
+        await s3Client.send(new DeleteObjectCommand(deleteParams));
+      } catch (deleteError) {
+        console.error('Error deleting old photo from S3:', deleteError);
       }
     }
 
-    // Update user's photoUrl with relative path
-    const relativePhotoPath = path.relative(
-      path.join(__dirname, 'uploads'),
-      req.file.path
-    );
-    user.photoUrl = `/uploads/${relativePhotoPath.replace(/\\/g, '/')}`;
+    // Update user's photoUrl with S3 URL
+    user.photoUrl = req.file.location;
     await user.save();
 
-    console.log('Photo uploaded successfully:', {
-      filePath: req.file.path,
+    console.log('Photo uploaded successfully to S3:', {
+      s3Key: req.file.key,
       photoUrl: user.photoUrl
     });
 
@@ -150,11 +110,19 @@ app.post('/api/users/profile/photo', auth, upload.single('photo'), async (req, r
       }
     });
   } catch (error) {
-    // Delete the uploaded file if there was an error
+    // Delete the uploaded file from S3 if there was an error
     if (req.file) {
-      fs.unlinkSync(req.file.path);
+      try {
+        const deleteParams = {
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: req.file.key
+        };
+        await s3Client.send(new DeleteObjectCommand(deleteParams));
+      } catch (deleteError) {
+        console.error('Error deleting file from S3:', deleteError);
+      }
     }
-    console.error('Error uploading photo:', error);
+    console.error('Error uploading photo to S3:', error);
     res.status(500).json({ message: error.message });
   }
 });
