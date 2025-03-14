@@ -51,8 +51,13 @@ const ShareModal: React.FC<ShareModalProps> = ({ trip, isOpen, onClose, onUpdate
     navigator.clipboard.writeText(shareLink);
   };
 
+  const modalStyle = {
+    zIndex: 1000, // Ensure the modal appears above other elements
+    // ... existing styles ...
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div style={modalStyle} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
       <div className="bg-white p-6 rounded-lg w-full max-w-md">
         <h3 className="text-xl font-semibold mb-4">Share Trip</h3>
 
