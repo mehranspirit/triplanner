@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -30,12 +30,42 @@ interface RouteInfo {
   distance: number;
 }
 
-const TripMap: React.FC<TripMapProps> = ({ trip }) => {
+// Extract only the event data needed for the map to prevent unnecessary re-renders
+const extractMapRelevantData = (trip: Trip) => {
+  return {
+    id: trip._id,
+    name: trip.name,
+    events: trip.events.map(event => ({
+      id: event.id,
+      type: event.type,
+      date: event.date,
+      location: event.location,
+      // Type-specific fields
+      airport: 'airport' in event ? event.airport : undefined,
+      accommodationName: 'accommodationName' in event ? event.accommodationName : undefined,
+      address: 'address' in event ? event.address : undefined,
+      placeName: 'placeName' in event ? event.placeName : undefined,
+      checkIn: 'checkIn' in event ? event.checkIn : undefined,
+      checkOut: 'checkOut' in event ? event.checkOut : undefined,
+      airline: 'airline' in event ? event.airline : undefined,
+      flightNumber: 'flightNumber' in event ? event.flightNumber : undefined,
+    }))
+  };
+};
+
+const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const mapRef = useRef<LeafletMap | null>(null);
+  
+  // Extract only the data needed for the map to prevent unnecessary re-renders
+  const mapRelevantData = useMemo(() => extractMapRelevantData(trip), [
+    trip._id,
+    trip.name,
+    trip.events
+  ]);
 
   const fetchRoute = async (start: Location, end: Location): Promise<RouteInfo | null> => {
     try {
@@ -105,14 +135,15 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   };
 
   useEffect(() => {
+    console.log('TripMap: Fetching locations for events');
     const fetchLocations = async () => {
       try {
         setIsLoading(true);
         setError(null);
         
-        if (trip.events.length === 0) {
+        if (mapRelevantData.events.length === 0) {
           // If no events, try to get location from trip name
-          const tripLocation = await fetchTripLocation(trip.name);
+          const tripLocation = await fetchTripLocation(mapRelevantData.name);
           if (tripLocation) {
             setLocations([tripLocation]);
             if (mapRef.current) {
@@ -123,18 +154,18 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           return;
         }
         
-        const locationPromises = trip.events.map(async (event) => {
+        const locationPromises = mapRelevantData.events.map(async (event) => {
           let searchQuery = '';
           
           if (event.location) {
             searchQuery = event.location;
           } else {
             if (event.type === 'arrival' || event.type === 'departure') {
-              searchQuery = event.airport;
+              searchQuery = event.airport || '';
             } else if (event.type === 'stay') {
-              searchQuery = `${event.accommodationName} ${event.address || ''}`.trim();
+              searchQuery = `${event.accommodationName || ''} ${event.address || ''}`.trim();
             } else if (event.type === 'destination') {
-              searchQuery = `${event.placeName} ${event.address || ''}`.trim();
+              searchQuery = `${event.placeName || ''} ${event.address || ''}`.trim();
             }
           }
 
@@ -156,7 +187,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                 lat: parseFloat(data[0].lat),
                 lon: parseFloat(data[0].lon),
                 displayName: data[0].display_name,
-                event
+                event: event as Event
               };
             }
             return null;
@@ -192,7 +223,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     };
 
     fetchLocations();
-  }, [trip]);
+  }, [mapRelevantData]);
 
   if (isLoading) {
     return (
@@ -310,6 +341,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
       </MapContainer>
     </div>
   );
-};
+});
 
 export default TripMap; 

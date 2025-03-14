@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
@@ -258,8 +258,11 @@ const TripDetails: React.FC = () => {
           return;
         }
         console.log('Successfully fetched trip:', fetchedTrip);
+        
+        // Update only the local state
         setTrip(fetchedTrip);
         setEditedTrip(fetchedTrip);
+        
         setError('');
       } catch (err) {
         console.error('Error fetching trip:', err);
@@ -309,8 +312,48 @@ const TripDetails: React.FC = () => {
     loadEventThumbnails();
   }, [trip]);
 
-  const handleTripUpdate = (updatedTrip: Trip) => {
-    setTrip(updatedTrip);
+  const handleTripUpdate = async (updatedTrip: Trip) => {
+    console.log('Updating trip with new data:', updatedTrip);
+    
+    // Check if only collaborators have changed
+    const onlyCollaboratorsChanged = 
+      trip && 
+      trip._id === updatedTrip._id &&
+      trip.name === updatedTrip.name &&
+      trip.events.length === updatedTrip.events.length &&
+      JSON.stringify(trip.events) === JSON.stringify(updatedTrip.events);
+    
+    if (onlyCollaboratorsChanged) {
+      console.log('Only collaborators changed, updating just collaborator data');
+      // Update only the collaborators without replacing the entire trip object
+      setTrip(prevTrip => {
+        if (!prevTrip) return updatedTrip;
+        return {
+          ...prevTrip,
+          collaborators: updatedTrip.collaborators
+        };
+      });
+    } else {
+      // Create a deep copy of the updated trip to avoid reference issues
+      const tripCopy = JSON.parse(JSON.stringify(updatedTrip));
+      // Update the local state with the full new trip
+      setTrip(tripCopy);
+    }
+    
+    // Update the context state
+    try {
+      await updateTrip(updatedTrip);
+      console.log('Trip update complete');
+    } catch (err) {
+      console.error('Error updating trip in context:', err);
+      // If context update fails, fetch the latest trip data from the server
+      try {
+        const latestTrip = await api.getTrip(updatedTrip._id || id || '');
+        setTrip(latestTrip);
+      } catch (fetchErr) {
+        console.error('Failed to fetch latest trip data after error:', fetchErr);
+      }
+    }
   };
 
   const handleLeaveTrip = async () => {
@@ -333,6 +376,26 @@ const TripDetails: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to leave trip');
     }
   };
+
+  // Create a memoized version of the trip data that only includes fields needed for the map
+  const mapTripData = useMemo(() => {
+    if (!trip) return null;
+    
+    return {
+      _id: trip._id,
+      name: trip.name,
+      events: trip.events,
+      // Include required Trip properties but with minimal data
+      owner: trip.owner,
+      collaborators: [], // Empty array since collaborators aren't needed for the map
+      createdAt: trip.createdAt,
+      updatedAt: trip.updatedAt,
+      isPublic: trip.isPublic,
+      description: trip.description,
+      thumbnailUrl: trip.thumbnailUrl,
+      shareableLink: trip.shareableLink
+    };
+  }, [trip?._id, trip?.name, trip?.events, trip?.owner]);
 
   if (loading) {
     return (
@@ -932,6 +995,8 @@ const TripDetails: React.FC = () => {
     canEdit
   });
 
+  console.log('Rendering collaborators:', trip.collaborators);
+
   return (
     <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 space-y-6">
       <div className="relative">
@@ -963,19 +1028,24 @@ const TripDetails: React.FC = () => {
             {/* Collaborator Avatars */}
             {trip.collaborators
               .filter(collaborator => collaborator.user._id !== user?._id)
-              .map((collaborator) => (
-              <div key={collaborator.user._id} className="relative group">
-                <Avatar
-                  photoUrl={collaborator.user.photoUrl || null}
-                  name={collaborator.user.name}
-                  size="md"
-                  className="ring-2 ring-white"
-                />
-                <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  {collaborator.user.name} • {collaborator.role}
-                </div>
-              </div>
-            ))}
+              .map((collaborator) => {
+                // Force the role to be a string
+                const roleDisplay = String(collaborator.role || 'Viewer');
+                
+                return (
+                  <div key={collaborator.user._id} className="relative group">
+                    <Avatar
+                      photoUrl={collaborator.user.photoUrl || null}
+                      name={collaborator.user.name}
+                      size="md"
+                      className="ring-2 ring-white"
+                    />
+                    <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      {collaborator.user.name} • {roleDisplay}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
           
           {user && trip.owner._id !== user._id && (
@@ -1182,7 +1252,7 @@ const TripDetails: React.FC = () => {
           </div>
           <div className="border-t border-gray-200 flex-1">
             <div className="h-full">
-              <TripMap trip={trip} />
+              {mapTripData && <TripMap trip={mapTripData} />}
             </div>
           </div>
         </div>

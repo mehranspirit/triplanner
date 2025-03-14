@@ -27,9 +27,19 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
+      // Make the API call
       await api.addCollaborator(trip._id, email, role);
-      const updatedTrip = await api.getTrip(trip._id);
-      onUpdate(updatedTrip);
+      
+      // Fetch the latest trip data from the server
+      const serverTrip = await api.getTrip(trip._id);
+      
+      // Log the updated collaborators
+      console.log('Updated collaborators after adding:', serverTrip.collaborators);
+      
+      // Update the UI with the server data
+      onUpdate(serverTrip);
+      
+      // Reset form
       setEmail('');
       setRole('viewer');
     } catch (err) {
@@ -44,11 +54,27 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
+      // Make the API call
       await api.removeCollaborator(trip._id, userId);
-      const updatedTrip = await api.getTrip(trip._id);
-      onUpdate(updatedTrip);
+      
+      // Fetch the latest trip data from the server
+      const serverTrip = await api.getTrip(trip._id);
+      
+      // Log the updated collaborators
+      console.log('Updated collaborators after removing:', serverTrip.collaborators);
+      
+      // Update the UI with the server data
+      onUpdate(serverTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove collaborator');
+      
+      // On error, fetch the latest trip data to ensure consistency
+      try {
+        const latestTrip = await api.getTrip(trip._id);
+        onUpdate(latestTrip);
+      } catch (fetchErr) {
+        console.error('Failed to fetch latest trip data after error:', fetchErr);
+      }
     }
   };
 
@@ -59,16 +85,90 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
-      await api.updateCollaboratorRole(trip._id, userId, newRole);
-      const updatedTrip = await api.getTrip(trip._id);
+      console.log('Starting role update:', {
+        tripId: trip._id,
+        userId,
+        newRole,
+        currentCollaborators: trip.collaborators.map(c => ({
+          userId: c.user._id,
+          name: c.user.name,
+          role: c.role
+        }))
+      });
+      
+      // Create an optimistic update to maintain the order of collaborators
+      const updatedTrip = {
+        ...trip,
+        collaborators: trip.collaborators.map(c => 
+          c.user._id === userId 
+            ? { ...c, role: newRole } 
+            : c
+        )
+      };
+      
+      // Update the UI immediately to prevent visual reordering
       onUpdate(updatedTrip);
+      
+      // Make the API call in the background
+      await api.updateCollaboratorRole(trip._id, userId, newRole);
+      
+      // Add a small delay to ensure the server has processed the update
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Then fetch the latest trip data from the server
+      try {
+        const serverTrip = await api.getTrip(trip._id);
+        
+        // Log the updated collaborator data
+        const updatedCollaborator = serverTrip.collaborators.find(c => c.user._id === userId);
+        console.log('Updated collaborator data:', {
+          userId,
+          name: updatedCollaborator?.user.name,
+          role: updatedCollaborator?.role,
+          roleType: typeof updatedCollaborator?.role
+        });
+        
+        // Update the UI with the server data, but maintain the order
+        const orderedServerTrip = {
+          ...serverTrip,
+          collaborators: updatedTrip.collaborators.map(localCollab => {
+            // Find the matching collaborator from the server data
+            const serverCollab = serverTrip.collaborators.find(
+              sc => sc.user._id === localCollab.user._id
+            );
+            // Use server data but maintain the order from local data
+            return serverCollab || localCollab;
+          })
+        };
+        
+        onUpdate(orderedServerTrip);
+        
+        console.log('Role update complete');
+      } catch (fetchErr) {
+        console.error('Error fetching updated trip:', fetchErr);
+        // We already updated the UI optimistically, so no need to do it again
+      }
     } catch (err) {
+      console.error('Error updating role:', err);
       setError(err instanceof Error ? err.message : 'Failed to update role');
+      
+      // On error, fetch the latest trip data to ensure consistency
+      try {
+        const latestTrip = await api.getTrip(trip._id);
+        onUpdate(latestTrip);
+      } catch (fetchErr) {
+        console.error('Failed to fetch latest trip data after error:', fetchErr);
+      }
     }
   };
 
+  const modalStyle = {
+    zIndex: 1000, // Ensure the modal appears above other elements
+    // ... existing styles ...
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div style={modalStyle} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
       <div className="bg-white p-6 rounded-lg w-full max-w-md">
         <h3 className="text-xl font-semibold mb-4">Manage Collaborators</h3>
         
