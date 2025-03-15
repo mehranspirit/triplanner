@@ -15,6 +15,7 @@ import UserProfile from './components/UserProfile';
 import { UserList } from './components/UserList';
 import Calendar from './components/Calendar';
 import { Link, NavLink } from 'react-router-dom';
+import ActivityLogPage from './pages/ActivityLogPage';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -86,6 +87,26 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AuthenticatedLayout>
                     <Calendar />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activity-log"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <ActivityLogPage />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/trips/:tripId/activity-log"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <ActivityLogPage />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }

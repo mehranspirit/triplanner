@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -1060,12 +1060,20 @@ const TripDetails: React.FC = () => {
                       ? 'You can edit this trip' 
                       : 'You can view this trip'}
                   </span>
-                  <button
-                    onClick={() => setIsLeaveWarningOpen(true)}
-                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors duration-200 shadow-sm"
-                  >
-                    Leave Trip
-                  </button>
+                  <div className="flex gap-2">
+                    <Link
+                      to={`/trips/${trip._id}/activity-log`}
+                      className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded transition-colors duration-200 shadow-sm"
+                    >
+                      Activity Log
+                    </Link>
+                    <button
+                      onClick={() => setIsLeaveWarningOpen(true)}
+                      className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors duration-200 shadow-sm"
+                    >
+                      Leave Trip
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1099,6 +1107,12 @@ const TripDetails: React.FC = () => {
             >
               Share Trip
             </button>
+            <Link
+              to={`/trips/${trip._id}/activity-log`}
+              className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base flex items-center"
+            >
+              Activity Log
+            </Link>
           </div>
         )}
       </div>
