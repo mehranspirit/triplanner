@@ -25,6 +25,31 @@ handlebars.registerHelper('or', function() {
   return Array.prototype.slice.call(arguments, 0, -1).some(Boolean);
 });
 
+// Configure Puppeteer launch options based on environment
+const getPuppeteerOptions = () => {
+  // Default options for local development
+  const options = {
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  };
+
+  // Additional options for production environments like Render
+  if (process.env.NODE_ENV === 'production') {
+    options.args.push(
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu'
+    );
+    
+    // Use executable path if specified in environment
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+  }
+
+  return options;
+};
+
 /**
  * Convert plain text URLs to HTML hyperlinks
  * @param {string} text - Text that may contain URLs
@@ -58,10 +83,7 @@ async function generatePDF(trip, options = {}) {
     const html = await renderTemplate('pdf-template', templateData);
     
     // Launch puppeteer to convert HTML to PDF
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    const browser = await puppeteer.launch(getPuppeteerOptions());
     
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });

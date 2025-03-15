@@ -300,7 +300,7 @@ export default function TripList() {
   const renderTripCard = (trip: Trip) => (
     <div
       key={trip._id}
-      className="bg-white overflow-hidden shadow rounded-lg"
+      className="bg-white overflow-hidden shadow rounded-lg relative group"
     >
       {editingTripId === trip._id ? (
         <div className="p-4">
@@ -351,104 +351,114 @@ export default function TripList() {
         </div>
       ) : (
         <>
-          <div className="h-48 w-full relative">
-            <img
-              src={trip.thumbnailUrl || tripThumbnails[trip._id] || PREDEFINED_THUMBNAILS.default}
-              alt={trip.name}
-              className="h-full w-full object-cover"
-            />
-            {user && trip.owner._id !== user._id && (
-              <div className="absolute top-2 right-2 z-10">
-                <div className="relative group">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-white/90 text-indigo-700 shadow-sm backdrop-blur-sm">
-                    Shared
-                  </span>
-                  <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' ? 'You can edit' : 'View only'}
-                  </div>
-                </div>
-              </div>
-            )}
-            {/* Owner and Collaborator Avatars */}
-            <div className="absolute bottom-2 right-2 flex -space-x-2 z-10">
-              {/* Owner Avatar */}
-              {trip.owner._id !== user?._id && (
-                <div className="relative group">
-                  <Avatar
-                    photoUrl={trip.owner.photoUrl || null}
-                    name={trip.owner.name}
-                    size="sm"
-                    className="ring-2 ring-white"
-                  />
-                  <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {trip.owner.name} • Owner
+          {/* Clickable card that navigates to trip details */}
+          <div 
+            onClick={() => navigate(`/trips/${trip._id}`)}
+            className="cursor-pointer"
+          >
+            <div className="h-48 w-full relative">
+              <img
+                src={trip.thumbnailUrl || tripThumbnails[trip._id] || PREDEFINED_THUMBNAILS.default}
+                alt={trip.name}
+                className="h-full w-full object-cover"
+              />
+              {user && trip.owner._id !== user._id && (
+                <div className="absolute top-2 right-2 z-10">
+                  <div className="relative group">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-white/90 text-indigo-700 shadow-sm backdrop-blur-sm">
+                      Shared
+                    </span>
+                    <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' ? 'You can edit' : 'View only'}
+                    </div>
                   </div>
                 </div>
               )}
-              {/* Collaborator Avatars */}
-              {trip.collaborators
-                .filter(collaborator => collaborator.user._id !== user?._id)
-                .slice(0, 3)
-                .map((collaborator) => (
-                <div key={collaborator.user._id} className="relative group">
-                  <Avatar
-                    photoUrl={collaborator.user.photoUrl || null}
-                    name={collaborator.user.name}
-                    size="sm"
-                    className="ring-2 ring-white"
-                  />
-                  <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {collaborator.user.name} • {collaborator.role}
+              {/* Owner and Collaborator Avatars */}
+              <div className="absolute bottom-2 right-2 flex -space-x-2 z-10">
+                {/* Owner Avatar */}
+                {trip.owner._id !== user?._id && (
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <Avatar
+                      photoUrl={trip.owner.photoUrl || null}
+                      name={trip.owner.name}
+                      size="sm"
+                      className="ring-2 ring-white hover:ring-indigo-200 transition-all peer"
+                    />
+                    <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 peer-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                      {trip.owner.name} • Owner
+                    </div>
                   </div>
-                </div>
-              ))}
-              {trip.collaborators.filter(c => c.user._id !== user?._id).length > 3 && (
-                <div className="relative flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full ring-2 ring-white">
-                  <span className="text-xs text-gray-600">+{trip.collaborators.filter(c => c.user._id !== user?._id).length - 3}</span>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>
-            {tripDurations[trip._id] && (
-              <p className="text-sm text-gray-600 mt-1">
-                {formatDateRange(tripDurations[trip._id].startDate, tripDurations[trip._id].endDate)}
-                <span className="ml-2 text-gray-500">
-                  • {tripDurations[trip._id].duration} {tripDurations[trip._id].duration === 1 ? 'day' : 'days'}
-                </span>
-              </p>
-            )}
-            {trip.description && (
-              <p className="mt-2 text-sm text-gray-600 line-clamp-2">{trip.description}</p>
-            )}
-            <div className="mt-4 flex justify-between items-center">
-              <div className="space-x-2">
-                <button
-                  onClick={() => navigate(`/trips/${trip._id}`)}
-                  className="text-indigo-600 hover:text-indigo-900"
-                >
-                  View Details
-                </button>
-                {(user && trip.owner._id === user._id) && (
-                  <>
-                    <button
-                      onClick={() => startEditing(trip)}
-                      className="text-indigo-600 hover:text-indigo-900"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => openDeleteModal(trip)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </>
+                )}
+                {/* Collaborator Avatars */}
+                {trip.collaborators
+                  .filter(collaborator => collaborator.user._id !== user?._id)
+                  .slice(0, 3)
+                  .map((collaborator) => (
+                  <div key={collaborator.user._id} className="relative" onClick={(e) => e.stopPropagation()}>
+                    <Avatar
+                      photoUrl={collaborator.user.photoUrl || null}
+                      name={collaborator.user.name}
+                      size="sm"
+                      className="ring-2 ring-white hover:ring-indigo-200 transition-all peer"
+                    />
+                    <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 peer-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                      {collaborator.user.name} • {collaborator.role}
+                    </div>
+                  </div>
+                ))}
+                {trip.collaborators.filter(c => c.user._id !== user?._id).length > 3 && (
+                  <div className="relative flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full ring-2 ring-white">
+                    <span className="text-xs text-gray-600">+{trip.collaborators.filter(c => c.user._id !== user?._id).length - 3}</span>
+                  </div>
                 )}
               </div>
             </div>
+            <div className="px-4 py-5 sm:p-6 h-[120px]">
+              <h3 className="text-2xl font-semibold text-gray-900">{trip.name}</h3>
+              {tripDurations[trip._id] && (
+                <p className="text-sm text-gray-600 mt-1">
+                  {formatDateRange(tripDurations[trip._id].startDate, tripDurations[trip._id].endDate)}
+                  <span className="ml-2 text-gray-500">
+                    • {tripDurations[trip._id].duration} {tripDurations[trip._id].duration === 1 ? 'day' : 'days'}
+                  </span>
+                </p>
+              )}
+              {trip.description && (
+                <p className="mt-2 text-sm text-gray-600 line-clamp-2">{trip.description}</p>
+              )}
+            </div>
           </div>
+          
+          {/* Action buttons for owner - positioned in bottom right corner */}
+          {(user && trip.owner._id === user._id) && (
+            <div className="absolute bottom-3 right-4 z-20 flex space-x-2" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEditing(trip);
+                }}
+                className="p-1.5 rounded-full bg-gray-100 text-indigo-600 hover:bg-indigo-100 transition-colors shadow-sm"
+                title="Edit trip"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDeleteModal(trip);
+                }}
+                className="p-1.5 rounded-full bg-gray-100 text-red-600 hover:bg-red-100 transition-colors shadow-sm"
+                title="Delete trip"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
