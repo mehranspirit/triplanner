@@ -1211,6 +1211,15 @@ const TripDetails: React.FC = () => {
                                 ) }} />
                               </p>
                             )}
+                            {/* Creator information */}
+                            {event.createdBy && (
+                              <p className="text-xs text-gray-400 mt-1 italic">
+                                Created by {event.createdBy.name} 
+                                {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
+                                  ` • Last edited by ${event.updatedBy.name}`}
+                              </p>
+                            )}
                           </div>
                         ) : event.type === 'destination' ? (
                           <div className="mt-1">
@@ -1233,6 +1242,15 @@ const TripDetails: React.FC = () => {
                                 ) }} />
                               </p>
                             )}
+                            {/* Creator information */}
+                            {event.createdBy && (
+                              <p className="text-xs text-gray-400 mt-1 italic">
+                                Created by {event.createdBy.name} 
+                                {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
+                                  ` • Last edited by ${event.updatedBy.name}`}
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <div className="mt-1">
@@ -1251,6 +1269,15 @@ const TripDetails: React.FC = () => {
                                   /(https?:\/\/[^\s]+)/g,
                                   '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
                                 ) }} />
+                              </p>
+                            )}
+                            {/* Creator information */}
+                            {event.createdBy && (
+                              <p className="text-xs text-gray-400 mt-1 italic">
+                                Created by {event.createdBy.name} 
+                                {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
+                                  ` • Last edited by ${event.updatedBy.name}`}
                               </p>
                             )}
                           </div>

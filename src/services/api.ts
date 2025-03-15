@@ -488,3 +488,42 @@ export const api: API = {
     return user;
   },
 };
+
+// Activity related functions
+export const getActivities = async (page = 1, limit = 20): Promise<any> => {
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/activities?page=${page}&limit=${limit}`, {
+      method: 'GET',
+      headers: getHeaders()
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch activities');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching activities:', error);
+    throw error;
+  }
+};
+
+export const getTripActivities = async (tripId: string, page = 1, limit = 20): Promise<any> => {
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/trip/${tripId}?page=${page}&limit=${limit}`, {
+      method: 'GET',
+      headers: getHeaders()
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch trip activities');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching trip activities:', error);
+    throw error;
+  }
+};

@@ -29,7 +29,31 @@ const eventSchema = new mongoose.Schema({
   // Destination fields
   placeName: String,
   description: String,
-  openingHours: String
+  openingHours: String,
+  // Creator and modifier information
+  createdBy: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    name: String,
+    email: String
+  },
+  updatedBy: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    name: String,
+    email: String
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date
+  }
 });
 
 const tripSchema = new mongoose.Schema({

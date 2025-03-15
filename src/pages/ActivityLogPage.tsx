@@ -17,6 +17,9 @@ const ActivityLogPage: React.FC = () => {
             : 'View all activities related to your trips'
           }
         </p>
+        <p className="mt-1 text-sm text-gray-500">
+          Use the filters to view activities by yourself, others, or everyone.
+        </p>
       </div>
       
       <ActivityLog tripId={tripId} />

@@ -36,6 +36,18 @@ export interface BaseEvent {
   date: string;
   location?: string;
   notes?: string;
+  createdBy?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  updatedBy?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 export interface ArrivalDepartureEvent extends BaseEvent {

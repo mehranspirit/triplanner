@@ -484,10 +484,31 @@ app.put('/api/trips/:id', auth, async (req, res) => {
       const oldEvents = trip.events || [];
       const newEvents = req.body.events || [];
       
+      console.log('Event comparison:', {
+        oldCount: oldEvents.length,
+        newCount: newEvents.length,
+        oldIds: oldEvents.map(e => e.id),
+        newIds: newEvents.map(e => e.id)
+      });
+      
       // Find added events (exist in new but not in old)
       const addedEvents = newEvents.filter(newEvent => 
         !oldEvents.some(oldEvent => oldEvent.id === newEvent.id)
-      );
+      ).map(event => ({
+        ...event,
+        createdBy: {
+          _id: req.user._id,
+          name: req.user.name,
+          email: req.user.email
+        },
+        updatedBy: {
+          _id: req.user._id,
+          name: req.user.name,
+          email: req.user.email
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
       
       // Find deleted events (exist in old but not in new)
       const deletedEvents = oldEvents.filter(oldEvent => 
@@ -507,8 +528,8 @@ app.put('/api/trips/:id', auth, async (req, res) => {
         
         // Compare all fields
         Object.keys(newEvent).forEach(key => {
-          // Skip the id field
-          if (key === 'id') return;
+          // Skip the id field and creator fields
+          if (key === 'id' || key === 'createdBy' || key === 'createdAt') return;
           
           // Check if the field exists in both and has changed
           if (oldEvent[key] !== undefined && 
@@ -525,8 +546,26 @@ app.put('/api/trips/:id', auth, async (req, res) => {
           }
         });
         
+        // Preserve the original creator information
+        const updatedEvent = {
+          ...newEvent,
+          createdBy: oldEvent.createdBy || {
+            _id: req.user._id,
+            name: req.user.name,
+            email: req.user.email
+          },
+          createdAt: oldEvent.createdAt || new Date(),
+          // Update the updater information
+          updatedBy: {
+            _id: req.user._id,
+            name: req.user.name,
+            email: req.user.email
+          },
+          updatedAt: new Date()
+        };
+        
         return {
-          event: newEvent,
+          event: updatedEvent,
           oldEvent,
           changedFields: changedEventFields,
           previousValues,
@@ -534,13 +573,19 @@ app.put('/api/trips/:id', auth, async (req, res) => {
         };
       }).filter(update => update.changedFields.length > 0);
       
+      console.log('Event changes detected:', {
+        added: addedEvents.length,
+        updated: updatedEvents.length,
+        deleted: deletedEvents.length
+      });
+      
       // Log event activities
       if (addedEvents.length > 0) {
         for (const event of addedEvents) {
           await logActivity({
             userId: req.user._id,
             tripId: updatedTrip._id,
-            eventId: event.id,
+            eventId: event.id, // Use the string ID directly, don't convert to ObjectId
             actionType: 'event_create',
             description: `Added ${event.type} to trip "${updatedTrip.name}"`,
             details: {
@@ -555,19 +600,44 @@ app.put('/api/trips/:id', auth, async (req, res) => {
       
       if (updatedEvents.length > 0) {
         for (const update of updatedEvents) {
+          // Create a more detailed description of what changed
+          const eventTypeDisplay = update.event.type.charAt(0).toUpperCase() + update.event.type.slice(1);
+          let eventName = '';
+          
+          // Get a descriptive name based on event type
+          switch (update.event.type) {
+            case 'arrival':
+            case 'departure':
+              eventName = `${update.event.airline || ''} ${update.event.flightNumber || ''} - ${update.event.airport || ''}`;
+              break;
+            case 'stay':
+              eventName = update.event.accommodationName || 'Accommodation';
+              break;
+            case 'destination':
+              eventName = update.event.placeName || update.event.location || 'Destination';
+              break;
+            default:
+              eventName = `Event ${update.event.id.substring(0, 8)}`;
+          }
+          
+          // Format the description to be more specific
+          const description = `Updated ${eventTypeDisplay} "${eventName}" in trip "${updatedTrip.name}" (changed: ${update.changedFields.join(', ')})`;
+          
           await logActivity({
             userId: req.user._id,
             tripId: updatedTrip._id,
-            eventId: update.event.id,
+            eventId: update.event.id, // Use the string ID directly
             actionType: 'event_update',
-            description: `Updated ${update.event.type} in trip "${updatedTrip.name}" (changed: ${update.changedFields.join(', ')})`,
+            description,
             details: {
               tripName: updatedTrip.name,
               eventType: update.event.type,
               eventId: update.event.id,
               changedFields: update.changedFields,
               previousValues: update.previousValues,
-              newValues: update.newValues
+              newValues: update.newValues,
+              // Include full event details for better context
+              event: update.event
             }
           });
         }
@@ -575,12 +645,32 @@ app.put('/api/trips/:id', auth, async (req, res) => {
       
       if (deletedEvents.length > 0) {
         for (const event of deletedEvents) {
+          // Create a more descriptive name for the deleted event
+          const eventTypeDisplay = event.type.charAt(0).toUpperCase() + event.type.slice(1);
+          let eventName = '';
+          
+          // Get a descriptive name based on event type
+          switch (event.type) {
+            case 'arrival':
+            case 'departure':
+              eventName = `${event.airline || ''} ${event.flightNumber || ''} - ${event.airport || ''}`;
+              break;
+            case 'stay':
+              eventName = event.accommodationName || 'Accommodation';
+              break;
+            case 'destination':
+              eventName = event.placeName || event.location || 'Destination';
+              break;
+            default:
+              eventName = `Event ${event.id.substring(0, 8)}`;
+          }
+          
           await logActivity({
             userId: req.user._id,
             tripId: updatedTrip._id,
-            eventId: event.id,
+            eventId: event.id, // Use the string ID directly
             actionType: 'event_delete',
-            description: `Removed ${event.type} from trip "${updatedTrip.name}"`,
+            description: `Removed ${eventTypeDisplay} "${eventName}" from trip "${updatedTrip.name}"`,
             details: {
               tripName: updatedTrip.name,
               eventType: event.type,

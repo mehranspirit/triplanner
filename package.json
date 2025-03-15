@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "migrate:event-creators": "node server/scripts/migrateEventCreators.js"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +17,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",
     "axios": "^1.8.2",
+    "date-fns": "^4.1.0",
     "leaflet": "^1.9.4",
     "multer-s3": "^3.0.1",
     "react": "^19.0.0",
