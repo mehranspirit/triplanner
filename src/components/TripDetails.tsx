@@ -201,6 +201,7 @@ const TripDetails: React.FC = () => {
   const [showAirportSuggestions, setShowAirportSuggestions] = useState(false);
   const airportInputRef = useRef<HTMLInputElement>(null);
   const [eventThumbnails, setEventThumbnails] = useState<{ [key: string]: string }>({});
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const fetchAirports = async (query: string) => {
     if (query.length < 2) {
@@ -396,6 +397,27 @@ const TripDetails: React.FC = () => {
       shareableLink: trip.shareableLink
     };
   }, [trip?._id, trip?.name, trip?.events, trip?.owner]);
+
+  // Export functions
+  const handleExportPDF = async () => {
+    try {
+      if (!trip?._id) return;
+      await api.exportTripAsPDF(trip._id);
+      setShowExportMenu(false);
+    } catch (error) {
+      setError('Failed to export trip as PDF');
+    }
+  };
+
+  const handleExportHTML = async () => {
+    try {
+      if (!trip?._id) return;
+      await api.exportTripAsHTML(trip._id);
+      setShowExportMenu(false);
+    } catch (error) {
+      setError('Failed to export trip as HTML');
+    }
+  };
 
   if (loading) {
     return (
@@ -1081,223 +1103,284 @@ const TripDetails: React.FC = () => {
             </div>
           )}
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{trip.name}</h1>
-            {trip.description && (
-              <p className="text-lg sm:text-xl text-white/90">{trip.description}</p>
-            )}
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-semibold text-gray-900">{trip.name}</h1>
+              <div className="flex items-center space-x-2">
+                {canEdit && (
+                  <>
+                    <button
+                      onClick={() => setIsEditingTrip(true)}
+                      className="btn btn-secondary"
+                    >
+                      Edit Trip
+                    </button>
+                    <button
+                      onClick={() => setIsModalOpen(true)}
+                      className="btn btn-primary"
+                    >
+                      Add Event
+                    </button>
+                  </>
+                )}
+                
+                {/* Export dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    className="btn btn-secondary flex items-center"
+                  >
+                    <span>Export</span>
+                    <svg
+                      className="w-4 h-4 ml-1"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 9l-7 7-7-7"
+                      ></path>
+                    </svg>
+                  </button>
+                  
+                  {showExportMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-50">
+                      <div className="py-1">
+                        <button
+                          onClick={handleExportPDF}
+                          className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+                        >
+                          Export as PDF
+                        </button>
+                        <button
+                          onClick={handleExportHTML}
+                          className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+                        >
+                          Printable Version
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Collaborators button */}
+                <button
+                  onClick={() => setIsCollaboratorModalOpen(true)}
+                  className="btn btn-secondary"
+                >
+                  Collaborators
+                </button>
+                
+                {/* Share button */}
+                <button
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="btn btn-secondary"
+                >
+                  Share
+                </button>
+                
+                {/* Leave/Delete Trip button */}
+                {isOwner ? (
+                  <button
+                    onClick={() => setIsLeaveWarningOpen(true)}
+                    className="btn btn-danger"
+                  >
+                    Delete Trip
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsLeaveWarningOpen(true)}
+                    className="btn btn-danger"
+                  >
+                    Leave Trip
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Action buttons */}
-        {isOwner && (
-          <div className="absolute top-4 right-4 sm:right-6 flex space-x-2">
-            <button
-              onClick={handleTripEdit}
-              className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base"
-            >
-              Edit Trip
-            </button>
-            <button
-              onClick={() => setIsCollaboratorModalOpen(true)}
-              className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base"
-            >
-              Manage Collaborators
-            </button>
-            <button
-              onClick={() => setIsShareModalOpen(true)}
-              className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base"
-            >
-              Share Trip
-            </button>
-            {trip.collaborators.length > 0 && (
-              <Link
-                to={`/trips/${trip._id}/activity-log`}
-                className="px-3 sm:px-4 py-2 bg-white/90 hover:bg-white text-gray-900 rounded-md shadow-lg transition-colors text-sm sm:text-base flex items-center"
-              >
-                Activity Log
-              </Link>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Events and Map section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-20">
-        {/* Events list */}
-        <div className="bg-white shadow rounded-none md:rounded-lg flex flex-col h-[700px]">
-          <div className="px-4 py-5 sm:px-6 flex-shrink-0">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">Events</h3>
-              {canEdit && (
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                >
-                  Add Event
-                </button>
-              )}
+        {/* Events and Map section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-20">
+          {/* Events list */}
+          <div className="bg-white shadow rounded-none md:rounded-lg flex flex-col h-[700px]">
+            <div className="px-4 py-5 sm:px-6 flex-shrink-0">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">Events</h3>
+                {canEdit && (
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    Add Event
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="border-t border-gray-200 flex-1 overflow-auto">
-            <ul className="divide-y divide-gray-200">
-              {trip.events
-                .sort((a, b) => {
-                  const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
-                  const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
-                  return dateA - dateB;
-                })
-                .map((event) => (
-                  <li key={event.id} className="px-4 py-4 sm:px-6">
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                      <div className="flex-shrink-0">
-                        <img
-                          src={event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type]}
-                          alt={event.type}
-                          className="h-20 w-20 object-cover rounded-lg"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = DEFAULT_THUMBNAILS[event.type];
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-indigo-600 capitalize">
-                            {event.type}
-                          </p>
-                          {canEdit && (
-                            <div className="flex space-x-2 ml-2">
-                              <button
-                                onClick={() => handleEditEvent(event.id)}
-                                className="text-indigo-600 hover:text-indigo-900 text-sm"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (trip._id) {
-                                    deleteEvent(trip._id, event.id);
-                                    setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
-                                  }
-                                }}
-                                className="text-red-600 hover:text-red-900 text-sm"
-                              >
-                                Delete
-                              </button>
+            <div className="border-t border-gray-200 flex-1 overflow-auto">
+              <ul className="divide-y divide-gray-200">
+                {trip.events
+                  .sort((a, b) => {
+                    const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
+                    const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
+                    return dateA - dateB;
+                  })
+                  .map((event) => (
+                    <li key={event.id} className="px-4 py-4 sm:px-6">
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                        <div className="flex-shrink-0">
+                          <img
+                            src={event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type]}
+                            alt={event.type}
+                            className="h-20 w-20 object-cover rounded-lg"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = DEFAULT_THUMBNAILS[event.type];
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-indigo-600 capitalize">
+                              {event.type}
+                            </p>
+                            {canEdit && (
+                              <div className="flex space-x-2 ml-2">
+                                <button
+                                  onClick={() => handleEditEvent(event.id)}
+                                  className="text-indigo-600 hover:text-indigo-900 text-sm"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (trip._id) {
+                                      deleteEvent(trip._id, event.id);
+                                      setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
+                                    }
+                                  }}
+                                  className="text-red-600 hover:text-red-900 text-sm"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          {event.type === 'stay' ? (
+                            <div className="mt-1">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {(event as StayEvent).accommodationName}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              {(event as StayEvent).address && (
+                                <p className="text-xs text-gray-500 mt-1 truncate">
+                                  {(event as StayEvent).address}
+                                </p>
+                              )}
+                              {event.notes && (
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                  Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                    /(https?:\/\/[^\s]+)/g,
+                                    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                  ) }} />
+                                </p>
+                              )}
+                              {/* Creator information */}
+                              {event.createdBy && (
+                                <p className="text-xs text-gray-400 mt-1 italic">
+                                  Created by {event.createdBy.name} 
+                                  {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                  {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
+                                    ` • Last edited by ${event.updatedBy.name}`}
+                                </p>
+                              )}
+                            </div>
+                          ) : event.type === 'destination' ? (
+                            <div className="mt-1">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {(event as DestinationEvent).placeName}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              {(event as DestinationEvent).address && (
+                                <p className="text-xs text-gray-500 mt-1 truncate">
+                                  {(event as DestinationEvent).address}
+                                </p>
+                              )}
+                              {event.notes && (
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                  Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                    /(https?:\/\/[^\s]+)/g,
+                                    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                  ) }} />
+                                </p>
+                              )}
+                              {/* Creator information */}
+                              {event.createdBy && (
+                                <p className="text-xs text-gray-400 mt-1 italic">
+                                  Created by {event.createdBy.name} 
+                                  {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                  {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
+                                    ` • Last edited by ${event.updatedBy.name}`}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mt-1">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {(event as ArrivalDepartureEvent).airport}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
+                              </p>
+                              {event.notes && (
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                  Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                    /(https?:\/\/[^\s]+)/g,
+                                    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                  ) }} />
+                                </p>
+                              )}
+                              {/* Creator information */}
+                              {event.createdBy && (
+                                <p className="text-xs text-gray-400 mt-1 italic">
+                                  Created by {event.createdBy.name} 
+                                  {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                  {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
+                                    ` • Last edited by ${event.updatedBy.name}`}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
-                        {event.type === 'stay' ? (
-                          <div className="mt-1">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {(event as StayEvent).accommodationName}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                            {(event as StayEvent).address && (
-                              <p className="text-xs text-gray-500 mt-1 truncate">
-                                {(event as StayEvent).address}
-                              </p>
-                            )}
-                            {event.notes && (
-                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                  /(https?:\/\/[^\s]+)/g,
-                                  '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                ) }} />
-                              </p>
-                            )}
-                            {/* Creator information */}
-                            {event.createdBy && (
-                              <p className="text-xs text-gray-400 mt-1 italic">
-                                Created by {event.createdBy.name} 
-                                {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
-                                  ` • Last edited by ${event.updatedBy.name}`}
-                              </p>
-                            )}
-                          </div>
-                        ) : event.type === 'destination' ? (
-                          <div className="mt-1">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {(event as DestinationEvent).placeName}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                            {(event as DestinationEvent).address && (
-                              <p className="text-xs text-gray-500 mt-1 truncate">
-                                {(event as DestinationEvent).address}
-                              </p>
-                            )}
-                            {event.notes && (
-                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                  /(https?:\/\/[^\s]+)/g,
-                                  '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                ) }} />
-                              </p>
-                            )}
-                            {/* Creator information */}
-                            {event.createdBy && (
-                              <p className="text-xs text-gray-400 mt-1 italic">
-                                Created by {event.createdBy.name} 
-                                {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
-                                  ` • Last edited by ${event.updatedBy.name}`}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="mt-1">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {(event as ArrivalDepartureEvent).airport}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
-                            </p>
-                            {event.notes && (
-                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                  /(https?:\/\/[^\s]+)/g,
-                                  '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                ) }} />
-                              </p>
-                            )}
-                            {/* Creator information */}
-                            {event.createdBy && (
-                              <p className="text-xs text-gray-400 mt-1 italic">
-                                Created by {event.createdBy.name} 
-                                {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
-                                  ` • Last edited by ${event.updatedBy.name}`}
-                              </p>
-                            )}
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  </li>
-                ))}
-            </ul>
+                    </li>
+                  ))}
+              </ul>
+            </div>
           </div>
-        </div>
 
-        {/* Map view */}
-        <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
-          <div className="px-4 py-5 sm:px-6 flex-shrink-0">
-            <h3 className="text-lg font-medium text-gray-900">Trip Map</h3>
-          </div>
-          <div className="border-t border-gray-200 flex-1">
-            <div className="h-full">
-              {mapTripData && <TripMap trip={mapTripData} />}
+          {/* Map view */}
+          <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
+            <div className="px-4 py-5 sm:px-6 flex-shrink-0">
+              <h3 className="text-lg font-medium text-gray-900">Trip Map</h3>
+            </div>
+            <div className="border-t border-gray-200 flex-1">
+              <div className="h-full">
+                {mapTripData && <TripMap trip={mapTripData} />}
+              </div>
             </div>
           </div>
         </div>

@@ -206,8 +206,8 @@ ${trip.duration} day${trip.duration !== 1 ? 's' : ''}`;
       title={tooltipText}
     >
       {/* Top half - Text content */}
-      <div ref={contentRef} className="absolute top-0 left-0 right-0 h-1/2 bg-white p-2 z-10">
-        <div ref={titleRef} className={`font-medium text-sm ${isPastTrip ? 'text-gray-600' : 'text-gray-900'} whitespace-nowrap`}>
+      <div ref={contentRef} className="absolute top-0 left-0 right-0 h-1/2 bg-white p-1.5 z-10">
+        <div ref={titleRef} className={`font-medium text-xs ${isPastTrip ? 'text-gray-600' : 'text-gray-900'} whitespace-nowrap`}>
           {trip.trip.name}
         </div>
         {showDateText && (
@@ -409,13 +409,13 @@ const Calendar: React.FC = () => {
       1;
 
     // Dynamic sizing based on number of trips
-    const CONTAINER_MIN_HEIGHT = 160;
-    const CONTAINER_MAX_HEIGHT = 300;
-    const MIN_BAR_HEIGHT = 32;
-    const MIN_SPACING = 8;
+    const CONTAINER_MIN_HEIGHT = 140;
+    const CONTAINER_MAX_HEIGHT = 240;
+    const MIN_BAR_HEIGHT = 28;
+    const MIN_SPACING = 6;
 
     // Calculate optimal bar height and spacing
-    const availableHeight = Math.min(CONTAINER_MAX_HEIGHT, Math.max(CONTAINER_MIN_HEIGHT, layerCount * 50));
+    const availableHeight = Math.min(CONTAINER_MAX_HEIGHT, Math.max(CONTAINER_MIN_HEIGHT, layerCount * 40));
     const barHeight = Math.max(MIN_BAR_HEIGHT, Math.floor((availableHeight - (layerCount + 1) * MIN_SPACING) / layerCount));
     const spacing = Math.max(MIN_SPACING, Math.floor((availableHeight - layerCount * barHeight) / (layerCount + 1)));
 
@@ -430,12 +430,12 @@ const Calendar: React.FC = () => {
 
     return (
       <div key={month} className="rounded-lg shadow overflow-hidden h-full bg-white">
-        <div className={`p-3 border-b ${seasonColors.border}`}>
-          <h3 className={`text-lg font-semibold ${seasonColors.text}`}>
+        <div className={`p-2 border-b ${seasonColors.border}`}>
+          <h3 className={`text-base font-semibold ${seasonColors.text}`}>
             {getMonthName(month)}
           </h3>
         </div>
-        <div className="p-3">
+        <div className="p-2">
           <div className={`relative rounded-lg ${seasonColors.bg} bg-opacity-75`} 
                style={{ height: `${availableHeight}px` }}>
             {/* Today's date line */}
@@ -521,7 +521,7 @@ const Calendar: React.FC = () => {
           ) : tripDurations.length === 0 ? (
             <div className="text-gray-500 text-center py-8">No trips found</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {Array.from({ length: 12 }, (_, i) => renderMonth(i))}
             </div>
           )}

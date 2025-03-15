@@ -39,6 +39,8 @@ interface API {
   register: (name: string, email: string, password: string) => Promise<{ token: string; user: User }>;
   logout: () => void;
   getCurrentUser: () => Promise<User>;
+  exportTripAsPDF: (tripId: string) => Promise<void>;
+  exportTripAsHTML: (tripId: string) => Promise<void>;
 }
 
 export const api: API = {
@@ -486,6 +488,32 @@ export const api: API = {
     const user = await response.json();
     console.log('Current user response:', user);
     return user;
+  },
+
+  // Export trip as PDF
+  exportTripAsPDF: async (tripId: string): Promise<void> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    
+    try {
+      // Use window.open to trigger the download in a new tab
+      window.open(`${API_URL}/api/trips/${tripId}/export/pdf`, '_blank');
+    } catch (error) {
+      console.error('Error exporting trip as PDF:', error);
+      throw new Error('Failed to export trip as PDF');
+    }
+  },
+
+  // Export trip as HTML
+  exportTripAsHTML: async (tripId: string): Promise<void> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    
+    try {
+      // Use window.open to open the HTML in a new tab
+      window.open(`${API_URL}/api/trips/${tripId}/export/html`, '_blank');
+    } catch (error) {
+      console.error('Error exporting trip as HTML:', error);
+      throw new Error('Failed to export trip as HTML');
+    }
   },
 };
 
