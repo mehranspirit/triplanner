@@ -207,45 +207,47 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
 
         <div className="border-t pt-4">
           <h4 className="font-medium mb-2">Current Collaborators</h4>
-          <ul className="space-y-2">
-            {trip.collaborators.map((collaborator) => (
-              <li key={collaborator.user._id} className="flex items-center justify-between py-2">
-                <div className="flex items-center space-x-3">
-                  <Avatar
-                    photoUrl={collaborator.user.photoUrl || null}
-                    name={collaborator.user.name}
-                    size="sm"
-                    className="ring-2 ring-gray-200"
-                  />
-                  <div>
-                    <p className="font-medium">{collaborator.user.name}</p>
-                    <p className="text-sm text-gray-500">{collaborator.user.email}</p>
+          <div className="max-h-60 overflow-y-auto pr-1">
+            <ul className="space-y-2">
+              {trip.collaborators.map((collaborator) => (
+                <li key={collaborator.user._id} className="flex items-center justify-between py-2">
+                  <div className="flex items-center space-x-3">
+                    <Avatar
+                      photoUrl={collaborator.user.photoUrl || null}
+                      name={collaborator.user.name}
+                      size="sm"
+                      className="ring-2 ring-gray-200"
+                    />
+                    <div>
+                      <p className="font-medium">{collaborator.user.name}</p>
+                      <p className="text-sm text-gray-500">{collaborator.user.email}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <select
-                    value={collaborator.role}
-                    onChange={(e) =>
-                      handleRoleChange(
-                        collaborator.user._id,
-                        e.target.value as 'editor' | 'viewer'
-                      )
-                    }
-                    className="input py-1"
-                  >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                  </select>
-                  <button
-                    onClick={() => handleRemoveCollaborator(collaborator.user._id)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={collaborator.role}
+                      onChange={(e) =>
+                        handleRoleChange(
+                          collaborator.user._id,
+                          e.target.value as 'editor' | 'viewer'
+                        )
+                      }
+                      className="input py-1"
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                    </select>
+                    <button
+                      onClick={() => handleRemoveCollaborator(collaborator.user._id)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         <div className="mt-6 flex justify-end">

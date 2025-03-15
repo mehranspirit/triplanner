@@ -495,8 +495,45 @@ export const api: API = {
     if (!tripId) throw new Error('Trip ID is required');
     
     try {
-      // Use window.open to trigger the download in a new tab
-      window.open(`${API_URL}/api/trips/${tripId}/export/pdf`, '_blank');
+      // Get the authentication token
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Make a direct fetch request to get the PDF
+      const response = await fetch(`${API_URL}/api/trips/${tripId}/export/pdf`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Failed to export trip as PDF');
+      }
+      
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create a link element
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `trip_${tripId}_itinerary.pdf`;
+      
+      // Append to the document
+      document.body.appendChild(a);
+      
+      // Click the link
+      a.click();
+      
+      // Clean up
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (error) {
       console.error('Error exporting trip as PDF:', error);
       throw new Error('Failed to export trip as PDF');
@@ -508,8 +545,43 @@ export const api: API = {
     if (!tripId) throw new Error('Trip ID is required');
     
     try {
-      // Use window.open to open the HTML in a new tab
-      window.open(`${API_URL}/api/trips/${tripId}/export/html`, '_blank');
+      // Get the authentication token
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Open a new window
+      const newWindow = window.open('about:blank', '_blank');
+      
+      if (!newWindow) {
+        throw new Error('Failed to open new window. Please check your popup blocker settings.');
+      }
+      
+      // Show loading message
+      newWindow.document.write('<html><body><h1>Loading printable version...</h1></body></html>');
+      
+      // Make a direct fetch request to get the HTML
+      const response = await fetch(`${API_URL}/api/trips/${tripId}/export/html`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        newWindow.close();
+        throw new Error(errorData?.message || 'Failed to export trip as HTML');
+      }
+      
+      // Get the HTML content
+      const html = await response.text();
+      
+      // Write the HTML to the new window
+      newWindow.document.open();
+      newWindow.document.write(html);
+      newWindow.document.close();
     } catch (error) {
       console.error('Error exporting trip as HTML:', error);
       throw new Error('Failed to export trip as HTML');

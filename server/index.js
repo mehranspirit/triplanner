@@ -15,6 +15,7 @@ const { s3Client, uploadToS3, getS3Url, getKeyFromUrl } = require('./utils/s3Con
 const checkS3Connectivity = require('./utils/ensureUploadsDir');
 const { logActivity } = require('./utils/activityLogger');
 const { generatePDF, generateHTML } = require('./utils/exportUtils');
+const jwt = require('jsonwebtoken');
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
@@ -1184,7 +1185,7 @@ app.put('/api/users/profile', auth, async (req, res) => {
   }
 });
 
-// Export trip as PDF
+// Export trip as PDF (GET method with auth middleware)
 app.get('/api/trips/:id/export/pdf', auth, async (req, res) => {
   try {
     const trip = await Trip.findById(req.params.id)
@@ -1216,7 +1217,53 @@ app.get('/api/trips/:id/export/pdf', auth, async (req, res) => {
   }
 });
 
-// Export trip as HTML
+// Export trip as PDF (POST method with token in body)
+app.post('/api/trips/:id/export/pdf', async (req, res) => {
+  try {
+    // Get token from request body
+    const token = req.body.token;
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication token is required' });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid authentication token' });
+    }
+
+    // Find trip
+    const trip = await Trip.findById(req.params.id)
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
+    
+    if (!trip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+
+    // Check if user has access to this trip
+    const accessRole = trip.hasAccess(user._id);
+    if (!accessRole) {
+      return res.status(403).json({ message: 'You do not have permission to access this trip' });
+    }
+
+    // Generate PDF
+    const pdf = await generatePDF(trip);
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${trip.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_itinerary.pdf"`);
+    
+    // Send PDF
+    res.send(pdf);
+  } catch (error) {
+    console.error('Error exporting trip as PDF:', error);
+    res.status(500).json({ message: 'Failed to export trip as PDF' });
+  }
+});
+
+// Export trip as HTML (GET method with auth middleware)
 app.get('/api/trips/:id/export/html', auth, async (req, res) => {
   try {
     const trip = await Trip.findById(req.params.id)
@@ -1229,6 +1276,49 @@ app.get('/api/trips/:id/export/html', auth, async (req, res) => {
 
     // Check if user has access to this trip
     const accessRole = trip.hasAccess(req.user._id);
+    if (!accessRole) {
+      return res.status(403).json({ message: 'You do not have permission to access this trip' });
+    }
+
+    // Generate HTML
+    const html = await generateHTML(trip);
+    
+    // Send HTML
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    console.error('Error exporting trip as HTML:', error);
+    res.status(500).json({ message: 'Failed to export trip as HTML' });
+  }
+});
+
+// Export trip as HTML (POST method with token in body)
+app.post('/api/trips/:id/export/html', async (req, res) => {
+  try {
+    // Get token from request body
+    const token = req.body.token;
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication token is required' });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid authentication token' });
+    }
+
+    // Find trip
+    const trip = await Trip.findById(req.params.id)
+      .populate('owner', 'name email')
+      .populate('collaborators.user', 'name email');
+    
+    if (!trip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+
+    // Check if user has access to this trip
+    const accessRole = trip.hasAccess(user._id);
     if (!accessRole) {
       return res.status(403).json({ message: 'You do not have permission to access this trip' });
     }
