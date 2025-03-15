@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const Trip = require('./models/Trip');
 const authRoutes = require('./routes/auth');
+const activitiesRoutes = require('./routes/activities');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
@@ -12,6 +13,7 @@ const fs = require('fs');
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { s3Client, uploadToS3, getS3Url, getKeyFromUrl } = require('./utils/s3Config');
 const checkS3Connectivity = require('./utils/ensureUploadsDir');
+const { logActivity } = require('./utils/activityLogger');
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
@@ -129,6 +131,9 @@ app.post('/api/users/profile/photo', auth, uploadToS3.single('photo'), async (re
 
 // Mount auth routes
 app.use('/api/auth', authRoutes);
+
+// Mount activities routes
+app.use('/api/activities', activitiesRoutes);
 
 // Add role change endpoint directly in index.js
 app.patch('/api/users/:userId/role', auth, async (req, res) => {
@@ -329,6 +334,19 @@ app.post('/api/trips', auth, async (req, res) => {
     delete transformedTrip.owner.id;
     
     console.log('Final transformed trip:', JSON.stringify(transformedTrip, null, 2));
+    
+    // Log activity
+    await logActivity({
+      userId: req.user._id,
+      tripId: savedTrip._id,
+      actionType: 'trip_create',
+      description: `Created trip "${savedTrip.name}"`,
+      details: {
+        tripName: savedTrip.name,
+        tripDescription: savedTrip.description
+      }
+    });
+    
     res.status(201).json(transformedTrip);
   } catch (error) {
     console.error('Error creating trip:', error);
@@ -450,6 +468,151 @@ app.put('/api/trips/:id', auth, async (req, res) => {
       collaborators: updatedTrip.collaborators.length
     });
 
+    // Determine what fields were updated
+    const changedFields = [];
+    if (req.body.name && req.body.name !== trip.name) changedFields.push('name');
+    if (req.body.description && req.body.description !== trip.description) changedFields.push('description');
+    if (req.body.startDate && req.body.startDate !== trip.startDate) changedFields.push('start date');
+    if (req.body.endDate && req.body.endDate !== trip.endDate) changedFields.push('end date');
+    
+    // Check for event changes
+    let eventActivity = null;
+    if (req.body.events && JSON.stringify(req.body.events) !== JSON.stringify(trip.events)) {
+      changedFields.push('events');
+      
+      // Find added, updated, and deleted events
+      const oldEvents = trip.events || [];
+      const newEvents = req.body.events || [];
+      
+      // Find added events (exist in new but not in old)
+      const addedEvents = newEvents.filter(newEvent => 
+        !oldEvents.some(oldEvent => oldEvent.id === newEvent.id)
+      );
+      
+      // Find deleted events (exist in old but not in new)
+      const deletedEvents = oldEvents.filter(oldEvent => 
+        !newEvents.some(newEvent => newEvent.id === oldEvent.id)
+      );
+      
+      // Find potentially updated events (exist in both)
+      const updatedEvents = newEvents.filter(newEvent => 
+        oldEvents.some(oldEvent => oldEvent.id === newEvent.id)
+      ).map(newEvent => {
+        const oldEvent = oldEvents.find(e => e.id === newEvent.id);
+        
+        // Determine which fields were changed
+        const changedEventFields = [];
+        const previousValues = {};
+        const newValues = {};
+        
+        // Compare all fields
+        Object.keys(newEvent).forEach(key => {
+          // Skip the id field
+          if (key === 'id') return;
+          
+          // Check if the field exists in both and has changed
+          if (oldEvent[key] !== undefined && 
+              JSON.stringify(oldEvent[key]) !== JSON.stringify(newEvent[key])) {
+            changedEventFields.push(key);
+            previousValues[key] = oldEvent[key];
+            newValues[key] = newEvent[key];
+          }
+          // Check if the field is new
+          else if (oldEvent[key] === undefined && newEvent[key] !== undefined) {
+            changedEventFields.push(key);
+            previousValues[key] = null;
+            newValues[key] = newEvent[key];
+          }
+        });
+        
+        return {
+          event: newEvent,
+          oldEvent,
+          changedFields: changedEventFields,
+          previousValues,
+          newValues
+        };
+      }).filter(update => update.changedFields.length > 0);
+      
+      // Log event activities
+      if (addedEvents.length > 0) {
+        for (const event of addedEvents) {
+          await logActivity({
+            userId: req.user._id,
+            tripId: updatedTrip._id,
+            eventId: event.id,
+            actionType: 'event_create',
+            description: `Added ${event.type} to trip "${updatedTrip.name}"`,
+            details: {
+              tripName: updatedTrip.name,
+              eventType: event.type,
+              eventId: event.id,
+              ...event
+            }
+          });
+        }
+      }
+      
+      if (updatedEvents.length > 0) {
+        for (const update of updatedEvents) {
+          await logActivity({
+            userId: req.user._id,
+            tripId: updatedTrip._id,
+            eventId: update.event.id,
+            actionType: 'event_update',
+            description: `Updated ${update.event.type} in trip "${updatedTrip.name}" (changed: ${update.changedFields.join(', ')})`,
+            details: {
+              tripName: updatedTrip.name,
+              eventType: update.event.type,
+              eventId: update.event.id,
+              changedFields: update.changedFields,
+              previousValues: update.previousValues,
+              newValues: update.newValues
+            }
+          });
+        }
+      }
+      
+      if (deletedEvents.length > 0) {
+        for (const event of deletedEvents) {
+          await logActivity({
+            userId: req.user._id,
+            tripId: updatedTrip._id,
+            eventId: event.id,
+            actionType: 'event_delete',
+            description: `Removed ${event.type} from trip "${updatedTrip.name}"`,
+            details: {
+              tripName: updatedTrip.name,
+              eventType: event.type,
+              eventId: event.id,
+              date: event.date,
+              ...event
+            }
+          });
+        }
+      }
+    }
+
+    // Log trip update activity (only if there are non-event changes or no specific event activities were logged)
+    if (changedFields.length > 0 && (changedFields.length > 1 || !changedFields.includes('events'))) {
+      await logActivity({
+        userId: req.user._id,
+        tripId: updatedTrip._id,
+        actionType: 'trip_update',
+        description: `Updated trip "${updatedTrip.name}"${changedFields.length > 0 ? ` (changed: ${changedFields.join(', ')})` : ''}`,
+        details: {
+          tripName: updatedTrip.name,
+          changedFields,
+          previousValues: {
+            name: trip.name,
+            description: trip.description,
+            startDate: trip.startDate,
+            endDate: trip.endDate
+          }
+        }
+      });
+    }
+
     res.json(updatedTrip);
   } catch (error) {
     console.error('Error updating trip:', {
@@ -497,6 +660,18 @@ app.delete('/api/trips/:id', auth, async (req, res) => {
     console.log('Trip successfully deleted:', {
       tripId: deletedTrip._id,
       owner: deletedTrip.owner
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: req.user._id,
+      tripId: deletedTrip._id,
+      actionType: 'trip_delete',
+      description: `Deleted trip "${deletedTrip.name}"`,
+      details: {
+        tripName: deletedTrip.name,
+        tripDescription: deletedTrip.description
+      }
     });
     
     res.json({ message: 'Trip deleted successfully' });
@@ -552,6 +727,21 @@ app.post('/api/trips/:id/collaborators', auth, async (req, res) => {
       .populate('owner', 'name email photoUrl')
       .populate('collaborators.user', 'name email photoUrl');
 
+    // Log activity
+    await logActivity({
+      userId: req.user._id,
+      tripId: trip._id,
+      actionType: 'collaborator_add',
+      description: `Added ${collaboratorUser.name} as a ${role || 'viewer'} to trip "${trip.name}"`,
+      details: {
+        tripName: trip.name,
+        collaboratorId: collaboratorUser._id,
+        collaboratorName: collaboratorUser.name,
+        collaboratorEmail: collaboratorUser.email,
+        role: role || 'viewer'
+      }
+    });
+
     res.json(populatedTrip);
   } catch (error) {
     console.error('Error adding collaborator:', error);
@@ -600,6 +790,11 @@ app.delete('/api/trips/:id/collaborators/:userId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Collaborator not found' });
     }
 
+    // Store collaborator info before removing
+    const collaborator = trip.collaborators[collaboratorIndex];
+    const collaboratorUser = await User.findById(req.params.userId);
+    const collaboratorName = collaboratorUser ? collaboratorUser.name : 'Unknown user';
+
     // Remove the collaborator
     trip.collaborators.splice(collaboratorIndex, 1);
 
@@ -613,6 +808,20 @@ app.delete('/api/trips/:id/collaborators/:userId', auth, async (req, res) => {
       tripId: populatedTrip._id,
       collaboratorId: req.params.userId,
       remainingCollaborators: populatedTrip.collaborators.length
+    });
+
+    // Log activity
+    await logActivity({
+      userId: req.user._id,
+      tripId: trip._id,
+      actionType: 'collaborator_remove',
+      description: `Removed ${collaboratorName} from trip "${trip.name}"`,
+      details: {
+        tripName: trip.name,
+        collaboratorId: req.params.userId,
+        collaboratorName,
+        role: collaborator.role
+      }
     });
 
     res.json(populatedTrip);
