@@ -11,6 +11,18 @@ const eventSchema = new mongoose.Schema({
   date: String,
   location: String,
   notes: String,
+  status: {
+    type: String,
+    enum: ['confirmed', 'exploring', 'alternative'],
+    default: 'confirmed'
+  },
+  priority: {
+    type: Number,
+    min: 1,
+    max: 5,
+    default: 3
+  },
+  source: String,
   // Arrival/Departure fields
   flightNumber: String,
   airline: String,

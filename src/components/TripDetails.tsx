@@ -170,11 +170,17 @@ const TripDetails: React.FC = () => {
   const [isEditingEvent, setIsEditingEvent] = useState<string | null>(null);
   const [editedTrip, setEditedTrip] = useState<Trip | null>(null);
   const [tripThumbnail, setTripThumbnail] = useState<string>('');
+  const [eventStatusFilter, setEventStatusFilter] = useState<'all' | 'confirmed' | 'exploring' | 'alternative'>('all');
+  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
   const [eventData, setEventData] = useState({
     thumbnailUrl: '',
     date: '',
     location: '',
     notes: '',
+    status: 'confirmed' as 'confirmed' | 'exploring' | 'alternative',
+    priority: 3,
+    source: '',
     // Arrival/Departure fields
     flightNumber: '',
     airline: '',
@@ -233,6 +239,19 @@ const TripDetails: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (airportInputRef.current && !airportInputRef.current.contains(event.target as Node)) {
         setShowAirportSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target as Node)) {
+        setStatusMenuOpen(null);
       }
     };
 
@@ -434,6 +453,60 @@ const TripDetails: React.FC = () => {
     }
   };
 
+  const handleStatusChange = async (eventId: string, newStatus: 'confirmed' | 'exploring' | 'alternative') => {
+    if (!trip || !trip._id) return;
+    
+    try {
+      const eventToUpdate = trip.events.find(e => e.id === eventId);
+      if (!eventToUpdate) return;
+      
+      // Create a complete updated event object with the new status
+      const updatedEvent = { 
+        ...eventToUpdate, 
+        status: newStatus 
+      };
+      
+      console.log('Updating event status:', { 
+        eventId, 
+        oldStatus: eventToUpdate.status, 
+        newStatus,
+        updatedEvent
+      });
+      
+      // Update the event in the backend
+      await updateEvent(trip._id, updatedEvent);
+      
+      // Update the local state
+      const updatedTrip = { 
+        ...trip, 
+        events: trip.events.map(e => e.id === eventId ? updatedEvent : e) 
+      };
+    setTrip(updatedTrip);
+      
+      // Also update the edited trip state to ensure consistency
+      setEditedTrip(updatedTrip);
+      
+      // Verify the update was successful by refetching the trip
+      const refreshedTrip = await api.getTrip(trip._id);
+      if (refreshedTrip) {
+        console.log('Refreshed trip after status update:', refreshedTrip);
+        // Check if the status was properly updated
+        const updatedEventInRefresh = refreshedTrip.events.find(e => e.id === eventId);
+        if (updatedEventInRefresh && updatedEventInRefresh.status !== newStatus) {
+          console.warn('Status not updated correctly in backend:', {
+            expected: newStatus,
+            actual: updatedEventInRefresh.status
+          });
+        }
+      }
+      
+      setStatusMenuOpen(null);
+    } catch (err) {
+      console.error('Error updating event status:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update event status');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -493,6 +566,9 @@ const TripDetails: React.FC = () => {
     e.preventDefault();
     let newEvent: Event;
 
+    // Ensure status has a default value if not provided
+    const status = eventData.status || 'confirmed';
+
     const baseEventData = {
       id: isEditingEvent || uuidv4(),
       type: eventType,
@@ -500,7 +576,17 @@ const TripDetails: React.FC = () => {
       date: eventData.date,
       location: eventData.location || undefined,
       notes: eventData.notes || undefined,
+      status: status,
+      priority: eventData.priority,
+      source: eventData.source || undefined,
     };
+
+    console.log('Creating/updating event with data:', {
+      isEditingEvent,
+      eventType,
+      status,
+      baseEventData
+    });
 
     switch (eventType) {
       case 'arrival':
@@ -549,17 +635,46 @@ const TripDetails: React.FC = () => {
         setError('Trip ID is missing');
         return;
       }
+        console.log('Updating event with ID:', newEvent.id, 'Status:', newEvent.status);
         await updateEvent(trip._id, newEvent);
+        
+        // Update local state
         const updatedTrip = { ...trip, events: trip.events.map(e => e.id === newEvent.id ? newEvent : e) };
         setTrip(updatedTrip);
+        
+        // Also update editedTrip to ensure consistency
+        setEditedTrip(updatedTrip);
+        
+        // Verify the update was successful
+        const refreshedTrip = await api.getTrip(trip._id);
+        if (refreshedTrip) {
+          console.log('Refreshed trip after event update:', refreshedTrip);
+          // Check if the event was properly updated
+          const updatedEventInRefresh = refreshedTrip.events.find(e => e.id === newEvent.id);
+          if (updatedEventInRefresh) {
+            console.log('Updated event in refreshed trip:', updatedEventInRefresh);
+            if (updatedEventInRefresh.status !== newEvent.status) {
+              console.warn('Status not updated correctly in backend:', {
+                expected: newEvent.status,
+                actual: updatedEventInRefresh.status
+              });
+            }
+          }
+        }
     } else {
         if (!trip._id) {
         setError('Trip ID is missing');
         return;
       }
+        console.log('Adding new event with status:', newEvent.status);
         await addEvent(trip._id, newEvent);
+        
+        // Update local state
         const updatedTrip = { ...trip, events: [...trip.events, newEvent] };
         setTrip(updatedTrip);
+        
+        // Also update editedTrip to ensure consistency
+        setEditedTrip(updatedTrip);
     }
       
     setIsModalOpen(false);
@@ -568,6 +683,10 @@ const TripDetails: React.FC = () => {
       thumbnailUrl: '',
       date: '',
       location: '',
+      notes: '',
+      status: 'confirmed',
+      priority: 3,
+      source: '',
       flightNumber: '',
       airline: '',
       time: '',
@@ -584,49 +703,34 @@ const TripDetails: React.FC = () => {
       placeName: '',
       description: '',
       openingHours: '',
-      notes: '',
     });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update event');
     }
   };
 
-  const handleEditEvent = async (eventId: string) => {
+  const handleEditEvent = (eventId: string) => {
     if (!trip) return;
-
+    
+    setIsEditingEvent(eventId);
+    setIsModalOpen(true); // Add this line to open the modal
     const eventToEdit = trip.events.find(e => e.id === eventId);
     if (!eventToEdit) return;
-
+    
     setEventType(eventToEdit.type);
-    setIsEditingEvent(eventId);
-    setIsModalOpen(true);
-
+    
     // Set common fields
-    setEventData({
-      ...eventData,
+    setEventData(prev => ({
+      ...prev,
       thumbnailUrl: eventToEdit.thumbnailUrl || '',
-      date: eventToEdit.date,
+      date: eventToEdit.date || '',
       location: eventToEdit.location || '',
       notes: eventToEdit.notes || '',
-      // Initialize all fields with empty values first
-      flightNumber: '',
-      airline: '',
-      time: '',
-      airport: '',
-      terminal: '',
-      gate: '',
-      bookingReference: '',
-      accommodationName: '',
-      address: '',
-      checkIn: '',
-      checkOut: '',
-      reservationNumber: '',
-      contactInfo: '',
-      placeName: '',
-      description: '',
-      openingHours: '',
-    });
-
+      status: eventToEdit.status || 'confirmed',
+      priority: eventToEdit.priority || 3,
+      source: eventToEdit.source || '',
+    }));
+    
     // Set type-specific fields
     switch (eventToEdit.type) {
       case 'arrival':
@@ -680,6 +784,9 @@ const TripDetails: React.FC = () => {
       date: eventData.date,
       notes: eventData.notes,
       thumbnailUrl: eventData.thumbnailUrl,
+      status: eventData.status,
+      priority: eventData.priority,
+      source: eventData.source,
       // ... existing event properties ...
     };
 
@@ -720,6 +827,53 @@ const TripDetails: React.FC = () => {
             required
           />
         </div>
+        <div className="mb-4">
+          <label className="block text-gray-700 mb-2">Status</label>
+          <select
+            value={eventData.status}
+            onChange={(e) =>
+              setEventData({ ...eventData, status: e.target.value as 'confirmed' | 'exploring' | 'alternative' })
+            }
+            className="input"
+          >
+            <option value="confirmed">Confirmed</option>
+            <option value="exploring">Exploring</option>
+            <option value="alternative">Alternative</option>
+          </select>
+        </div>
+        {eventData.status === 'exploring' && (
+          <>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Priority (1-5)</label>
+              <div className="flex items-center">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setEventData({ ...eventData, priority: star })}
+                    className={`text-2xl ${
+                      star <= eventData.priority ? 'text-yellow-500' : 'text-gray-300'
+                    } focus:outline-none`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Source (optional)</label>
+              <input
+                type="text"
+                value={eventData.source}
+                onChange={(e) =>
+                  setEventData({ ...eventData, source: e.target.value })
+                }
+                className="input"
+                placeholder="Where did you find this idea?"
+              />
+            </div>
+          </>
+        )}
         <div className="mb-4">
           <label className="block text-gray-700 mb-2">Location (optional)</label>
           <input
@@ -1068,7 +1222,7 @@ const TripDetails: React.FC = () => {
                 title="Export Trip"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 001.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 101.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 001.414 0L9 10.586V3a1 1 0 102 0v7.586l1.293-1.293a1 1 0 101.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </button>
               
@@ -1087,26 +1241,26 @@ const TripDetails: React.FC = () => {
             </div>
             
             {/* Collaborators button */}
-            <button
-              onClick={() => setIsCollaboratorModalOpen(true)}
+              <button
+                onClick={() => setIsCollaboratorModalOpen(true)}
               className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
               title="Collaborators"
-            >
+              >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
               </svg>
-            </button>
+              </button>
             
             {/* Share button */}
-            <button
-              onClick={() => setIsShareModalOpen(true)}
+              <button
+                onClick={() => setIsShareModalOpen(true)}
               className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
               title="Share Trip"
-            >
+              >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
               </svg>
-            </button>
+              </button>
             
             {/* Add Event button - Only for users who can edit */}
             {canEdit && (
@@ -1142,14 +1296,14 @@ const TripDetails: React.FC = () => {
                   <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                 </svg>
               </button>
-            )}
-          </div>
+          )}
+        </div>
           
           {/* Trip Title - Responsive positioning */}
           <div className="absolute top-[calc(4rem+8px)] sm:top-4 left-4 sm:left-6 z-20 max-w-[calc(100%-32px)] sm:max-w-[calc(100%-120px)]">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] truncate">{trip.name}</h1>
-          </div>
-          
+      </div>
+
           {/* Owner and Collaborator Avatars - Keep at bottom right */}
           <div className="absolute bottom-6 right-4 sm:right-6 flex -space-x-3 z-10">
             {/* Owner Avatar */}
@@ -1163,7 +1317,7 @@ const TripDetails: React.FC = () => {
                 />
                 <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                   {trip.owner.name} • Owner
-                </div>
+            </div>
               </div>
             )}
             {/* Collaborator Avatars */}
@@ -1183,19 +1337,19 @@ const TripDetails: React.FC = () => {
                     />
                     <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                       {collaborator.user.name} • {roleDisplay}
-                    </div>
-                  </div>
+          </div>
+        </div>
                 );
               })}
-          </div>
+            </div>
           
           {/* Shared trip info - Keep for non-owners */}
           {user && trip.owner._id !== user._id && (
             <div className="absolute top-[calc(8rem+8px)] sm:top-16 right-4 z-10">
               <div className="flex flex-col items-end gap-2 bg-black/40 backdrop-blur-sm p-3 rounded-lg">
                 <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-white text-indigo-700 shadow-sm">
-                  Shared
-                </span>
+                Shared
+              </span>
                 <div className="flex flex-col items-end gap-2">
                   <span className="text-sm font-medium text-white">
                     {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' 
@@ -1210,41 +1364,73 @@ const TripDetails: React.FC = () => {
                       >
                         Activity Log
                       </Link>
-                    )}
-                  </div>
-                </div>
+            )}
+          </div>
+        </div>
               </div>
             </div>
           )}
-        </div>
+      </div>
 
         {/* Events and Map section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-20 mt-4">
-          {/* Events list */}
+      {/* Events list */}
           <div className="bg-white shadow rounded-none md:rounded-lg flex flex-col h-[700px]">
             <div className="px-4 py-5 sm:px-6 flex-shrink-0">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium text-gray-900">Events</h3>
-                {canEdit && (
-                  <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                  >
-                    Add Event
-                  </button>
-                )}
+                <div className="flex items-center space-x-2">
+                  <div className="relative">
+                    <select
+                      value={eventStatusFilter}
+                      onChange={(e) => setEventStatusFilter(e.target.value as 'all' | 'confirmed' | 'exploring' | 'alternative')}
+                      className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    >
+                      <option value="all">All Events</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="exploring">Exploring</option>
+                      <option value="alternative">Alternative</option>
+                    </select>
+        </div>
+                  {canEdit && (
+                    <button
+                      onClick={() => setIsModalOpen(true)}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                    >
+                      Add Event
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
             <div className="border-t border-gray-200 flex-1 overflow-auto">
-              <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-gray-200">
                 {trip.events
+                  .filter(event => eventStatusFilter === 'all' || event.status === eventStatusFilter || (eventStatusFilter === 'confirmed' && !event.status))
                   .sort((a, b) => {
                     const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
                     const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
                     return dateA - dateB;
                   })
                   .map((event) => (
-                    <li key={event.id} className="px-4 py-4 sm:px-6">
+                    <li 
+                      key={event.id} 
+                      className={`px-4 py-4 sm:px-6 relative ${
+                        event.status === 'exploring' ? 'bg-green-50 border-l-4 border-green-300' : 
+                        event.status === 'alternative' ? 'bg-purple-50 border-l-4 border-purple-300' : 
+                        ''
+                      }`}
+                      style={{
+                        opacity: event.status === 'confirmed' || !event.status ? 1 : 0.85,
+                        borderStyle: event.status === 'exploring' || event.status === 'alternative' ? 'dashed' : 'solid',
+                        borderWidth: event.status === 'exploring' || event.status === 'alternative' ? '1px' : '0px',
+                        borderColor: event.status === 'exploring' ? 'rgb(134, 239, 172)' : event.status === 'alternative' ? 'rgb(216, 180, 254)' : 'transparent',
+                        borderRadius: '0.375rem',
+                        marginBottom: '4px',
+                        position: 'relative',
+                        zIndex: statusMenuOpen === event.id ? 998 : 'auto'
+                      }}
+                    >
                       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                         <div className="flex-shrink-0">
                           <img
@@ -1258,10 +1444,23 @@ const TripDetails: React.FC = () => {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-indigo-600 capitalize">
-                              {event.type}
-                            </p>
+                <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                    <p className="text-sm font-medium text-indigo-600 capitalize">
+                      {event.type}
+                    </p>
+                              {event.status && (
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  event.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                  event.status === 'exploring' ? 'bg-green-100 text-green-800' :
+                                  'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {event.status === 'confirmed' ? '✓ Confirmed' :
+                                   event.status === 'exploring' ? '🔍 Exploring' :
+                                   '⟳ Alternative'}
+                                </span>
+                              )}
+                  </div>
                             {canEdit && (
                               <div className="flex space-x-2 ml-2">
                                 <button
@@ -1273,6 +1472,52 @@ const TripDetails: React.FC = () => {
                                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                                   </svg>
                                 </button>
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // Prevent event bubbling
+                                      setStatusMenuOpen(statusMenuOpen === event.id ? null : event.id);
+                                    }}
+                                    className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
+                                    title="Change Status"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                                    </svg>
+                                  </button>
+                                  {statusMenuOpen === event.id && (
+                                    <div 
+                                      className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-[999]"
+                                      ref={statusMenuRef}
+                                      style={{ 
+                                        position: 'absolute', 
+                                        zIndex: 999,
+                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                                      }}
+                                    >
+                                      <div className="py-1">
+                                        <button
+                                          onClick={() => handleStatusChange(event.id, 'confirmed')}
+                                          className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'confirmed' ? 'bg-green-100 text-green-800' : 'text-gray-700 hover:bg-gray-100'}`}
+                                        >
+                                          ✓ Confirmed
+                                        </button>
+                                        <button
+                                          onClick={() => handleStatusChange(event.id, 'exploring')}
+                                          className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'exploring' ? 'bg-green-100 text-green-800' : 'text-gray-700 hover:bg-gray-100'}`}
+                                        >
+                                          🔍 Exploring
+                                        </button>
+                                        <button
+                                          onClick={() => handleStatusChange(event.id, 'alternative')}
+                                          className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'alternative' ? 'bg-purple-100 text-purple-800' : 'text-gray-700 hover:bg-gray-100'}`}
+                                        >
+                                          ⟳ Alternative
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                                 <button
                                   onClick={() => {
                                     if (trip._id) {
@@ -1290,6 +1535,8 @@ const TripDetails: React.FC = () => {
                               </div>
                             )}
                           </div>
+                          
+                          {/* Event type-specific content */}
                           {event.type === 'stay' ? (
                             <div className="mt-1">
                               <p className="text-sm font-medium text-gray-900 truncate">
@@ -1306,6 +1553,31 @@ const TripDetails: React.FC = () => {
                                   {(event as StayEvent).address}
                                 </p>
                               )}
+                              
+                              {/* Exploration-specific fields */}
+                              {event.status === 'exploring' && (
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                  {event.priority && (
+                                    <div className="flex items-center mb-1">
+                                      <span className="text-xs text-gray-500 mr-2">Priority:</span>
+                                      <div className="flex">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                          <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
+                                            ★
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {event.source && (
+                                    <div className="text-xs text-gray-500 mb-1">
+                                      <span className="font-medium">Source:</span> {event.source}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
                               {event.notes && (
                                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">
                                   Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
@@ -1314,6 +1586,7 @@ const TripDetails: React.FC = () => {
                                   ) }} />
                                 </p>
                               )}
+                              
                               {/* Creator information */}
                               {event.createdBy && (
                                 <p className="text-xs text-gray-400 mt-1 italic">
@@ -1324,19 +1597,42 @@ const TripDetails: React.FC = () => {
                                 </p>
                               )}
                             </div>
-                          ) : event.type === 'destination' ? (
+                          ) : event.type === 'arrival' || event.type === 'departure' ? (
                             <div className="mt-1">
                               <p className="text-sm font-medium text-gray-900 truncate">
-                                {(event as DestinationEvent).placeName}
+                                {(event as ArrivalDepartureEvent).airport}
                               </p>
                               <p className="text-xs text-gray-500">
                                 {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                               </p>
-                              {(event as DestinationEvent).address && (
-                                <p className="text-xs text-gray-500 mt-1 truncate">
-                                  {(event as DestinationEvent).address}
-                                </p>
+                              <p className="text-xs text-gray-500">
+                                {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
+                              </p>
+                              
+                              {/* Exploration-specific fields */}
+                              {event.status === 'exploring' && (
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                  {event.priority && (
+                                    <div className="flex items-center mb-1">
+                                      <span className="text-xs text-gray-500 mr-2">Priority:</span>
+                                      <div className="flex">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                          <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
+                                            ★
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {event.source && (
+                                    <div className="text-xs text-gray-500 mb-1">
+                                      <span className="font-medium">Source:</span> {event.source}
+                                    </div>
+                                  )}
+                                </div>
                               )}
+                              
                               {event.notes && (
                                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">
                                   Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
@@ -1345,6 +1641,7 @@ const TripDetails: React.FC = () => {
                                   ) }} />
                                 </p>
                               )}
+                              
                               {/* Creator information */}
                               {event.createdBy && (
                                 <p className="text-xs text-gray-400 mt-1 italic">
@@ -1358,14 +1655,41 @@ const TripDetails: React.FC = () => {
                           ) : (
                             <div className="mt-1">
                               <p className="text-sm font-medium text-gray-900 truncate">
-                                {(event as ArrivalDepartureEvent).airport}
+                                {(event as DestinationEvent).placeName}
                               </p>
                               <p className="text-xs text-gray-500">
                                 {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                               </p>
-                              <p className="text-xs text-gray-500">
-                                {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
-                              </p>
+                              {(event as DestinationEvent).address && (
+                                <p className="text-xs text-gray-500 mt-1 truncate">
+                                  {(event as DestinationEvent).address}
+                                </p>
+                              )}
+                              
+                              {/* Exploration-specific fields */}
+                              {event.status === 'exploring' && (
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                  {event.priority && (
+                                    <div className="flex items-center mb-1">
+                                      <span className="text-xs text-gray-500 mr-2">Priority:</span>
+                                      <div className="flex">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                          <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
+                                            ★
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {event.source && (
+                                    <div className="text-xs text-gray-500 mb-1">
+                                      <span className="font-medium">Source:</span> {event.source}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
                               {event.notes && (
                                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">
                                   Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
@@ -1374,6 +1698,7 @@ const TripDetails: React.FC = () => {
                                   ) }} />
                                 </p>
                               )}
+                              
                               {/* Creator information */}
                               {event.createdBy && (
                                 <p className="text-xs text-gray-400 mt-1 italic">
@@ -1386,12 +1711,12 @@ const TripDetails: React.FC = () => {
                             </div>
                           )}
                         </div>
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
           {/* Map view */}
           <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
@@ -1592,21 +1917,21 @@ const TripDetails: React.FC = () => {
 
       {/* Collaborator and Share Modals */}
       <div style={{ zIndex: 1000 }}>
-        <CollaboratorModal
+      <CollaboratorModal
           trip={{
             ...trip,
             _id: trip._id || id || ''
           }}
-          isOpen={isCollaboratorModalOpen}
-          onClose={() => setIsCollaboratorModalOpen(false)}
-          onUpdate={handleTripUpdate}
-        />
-        <ShareModal
-          trip={trip}
-          isOpen={isShareModalOpen}
-          onClose={() => setIsShareModalOpen(false)}
-          onUpdate={handleTripUpdate}
-        />
+        isOpen={isCollaboratorModalOpen}
+        onClose={() => setIsCollaboratorModalOpen(false)}
+        onUpdate={handleTripUpdate}
+      />
+      <ShareModal
+        trip={trip}
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        onUpdate={handleTripUpdate}
+      />
       </div>
     </div>
   );

@@ -13,6 +13,46 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Custom marker icons for different event statuses
+const blueIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const greenIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const violetIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// Function to get the appropriate icon based on event status
+const getMarkerIcon = (event: Event) => {
+  if (!event.status || event.status === 'confirmed') {
+    return blueIcon;
+  } else if (event.status === 'exploring') {
+    return greenIcon;
+  } else if (event.status === 'alternative') {
+    return violetIcon;
+  }
+  return blueIcon; // Default fallback
+};
+
 interface TripMapProps {
   trip: Trip;
 }
@@ -91,6 +131,7 @@ const extractMapRelevantData = (trip: Trip) => {
       type: event.type,
       date: event.date,
       location: event.location,
+      status: event.status,
       // Type-specific fields
       airport: 'airport' in event ? event.airport : undefined,
       accommodationName: 'accommodationName' in event ? event.accommodationName : undefined,
@@ -319,10 +360,16 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
         const validLocations = results.filter((loc): loc is Location => loc !== null);
         setLocations(validLocations);
 
-        // Fetch routes between consecutive locations
+        // Filter to only include confirmed events for routes
+        const confirmedLocations = validLocations.filter(
+          loc => !loc.event.status || loc.event.status === 'confirmed'
+        );
+        console.log('Confirmed locations for routes:', confirmedLocations.length);
+        
+        // Fetch routes between consecutive confirmed locations only
         const routePromises: Promise<RouteInfo | null>[] = [];
-        for (let i = 0; i < validLocations.length - 1; i++) {
-          routePromises.push(fetchRoute(validLocations[i], validLocations[i + 1]));
+        for (let i = 0; i < confirmedLocations.length - 1; i++) {
+          routePromises.push(fetchRoute(confirmedLocations[i], confirmedLocations[i + 1]));
         }
 
         const routeResults = await Promise.all(routePromises);
@@ -420,7 +467,7 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
           <Polyline
             key={index}
             positions={route.coordinates}
-            color="#3B82F6"
+            color="#2563EB"
             weight={3}
             opacity={0.7}
           >
@@ -434,13 +481,22 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
         {locations.map((location: Location) => {
           const eventDetails = getEventDetails(location.event);
           return (
-            <Marker key={location.event.id} position={[location.lat, location.lon]}>
+            <Marker key={location.event.id} position={[location.lat, location.lon]} icon={getMarkerIcon(location.event)}>
               <Popup>
                 <div className="font-semibold">{eventDetails.title}</div>
                 {eventDetails.details && (
                   <div className="text-sm text-gray-600">{eventDetails.details}</div>
                 )}
                 <div className="text-sm text-gray-600">{eventDetails.date}</div>
+                {location.event.status && (
+                  <div className={`text-sm mt-1 font-medium ${
+                    location.event.status === 'confirmed' ? 'text-green-600' :
+                    location.event.status === 'exploring' ? 'text-green-600' :
+                    'text-purple-600'
+                  }`}>
+                    {location.event.status.charAt(0).toUpperCase() + location.event.status.slice(1)}
+                  </div>
+                )}
               </Popup>
             </Marker>
           );
@@ -450,9 +506,23 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
         <div className="leaflet-bottom leaflet-left">
           <div className="leaflet-control bg-white p-3 rounded-lg shadow-lg m-4">
             <h4 className="font-semibold mb-2">Legend</h4>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-0.5 bg-blue-500"></div>
-              <span className="text-sm">Driving Route</span>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-0.5 bg-blue-600"></div>
+                <span className="text-sm">Driving Route (Between Confirmed Events Only)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                <span className="text-sm">Confirmed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                <span className="text-sm">Exploring</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-violet-500 rounded-full"></div>
+                <span className="text-sm">Alternative</span>
+              </div>
             </div>
           </div>
         </div>
