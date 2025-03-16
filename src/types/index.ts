@@ -43,11 +43,13 @@ export interface BaseEvent {
     _id: string;
     name: string;
     email: string;
+    photoUrl?: string | null;
   };
   updatedBy?: {
     _id: string;
     name: string;
     email: string;
+    photoUrl?: string | null;
   };
   createdAt?: string | Date;
   updatedAt?: string | Date;

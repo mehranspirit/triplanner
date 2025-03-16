@@ -137,8 +137,11 @@ function prepareTemplateData(trip, options) {
   // Group events by day
   const eventsByDay = {};
   
+  // Filter events to only include confirmed events
+  const confirmedEvents = trip.events.filter(event => event.status === 'confirmed');
+  
   // Sort events chronologically
-  const sortedEvents = [...trip.events].sort((a, b) => {
+  const sortedEvents = [...confirmedEvents].sort((a, b) => {
     const dateA = a.type === 'stay' ? new Date(a.checkIn).getTime() : new Date(a.date).getTime();
     const dateB = b.type === 'stay' ? new Date(b.checkIn).getTime() : new Date(b.date).getTime();
     return dateA - dateB;

@@ -11,12 +11,27 @@ const Avatar: React.FC<AvatarProps> = ({ photoUrl, name, size = 'md', className 
   const [showFallback, setShowFallback] = useState(!photoUrl);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
+  // Determine if this is likely an event card avatar based on props
+  const isLikelyEventCardAvatar = size === 'sm' && className.includes('ring-2');
+
+  console.log(`Avatar component rendering ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
+    photoUrl,
+    name,
+    size,
+    className,
+    showFallback,
+    imageUrl,
+    isLikelyEventCardAvatar,
+    timestamp: new Date().toISOString()
+  });
+
   useEffect(() => {
-    console.log('Avatar - Props received:', {
+    console.log(`Avatar - Props received ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
       photoUrl,
       name,
       size,
       className,
+      isLikelyEventCardAvatar,
       timestamp: new Date().toISOString()
     });
 
@@ -25,20 +40,22 @@ const Avatar: React.FC<AvatarProps> = ({ photoUrl, name, size = 'md', className 
       let fullUrl = photoUrl;
       
       // Log the URL construction process
-      console.log('Avatar - URL construction process:', {
+      console.log(`Avatar - URL construction process ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
         originalUrl: photoUrl,
         apiUrl,
         startsWithHttp: photoUrl.startsWith('http'),
         startsWithUploads: photoUrl.startsWith('/uploads'),
+        isLikelyEventCardAvatar,
         timestamp: new Date().toISOString()
       });
       
       // If the URL is relative (starts with /uploads) and doesn't already include the API URL
       if (photoUrl.startsWith('/uploads') && !photoUrl.includes(apiUrl)) {
         fullUrl = `${apiUrl}${photoUrl}`;
-        console.log('Avatar - URL modified:', {
+        console.log(`Avatar - URL modified ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
           originalUrl: photoUrl,
           constructedUrl: fullUrl,
+          isLikelyEventCardAvatar,
           timestamp: new Date().toISOString()
         });
       }
@@ -47,27 +64,30 @@ const Avatar: React.FC<AvatarProps> = ({ photoUrl, name, size = 'md', className 
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        console.log('Avatar - Image preloaded successfully:', {
+        console.log(`Avatar - Image preloaded successfully ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
           url: fullUrl,
           width: img.width,
           height: img.height,
+          isLikelyEventCardAvatar,
           timestamp: new Date().toISOString()
         });
         setImageUrl(fullUrl);
         setShowFallback(false);
       };
       img.onerror = (error) => {
-        console.error('Avatar - Image preload failed:', {
+        console.error(`Avatar - Image preload failed ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
           url: fullUrl,
           error,
+          isLikelyEventCardAvatar,
           timestamp: new Date().toISOString()
         });
         setShowFallback(true);
       };
       img.src = fullUrl;
     } else {
-      console.log('Avatar - No photo URL provided, showing initials for:', {
+      console.log(`Avatar - No photo URL provided ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}, showing initials for:`, {
         name,
+        isLikelyEventCardAvatar,
         timestamp: new Date().toISOString()
       });
       setImageUrl(null);

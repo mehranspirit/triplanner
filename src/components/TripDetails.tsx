@@ -280,6 +280,35 @@ const TripDetails: React.FC = () => {
         }
         console.log('Successfully fetched trip:', fetchedTrip);
         
+        // Debug log for event creators
+        if (fetchedTrip.events && fetchedTrip.events.length > 0) {
+          console.log('EVENT CREATOR CHECK - All events:', fetchedTrip.events.map(event => ({
+            eventId: event.id,
+            eventType: event.type,
+            createdBy: event.createdBy,
+            hasCreator: !!event.createdBy,
+            creatorHasPhotoUrl: event.createdBy ? !!event.createdBy.photoUrl : false
+          })));
+          
+          // Count events with creators
+          const eventsWithCreators = fetchedTrip.events.filter(event => !!event.createdBy);
+          console.log(`EVENT CREATOR CHECK - ${eventsWithCreators.length} out of ${fetchedTrip.events.length} events have creator information`);
+          
+          if (eventsWithCreators.length > 0) {
+            // Log details of the first event with a creator
+            const sampleEvent = eventsWithCreators[0];
+            console.log('EVENT CREATOR CHECK - Sample event with creator:', {
+              eventId: sampleEvent.id,
+              eventType: sampleEvent.type,
+              creatorId: sampleEvent.createdBy?._id,
+              creatorName: sampleEvent.createdBy?.name,
+              creatorEmail: sampleEvent.createdBy?.email,
+              creatorPhotoUrl: sampleEvent.createdBy?.photoUrl,
+              fullCreatorObject: sampleEvent.createdBy
+            });
+          }
+        }
+        
         // Update only the local state
         setTrip(fetchedTrip);
         setEditedTrip(fetchedTrip);
@@ -569,6 +598,14 @@ const TripDetails: React.FC = () => {
     // Ensure status has a default value if not provided
     const status = eventData.status || 'confirmed';
 
+    // Add creator information
+    const creatorInfo = user ? {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      photoUrl: user.photoUrl || null
+    } : undefined;
+
     const baseEventData = {
       id: isEditingEvent || uuidv4(),
       type: eventType,
@@ -579,6 +616,10 @@ const TripDetails: React.FC = () => {
       status: status,
       priority: eventData.priority,
       source: eventData.source || undefined,
+      createdBy: creatorInfo,
+      updatedBy: creatorInfo,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     console.log('Creating/updating event with data:', {
@@ -600,8 +641,8 @@ const TripDetails: React.FC = () => {
           airport: eventData.airport,
           terminal: eventData.terminal || undefined,
           gate: eventData.gate || undefined,
-          bookingReference: eventData.bookingReference || undefined,
-        } as ArrivalDepartureEvent;
+          bookingReference: eventData.bookingReference || undefined
+        };
         break;
       case 'stay':
         newEvent = {
@@ -612,8 +653,8 @@ const TripDetails: React.FC = () => {
           checkIn: eventData.checkIn,
           checkOut: eventData.checkOut,
           reservationNumber: eventData.reservationNumber || undefined,
-          contactInfo: eventData.contactInfo || undefined,
-        } as StayEvent;
+          contactInfo: eventData.contactInfo || undefined
+        };
         break;
       case 'destination':
         newEvent = {
@@ -622,19 +663,19 @@ const TripDetails: React.FC = () => {
           placeName: eventData.placeName,
           address: eventData.address,
           description: eventData.description,
-          openingHours: eventData.openingHours || undefined,
-        } as DestinationEvent;
+          openingHours: eventData.openingHours || undefined
+        };
         break;
       default:
         return;
     }
 
     try {
-    if (isEditingEvent) {
+      if (isEditingEvent) {
         if (!trip._id) {
-        setError('Trip ID is missing');
-        return;
-      }
+          setError('Trip ID is missing');
+          return;
+        }
         console.log('Updating event with ID:', newEvent.id, 'Status:', newEvent.status);
         await updateEvent(trip._id, newEvent);
         
@@ -661,11 +702,11 @@ const TripDetails: React.FC = () => {
             }
           }
         }
-    } else {
+      } else {
         if (!trip._id) {
-        setError('Trip ID is missing');
-        return;
-      }
+          setError('Trip ID is missing');
+          return;
+        }
         console.log('Adding new event with status:', newEvent.status);
         await addEvent(trip._id, newEvent);
         
@@ -675,35 +716,35 @@ const TripDetails: React.FC = () => {
         
         // Also update editedTrip to ensure consistency
         setEditedTrip(updatedTrip);
-    }
+      }
       
-    setIsModalOpen(false);
-    setIsEditingEvent(null);
-    setEventData({
-      thumbnailUrl: '',
-      date: '',
-      location: '',
-      notes: '',
-      status: 'confirmed',
-      priority: 3,
-      source: '',
-      flightNumber: '',
-      airline: '',
-      time: '',
-      airport: '',
-      terminal: '',
-      gate: '',
-      bookingReference: '',
-      accommodationName: '',
-      address: '',
-      checkIn: '',
-      checkOut: '',
-      reservationNumber: '',
-      contactInfo: '',
-      placeName: '',
-      description: '',
-      openingHours: '',
-    });
+      setIsModalOpen(false);
+      setIsEditingEvent(null);
+      setEventData({
+        thumbnailUrl: '',
+        date: '',
+        location: '',
+        notes: '',
+        status: 'confirmed',
+        priority: 3,
+        source: '',
+        flightNumber: '',
+        airline: '',
+        time: '',
+        airport: '',
+        terminal: '',
+        gate: '',
+        bookingReference: '',
+        accommodationName: '',
+        address: '',
+        checkIn: '',
+        checkOut: '',
+        reservationNumber: '',
+        contactInfo: '',
+        placeName: '',
+        description: '',
+        openingHours: '',
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update event');
     }
@@ -1227,8 +1268,11 @@ const TripDetails: React.FC = () => {
               </button>
               
               {showExportMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-[100]">
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-xl z-[100]">
                   <div className="py-1">
+                    <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
+                      Only confirmed events will be exported
+                    </div>
                     <button
                       onClick={handleExportHTML}
                       className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
@@ -1404,319 +1448,512 @@ const TripDetails: React.FC = () => {
               </div>
             </div>
             <div className="border-t border-gray-200 flex-1 overflow-auto">
-          <ul className="divide-y divide-gray-200">
-                {trip.events
-                  .filter(event => eventStatusFilter === 'all' || event.status === eventStatusFilter || (eventStatusFilter === 'confirmed' && !event.status))
-                  .sort((a, b) => {
-                    const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
-                    const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
-                    return dateA - dateB;
-                  })
-                  .map((event) => (
-                    <li 
-                      key={event.id} 
-                      className={`px-4 py-4 sm:px-6 relative ${
-                        event.status === 'exploring' ? 'bg-green-50 border-l-4 border-green-300' : 
-                        event.status === 'alternative' ? 'bg-purple-50 border-l-4 border-purple-300' : 
-                        ''
-                      }`}
-                      style={{
-                        opacity: event.status === 'confirmed' || !event.status ? 1 : 0.85,
-                        borderStyle: event.status === 'exploring' || event.status === 'alternative' ? 'dashed' : 'solid',
-                        borderWidth: event.status === 'exploring' || event.status === 'alternative' ? '1px' : '0px',
-                        borderColor: event.status === 'exploring' ? 'rgb(134, 239, 172)' : event.status === 'alternative' ? 'rgb(216, 180, 254)' : 'transparent',
-                        borderRadius: '0.375rem',
-                        marginBottom: '4px',
-                        position: 'relative',
-                        zIndex: statusMenuOpen === event.id ? 998 : 'auto'
-                      }}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                        <div className="flex-shrink-0">
-                          <img
-                            src={event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type]}
-                            alt={event.type}
-                            className="h-20 w-20 object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = DEFAULT_THUMBNAILS[event.type];
-                            }}
-                          />
+              {(() => {
+                // Filter events based on status filter
+                const filteredEvents = trip.events
+                  .filter(event => eventStatusFilter === 'all' || event.status === eventStatusFilter || (eventStatusFilter === 'confirmed' && !event.status));
+                
+                // Sort events by date
+                const sortedEvents = filteredEvents.sort((a, b) => {
+                  const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
+                  const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
+                  return dateA - dateB;
+                });
+                
+                // Group events by date
+                const eventsByDate: Record<string, Event[]> = {};
+                
+                sortedEvents.forEach(event => {
+                  // Get the date string (YYYY-MM-DD) for grouping
+                  const eventDate = event.type === 'stay' 
+                    ? new Date((event as StayEvent).checkIn) 
+                    : new Date(event.date);
+                  
+                  const dateString = eventDate.toISOString().split('T')[0];
+                  
+                  if (!eventsByDate[dateString]) {
+                    eventsByDate[dateString] = [];
+                  }
+                  
+                  eventsByDate[dateString].push(event);
+                });
+                
+                // Convert to array of [dateString, events] pairs and sort by date
+                const groupedEventEntries = Object.entries(eventsByDate)
+                  .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime());
+                
+                return (
+                  <div>
+                    {groupedEventEntries.map(([dateString, events]) => (
+                      <div key={dateString}>
+                        {/* Date header */}
+                        <div className="sticky top-0 z-10 bg-indigo-50 px-4 py-3 border-b border-indigo-100 shadow-sm">
+                          <h3 className="text-sm font-medium text-indigo-800 flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            {new Date(dateString).toLocaleDateString('en-US', { 
+                              weekday: 'long', 
+                              month: 'long', 
+                              day: 'numeric'
+                            })}
+                          </h3>
                         </div>
-                        <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                    <p className="text-sm font-medium text-indigo-600 capitalize">
-                      {event.type}
-                    </p>
-                              {event.status && (
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  event.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                  event.status === 'exploring' ? 'bg-green-100 text-green-800' :
-                                  'bg-purple-100 text-purple-800'
-                                }`}>
-                                  {event.status === 'confirmed' ? '✓ Confirmed' :
-                                   event.status === 'exploring' ? '🔍 Exploring' :
-                                   '⟳ Alternative'}
-                                </span>
-                              )}
-                  </div>
-                            {canEdit && (
-                              <div className="flex space-x-2 ml-2">
-                                <button
-                                  onClick={() => handleEditEvent(event.id)}
-                                  className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
-                                  title="Edit Event"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                                  </svg>
-                                </button>
-                                <div className="relative">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation(); // Prevent event bubbling
-                                      setStatusMenuOpen(statusMenuOpen === event.id ? null : event.id);
+                        
+                        {/* Events for this date */}
+                        <ul className="divide-y divide-gray-200">
+                          {events.map((event) => (
+                            <li 
+                              key={event.id} 
+                              className={`px-4 py-3 sm:px-6 relative ${
+                                event.status === 'exploring' ? 'bg-green-50 border-l-4 border-green-300' : 
+                                event.status === 'alternative' ? 'bg-purple-50 border-l-4 border-purple-300' : 
+                                'bg-white'
+                              }`}
+                              style={{
+                                opacity: 1,
+                                borderStyle: statusMenuOpen === event.id ? 'dashed' : 'solid',
+                                borderWidth: statusMenuOpen === event.id ? '1px' : '0px',
+                                borderColor: statusMenuOpen === event.id ? '#6366F1' : 'transparent',
+                                zIndex: statusMenuOpen === event.id ? 10 : 'auto'
+                              }}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                                <div className="flex-shrink-0">
+                                  <img
+                                    src={event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type]}
+                                    alt={event.type}
+                                    className="h-20 w-20 object-cover rounded-lg"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.src = DEFAULT_THUMBNAILS[event.type];
                                     }}
-                                    className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
-                                    title="Change Status"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                                    </svg>
-                                  </button>
-                                  {statusMenuOpen === event.id && (
-                                    <div 
-                                      className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-[999]"
-                                      ref={statusMenuRef}
-                                      style={{ 
-                                        position: 'absolute', 
-                                        zIndex: 999,
-                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                                      }}
-                                    >
-                                      <div className="py-1">
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      <p className="text-sm font-medium text-indigo-600 capitalize">
+                                        {event.type}
+                                      </p>
+                                      {event.status && (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                          event.status === 'confirmed' ? 'bg-blue-50 text-blue-700' :
+                                          event.status === 'exploring' ? 'bg-green-50 text-green-700' :
+                                          'bg-purple-50 text-purple-700'
+                                        }`}>
+                                          {event.status === 'confirmed' ? '✓ Confirmed' :
+                                           event.status === 'exploring' ? '🔍 Exploring' :
+                                           '⟳ Alternative'}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {canEdit && (
+                                      <div className="flex space-x-2 ml-2">
                                         <button
-                                          onClick={() => handleStatusChange(event.id, 'confirmed')}
-                                          className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'confirmed' ? 'bg-green-100 text-green-800' : 'text-gray-700 hover:bg-gray-100'}`}
+                                          onClick={() => handleEditEvent(event.id)}
+                                          className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
+                                          title="Edit Event"
                                         >
-                                          ✓ Confirmed
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                          </svg>
                                         </button>
+                                        <div className="relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation(); // Prevent event bubbling
+                                              setStatusMenuOpen(statusMenuOpen === event.id ? null : event.id);
+                                            }}
+                                            className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
+                                            title="Change Status"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                                            </svg>
+                                          </button>
+                                          {statusMenuOpen === event.id && (
+                                            <div 
+                                              className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-[999]"
+                                              ref={statusMenuRef}
+                                              style={{ 
+                                                position: 'absolute', 
+                                                zIndex: 999,
+                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                                              }}
+                                            >
+                                              <div className="py-1">
+                                                <button
+                                                  onClick={() => handleStatusChange(event.id, 'confirmed')}
+                                                  className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'confirmed' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                                >
+                                                  ✓ Confirmed
+                                                </button>
+                                                <button
+                                                  onClick={() => handleStatusChange(event.id, 'exploring')}
+                                                  className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'exploring' ? 'bg-green-50 text-green-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                                >
+                                                  🔍 Exploring
+                                                </button>
+                                                <button
+                                                  onClick={() => handleStatusChange(event.id, 'alternative')}
+                                                  className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'alternative' ? 'bg-purple-50 text-purple-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                                >
+                                                  ⟳ Alternative
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
                                         <button
-                                          onClick={() => handleStatusChange(event.id, 'exploring')}
-                                          className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'exploring' ? 'bg-green-100 text-green-800' : 'text-gray-700 hover:bg-gray-100'}`}
+                                          onClick={() => {
+                                            if (trip._id) {
+                                              deleteEvent(trip._id, event.id);
+                                              setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
+                                            }
+                                          }}
+                                          className="p-1.5 bg-white/90 hover:bg-white rounded-full text-red-600 hover:text-red-900 shadow-sm transition-colors"
+                                          title="Delete Event"
                                         >
-                                          🔍 Exploring
-                                        </button>
-                                        <button
-                                          onClick={() => handleStatusChange(event.id, 'alternative')}
-                                          className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'alternative' ? 'bg-purple-100 text-purple-800' : 'text-gray-700 hover:bg-gray-100'}`}
-                                        >
-                                          ⟳ Alternative
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                          </svg>
                                         </button>
                                       </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Event type-specific content */}
+                                  {event.type === 'stay' ? (
+                                    <div className="mt-1">
+                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                        {(event as StayEvent).accommodationName}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Check-in: {new Date((event as StayEvent).checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Check-out: {new Date((event as StayEvent).checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                      </p>
+                                      {(event as StayEvent).address && (
+                                        <p className="text-xs text-gray-500 mt-1 truncate">
+                                          {(event as StayEvent).address}
+                                        </p>
+                                      )}
+                                      
+                                      {/* Exploration-specific fields */}
+                                      {event.status === 'exploring' && (
+                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                          {event.priority && (
+                                            <div className="flex items-center mb-1">
+                                              <span className="text-xs text-gray-500 mr-2">Priority:</span>
+                                              <div className="flex">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                  <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
+                                                    ★
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                          
+                                          {event.source && (
+                                            <div className="text-xs text-gray-500 mb-1">
+                                              <span className="font-medium">Source:</span> {event.source}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      
+                                      {event.notes && (
+                                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                          Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                            /(https?:\/\/[^\s]+)/g,
+                                            '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                          ) }} />
+                                        </p>
+                                      )}
+                                      
+                                      {/* Creator information */}
+                                      {(() => {
+                                        // Debug log
+                                        console.log('EVENT CARD AVATAR - Creator information section rendering:', {
+                                          eventId: event.id,
+                                          creatorName: event.createdBy?.name,
+                                          creatorPhotoUrl: event.createdBy?.photoUrl,
+                                          creatorObject: event.createdBy,
+                                          timestamp: new Date().toISOString()
+                                        });
+                                        
+                                        // For events without creator info, use trip owner as fallback
+                                        const creatorInfo = event.createdBy || trip.owner;
+                                        
+                                        // Ensure photoUrl is properly set for both created and added events
+                                        const creatorPhotoUrl = event.createdBy?.photoUrl || trip.owner.photoUrl;
+                                        
+                                        return (
+                                          <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
+                                            <p className="text-xs text-gray-400 italic">
+                                              {/* Use consistent "Added by" for all events for better UX */}
+                                              {`Added by ${creatorInfo.name}`}
+                                              {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                              {event.updatedBy && event.updatedBy._id !== creatorInfo._id && 
+                                                ` • Last edited by ${event.updatedBy.name}`}
+                                            </p>
+                                            <div className="flex ml-2">
+                                              {/* Creator avatar */}
+                                              <div className="relative group" style={{ zIndex: 50 }}>
+                                                {(() => {
+                                                  console.log('EVENT CARD AVATAR - About to render Avatar component:', {
+                                                    eventId: event.id,
+                                                    hasCreatedBy: !!event.createdBy,
+                                                    usingFallback: !event.createdBy,
+                                                    creatorName: creatorInfo.name,
+                                                    photoUrl: creatorPhotoUrl,
+                                                    timestamp: new Date().toISOString()
+                                                  });
+                                                  return null;
+                                                })()}
+                                                <Avatar
+                                                  photoUrl={creatorPhotoUrl || null}
+                                                  name={creatorInfo.name}
+                                                  size="sm"
+                                                  className="ring-2 ring-white"
+                                                />
+                                                
+                                                {/* Tooltip */}
+                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 60 }}>
+                                                  <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                                                    {`Added by ${creatorInfo.name}`}
+                                                  </div>
+                                                  <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  ) : event.type === 'arrival' || event.type === 'departure' ? (
+                                    <div className="mt-1">
+                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                        {(event as ArrivalDepartureEvent).airport}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
+                                        {(event as ArrivalDepartureEvent).time && ` • ${(event as ArrivalDepartureEvent).time}`}
+                                      </p>
+                                      
+                                      {/* Exploration-specific fields */}
+                                      {event.status === 'exploring' && (
+                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                          {event.priority && (
+                                            <div className="flex items-center mb-1">
+                                              <span className="text-xs text-gray-500 mr-2">Priority:</span>
+                                              <div className="flex">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                  <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
+                                                    ★
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                          
+                                          {event.source && (
+                                            <div className="text-xs text-gray-500 mb-1">
+                                              <span className="font-medium">Source:</span> {event.source}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      
+                                      {event.notes && (
+                                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                          Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                            /(https?:\/\/[^\s]+)/g,
+                                            '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                          ) }} />
+                                        </p>
+                                      )}
+                                      
+                                      {/* Creator information */}
+                                      {(() => {
+                                        // Debug log
+                                        console.log('EVENT CARD AVATAR - Creator information section rendering:', {
+                                          eventId: event.id,
+                                          creatorName: event.createdBy?.name,
+                                          creatorPhotoUrl: event.createdBy?.photoUrl,
+                                          creatorObject: event.createdBy,
+                                          timestamp: new Date().toISOString()
+                                        });
+                                        
+                                        // For events without creator info, use trip owner as fallback
+                                        const creatorInfo = event.createdBy || trip.owner;
+                                        
+                                        // Ensure photoUrl is properly set for both created and added events
+                                        const creatorPhotoUrl = event.createdBy?.photoUrl || trip.owner.photoUrl;
+                                        
+                                        return (
+                                          <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
+                                            <p className="text-xs text-gray-400 italic">
+                                              {/* Use consistent "Added by" for all events for better UX */}
+                                              {`Added by ${creatorInfo.name}`}
+                                              {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                              {event.updatedBy && event.updatedBy._id !== creatorInfo._id && 
+                                                ` • Last edited by ${event.updatedBy.name}`}
+                                            </p>
+                                            <div className="flex ml-2">
+                                              {/* Creator avatar */}
+                                              <div className="relative group" style={{ zIndex: 50 }}>
+                                                {(() => {
+                                                  console.log('EVENT CARD AVATAR - About to render Avatar component:', {
+                                                    eventId: event.id,
+                                                    hasCreatedBy: !!event.createdBy,
+                                                    usingFallback: !event.createdBy,
+                                                    creatorName: creatorInfo.name,
+                                                    photoUrl: creatorPhotoUrl,
+                                                    timestamp: new Date().toISOString()
+                                                  });
+                                                  return null;
+                                                })()}
+                                                <Avatar
+                                                  photoUrl={creatorPhotoUrl || null}
+                                                  name={creatorInfo.name}
+                                                  size="sm"
+                                                  className="ring-2 ring-white"
+                                                />
+                                                
+                                                {/* Tooltip */}
+                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 60 }}>
+                                                  <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                                                    {`Added by ${creatorInfo.name}`}
+                                                  </div>
+                                                  <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-1">
+                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                        {(event as DestinationEvent).placeName}
+                                      </p>
+                                      {(event as DestinationEvent).address && (
+                                        <p className="text-xs text-gray-500 mt-1 truncate">
+                                          {(event as DestinationEvent).address}
+                                        </p>
+                                      )}
+                                      
+                                      {/* Exploration-specific fields */}
+                                      {event.status === 'exploring' && (
+                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                          {event.priority && (
+                                            <div className="flex items-center mb-1">
+                                              <span className="text-xs text-gray-500 mr-2">Priority:</span>
+                                              <div className="flex">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                  <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
+                                                    ★
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                          
+                                          {event.source && (
+                                            <div className="text-xs text-gray-500 mb-1">
+                                              <span className="font-medium">Source:</span> {event.source}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      
+                                      {event.notes && (
+                                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                          Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                            /(https?:\/\/[^\s]+)/g,
+                                            '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+                                          ) }} />
+                                        </p>
+                                      )}
+                                      
+                                      {/* Creator information */}
+                                      {(() => {
+                                        // Debug log
+                                        console.log('EVENT CARD AVATAR - Creator information section rendering:', {
+                                          eventId: event.id,
+                                          creatorName: event.createdBy?.name,
+                                          creatorPhotoUrl: event.createdBy?.photoUrl,
+                                          creatorObject: event.createdBy,
+                                          timestamp: new Date().toISOString()
+                                        });
+                                        
+                                        // For events without creator info, use trip owner as fallback
+                                        const creatorInfo = event.createdBy || trip.owner;
+                                        
+                                        // Ensure photoUrl is properly set for both created and added events
+                                        const creatorPhotoUrl = event.createdBy?.photoUrl || trip.owner.photoUrl;
+                                        
+                                        return (
+                                          <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
+                                            <p className="text-xs text-gray-400 italic">
+                                              {/* Use consistent "Added by" for all events for better UX */}
+                                              {`Added by ${creatorInfo.name}`}
+                                              {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
+                                              {event.updatedBy && event.updatedBy._id !== creatorInfo._id && 
+                                                ` • Last edited by ${event.updatedBy.name}`}
+                                            </p>
+                                            <div className="flex ml-2">
+                                              {/* Creator avatar */}
+                                              <div className="relative group" style={{ zIndex: 50 }}>
+                                                {(() => {
+                                                  console.log('EVENT CARD AVATAR - About to render Avatar component:', {
+                                                    eventId: event.id,
+                                                    hasCreatedBy: !!event.createdBy,
+                                                    usingFallback: !event.createdBy,
+                                                    creatorName: creatorInfo.name,
+                                                    photoUrl: creatorPhotoUrl,
+                                                    timestamp: new Date().toISOString()
+                                                  });
+                                                  return null;
+                                                })()}
+                                                <Avatar
+                                                  photoUrl={creatorPhotoUrl || null}
+                                                  name={creatorInfo.name}
+                                                  size="sm"
+                                                  className="ring-2 ring-white"
+                                                />
+                                                
+                                                {/* Tooltip */}
+                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 60 }}>
+                                                  <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                                                    {`Added by ${creatorInfo.name}`}
+                                                  </div>
+                                                  <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   )}
                                 </div>
-                                <button
-                                  onClick={() => {
-                                    if (trip._id) {
-                                      deleteEvent(trip._id, event.id);
-                                      setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
-                                    }
-                                  }}
-                                  className="p-1.5 bg-white/90 hover:bg-white rounded-full text-red-600 hover:text-red-900 shadow-sm transition-colors"
-                                  title="Delete Event"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                  </svg>
-                                </button>
                               </div>
-                            )}
-                          </div>
-                          
-                          {/* Event type-specific content */}
-                          {event.type === 'stay' ? (
-                            <div className="mt-1">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {(event as StayEvent).accommodationName}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                Check-in: {new Date((event as StayEvent).checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                Check-out: {new Date((event as StayEvent).checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                              {(event as StayEvent).address && (
-                                <p className="text-xs text-gray-500 mt-1 truncate">
-                                  {(event as StayEvent).address}
-                                </p>
-                              )}
-                              
-                              {/* Exploration-specific fields */}
-                              {event.status === 'exploring' && (
-                                <div className="mt-2 pt-2 border-t border-gray-100">
-                                  {event.priority && (
-                                    <div className="flex items-center mb-1">
-                                      <span className="text-xs text-gray-500 mr-2">Priority:</span>
-                                      <div className="flex">
-                                        {[1, 2, 3, 4, 5].map(star => (
-                                          <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
-                                            ★
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {event.source && (
-                                    <div className="text-xs text-gray-500 mb-1">
-                                      <span className="font-medium">Source:</span> {event.source}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {event.notes && (
-                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                  Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                    /(https?:\/\/[^\s]+)/g,
-                                    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                  ) }} />
-                                </p>
-                              )}
-                              
-                              {/* Creator information */}
-                              {event.createdBy && (
-                                <p className="text-xs text-gray-400 mt-1 italic">
-                                  Created by {event.createdBy.name} 
-                                  {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                  {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
-                                    ` • Last edited by ${event.updatedBy.name}`}
-                                </p>
-                              )}
-                            </div>
-                          ) : event.type === 'arrival' || event.type === 'departure' ? (
-                            <div className="mt-1">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {(event as ArrivalDepartureEvent).airport}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
-                              </p>
-                              
-                              {/* Exploration-specific fields */}
-                              {event.status === 'exploring' && (
-                                <div className="mt-2 pt-2 border-t border-gray-100">
-                                  {event.priority && (
-                                    <div className="flex items-center mb-1">
-                                      <span className="text-xs text-gray-500 mr-2">Priority:</span>
-                                      <div className="flex">
-                                        {[1, 2, 3, 4, 5].map(star => (
-                                          <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
-                                            ★
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {event.source && (
-                                    <div className="text-xs text-gray-500 mb-1">
-                                      <span className="font-medium">Source:</span> {event.source}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {event.notes && (
-                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                  Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                    /(https?:\/\/[^\s]+)/g,
-                                    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                  ) }} />
-                                </p>
-                              )}
-                              
-                              {/* Creator information */}
-                              {event.createdBy && (
-                                <p className="text-xs text-gray-400 mt-1 italic">
-                                  Created by {event.createdBy.name} 
-                                  {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                  {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
-                                    ` • Last edited by ${event.updatedBy.name}`}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="mt-1">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {(event as DestinationEvent).placeName}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                              {(event as DestinationEvent).address && (
-                                <p className="text-xs text-gray-500 mt-1 truncate">
-                                  {(event as DestinationEvent).address}
-                                </p>
-                              )}
-                              
-                              {/* Exploration-specific fields */}
-                              {event.status === 'exploring' && (
-                                <div className="mt-2 pt-2 border-t border-gray-100">
-                                  {event.priority && (
-                                    <div className="flex items-center mb-1">
-                                      <span className="text-xs text-gray-500 mr-2">Priority:</span>
-                                      <div className="flex">
-                                        {[1, 2, 3, 4, 5].map(star => (
-                                          <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
-                                            ★
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {event.source && (
-                                    <div className="text-xs text-gray-500 mb-1">
-                                      <span className="font-medium">Source:</span> {event.source}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {event.notes && (
-                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                  Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                    /(https?:\/\/[^\s]+)/g,
-                                    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                  ) }} />
-                                </p>
-                              )}
-                              
-                              {/* Creator information */}
-                              {event.createdBy && (
-                                <p className="text-xs text-gray-400 mt-1 italic">
-                                  Created by {event.createdBy.name} 
-                                  {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                  {event.updatedBy && event.updatedBy._id !== event.createdBy._id && 
-                                    ` • Last edited by ${event.updatedBy.name}`}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
 
           {/* Map view */}
           <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>

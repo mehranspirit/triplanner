@@ -551,17 +551,7 @@ export const api: API = {
         throw new Error('Authentication token not found');
       }
       
-      // Open a new window
-      const newWindow = window.open('about:blank', '_blank');
-      
-      if (!newWindow) {
-        throw new Error('Failed to open new window. Please check your popup blocker settings.');
-      }
-      
-      // Show loading message
-      newWindow.document.write('<html><body><h1>Loading printable version...</h1></body></html>');
-      
-      // Make a direct fetch request to get the HTML
+      // Make a direct fetch request to get the HTML first
       const response = await fetch(`${API_URL}/api/trips/${tripId}/export/html`, {
         method: 'GET',
         headers: {
@@ -571,17 +561,38 @@ export const api: API = {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        newWindow.close();
         throw new Error(errorData?.message || 'Failed to export trip as HTML');
       }
       
       // Get the HTML content
       const html = await response.text();
       
-      // Write the HTML to the new window
-      newWindow.document.open();
-      newWindow.document.write(html);
-      newWindow.document.close();
+      // Only try to open the window after we have the HTML content
+      try {
+        // Open a new window
+        const newWindow = window.open('about:blank', '_blank');
+        
+        if (!newWindow) {
+          throw new Error('Failed to open new window. Please check your popup blocker settings.');
+        }
+        
+        // Write the HTML to the new window
+        newWindow.document.open();
+        newWindow.document.write(html);
+        newWindow.document.close();
+      } catch (windowError) {
+        console.error('Error opening window:', windowError);
+        // Create a temporary element to display the HTML
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `trip_${tripId}_itinerary.html`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
     } catch (error) {
       console.error('Error exporting trip as HTML:', error);
       throw new Error('Failed to export trip as HTML');

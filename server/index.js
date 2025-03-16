@@ -369,6 +369,7 @@ app.get('/api/trips/:id', auth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid trip ID format' });
     }
 
+    // Find the trip and populate owner and collaborators
     const trip = await Trip.findById(req.params.id)
       .populate('owner', 'name email photoUrl')
       .populate('collaborators.user', 'name email photoUrl');
@@ -395,6 +396,64 @@ app.get('/api/trips/:id', auth, async (req, res) => {
       requestingUser: req.user._id,
       accessRole
     });
+
+    // Process events to ensure createdBy and updatedBy have photoUrl
+    if (trip.events && trip.events.length > 0) {
+      // Get all unique user IDs from events
+      const userIds = new Set();
+      trip.events.forEach(event => {
+        if (event.createdBy && event.createdBy._id) {
+          userIds.add(event.createdBy._id.toString());
+        }
+        if (event.updatedBy && event.updatedBy._id) {
+          userIds.add(event.updatedBy._id.toString());
+        }
+      });
+
+      // Fetch user data for all these IDs
+      const users = await User.find({ 
+        _id: { $in: Array.from(userIds) } 
+      }, 'name email photoUrl').lean();
+
+      // Create a map for quick lookup
+      const userMap = {};
+      users.forEach(user => {
+        userMap[user._id.toString()] = user;
+      });
+
+      // Update event creator/updater info
+      trip.events = trip.events.map(event => {
+        const eventObj = event.toObject ? event.toObject() : event;
+        
+        if (eventObj.createdBy && eventObj.createdBy._id) {
+          const userId = eventObj.createdBy._id.toString();
+          const user = userMap[userId];
+          if (user) {
+            eventObj.createdBy = {
+              _id: userId,
+              name: user.name,
+              email: user.email,
+              photoUrl: user.photoUrl || null
+            };
+          }
+        }
+        
+        if (eventObj.updatedBy && eventObj.updatedBy._id) {
+          const userId = eventObj.updatedBy._id.toString();
+          const user = userMap[userId];
+          if (user) {
+            eventObj.updatedBy = {
+              _id: userId,
+              name: user.name,
+              email: user.email,
+              photoUrl: user.photoUrl || null
+            };
+          }
+        }
+        
+        return eventObj;
+      });
+    }
 
     const transformedTrip = {
       ...trip.toObject(),
