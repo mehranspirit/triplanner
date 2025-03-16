@@ -35,6 +35,35 @@ interface Location {
   endDate: Date;
 }
 
+// Create module-level cache for locations
+const calendarLocationCache: Record<string, { lat: number, lon: number, displayName: string }> = {};
+
+// Function to get a cache key for a location query
+const getCalendarLocationCacheKey = (query: string): string => {
+  return `calendar_loc_${query.toLowerCase().trim()}`;
+};
+
+// Load cached data from localStorage on module initialization
+try {
+  const savedLocations = localStorage.getItem('calendarMapLocationCache');
+  if (savedLocations) {
+    const parsedLocations = JSON.parse(savedLocations);
+    Object.assign(calendarLocationCache, parsedLocations);
+    console.log('Loaded calendar location cache from localStorage:', Object.keys(parsedLocations).length, 'locations');
+  }
+} catch (err) {
+  console.warn('Failed to load calendar location cache from localStorage:', err);
+}
+
+// Function to save location cache to localStorage
+const saveCalendarLocationCache = () => {
+  try {
+    localStorage.setItem('calendarMapLocationCache', JSON.stringify(calendarLocationCache));
+  } catch (err) {
+    console.warn('Failed to save calendar location cache to localStorage:', err);
+  }
+};
+
 const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +91,33 @@ const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
         
         const locationPromises = trips.map(async (trip) => {
           try {
+            // Check cache first
+            const cacheKey = getCalendarLocationCacheKey(trip.name);
+            if (calendarLocationCache[cacheKey]) {
+              console.log(`Using cached location data for trip: ${trip.name}`);
+              
+              // Find the first event date and last event date
+              const eventDates = trip.events.map(event => 
+                event.type === 'stay' 
+                  ? [new Date(event.checkIn), new Date(event.checkOut)]
+                  : [new Date(event.date), new Date(event.date)]
+              ).flat();
+
+              const startDate = new Date(Math.min(...eventDates.map(d => d.getTime())));
+              const endDate = new Date(Math.max(...eventDates.map(d => d.getTime())));
+              
+              return {
+                ...calendarLocationCache[cacheKey],
+                tripId: trip._id,
+                tripName: trip.name,
+                startDate,
+                endDate
+              };
+            }
+            
+            // Add a small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             const response = await fetch(
               `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trip.name)}`
             );
@@ -83,10 +139,20 @@ const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
               const startDate = new Date(Math.min(...eventDates.map(d => d.getTime())));
               const endDate = new Date(Math.max(...eventDates.map(d => d.getTime())));
 
-              return {
+              const locationData = {
                 lat: parseFloat(data[0].lat),
                 lon: parseFloat(data[0].lon),
-                displayName: data[0].display_name,
+                displayName: data[0].display_name
+              };
+              
+              // Cache the result
+              calendarLocationCache[cacheKey] = locationData;
+              
+              // Save updated cache to localStorage
+              saveCalendarLocationCache();
+
+              return {
+                ...locationData,
                 tripId: trip._id,
                 tripName: trip.name,
                 startDate,

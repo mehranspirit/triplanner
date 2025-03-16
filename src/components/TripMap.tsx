@@ -30,6 +30,57 @@ interface RouteInfo {
   distance: number;
 }
 
+// Create module-level caches that persist across component mounts/unmounts
+const routeCache: Record<string, RouteInfo> = {};
+const locationCache: Record<string, { lat: number, lon: number, displayName: string }> = {};
+
+// Function to get a cache key for a route
+const getRouteCacheKey = (startLat: number, startLon: number, endLat: number, endLon: number): string => {
+  return `route_${startLat}_${startLon}_${endLat}_${endLon}`;
+};
+
+// Function to get a cache key for a location query
+const getLocationCacheKey = (query: string): string => {
+  return `loc_${query.toLowerCase().trim()}`;
+};
+
+// Load cached data from localStorage on module initialization
+try {
+  const savedRoutes = localStorage.getItem('tripMapRouteCache');
+  if (savedRoutes) {
+    const parsedRoutes = JSON.parse(savedRoutes);
+    Object.assign(routeCache, parsedRoutes);
+    console.log('Loaded route cache from localStorage:', Object.keys(parsedRoutes).length, 'routes');
+  }
+  
+  const savedLocations = localStorage.getItem('tripMapLocationCache');
+  if (savedLocations) {
+    const parsedLocations = JSON.parse(savedLocations);
+    Object.assign(locationCache, parsedLocations);
+    console.log('Loaded location cache from localStorage:', Object.keys(parsedLocations).length, 'locations');
+  }
+} catch (err) {
+  console.warn('Failed to load cache from localStorage:', err);
+}
+
+// Function to save route cache to localStorage
+const saveRouteCache = () => {
+  try {
+    localStorage.setItem('tripMapRouteCache', JSON.stringify(routeCache));
+  } catch (err) {
+    console.warn('Failed to save route cache to localStorage:', err);
+  }
+};
+
+// Function to save location cache to localStorage
+const saveLocationCache = () => {
+  try {
+    localStorage.setItem('tripMapLocationCache', JSON.stringify(locationCache));
+  } catch (err) {
+    console.warn('Failed to save location cache to localStorage:', err);
+  }
+};
+
 // Extract only the event data needed for the map to prevent unnecessary re-renders
 const extractMapRelevantData = (trip: Trip) => {
   return {
@@ -69,6 +120,16 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
 
   const fetchRoute = async (start: Location, end: Location): Promise<RouteInfo | null> => {
     try {
+      // Check cache first
+      const cacheKey = getRouteCacheKey(start.lat, start.lon, end.lat, end.lon);
+      if (routeCache[cacheKey]) {
+        console.log(`Using cached route data for: ${start.displayName} to ${end.displayName}`);
+        return routeCache[cacheKey];
+      }
+      
+      // Add a small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const response = await fetch(
         `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson`
       );
@@ -83,11 +144,20 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
         return null;
       }
 
-      return {
-        coordinates: data.routes[0].geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]),
+      // Create route object with the correct structure
+      const route: RouteInfo = {
+        coordinates: data.routes[0].geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]] as [number, number]),
         duration: data.routes[0].duration,
         distance: data.routes[0].distance
       };
+      
+      // Cache the result
+      routeCache[cacheKey] = route;
+      
+      // Save updated cache to localStorage
+      saveRouteCache();
+      
+      return route;
     } catch (err) {
       console.warn('Error fetching route:', err);
       return null;
@@ -103,6 +173,21 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
         .split(' ')
         .filter(word => !['trip', 'to', 'in', 'at', 'the', 'a', 'an'].includes(word))
         .join(' ');
+        
+      // Check cache first
+      const cacheKey = getLocationCacheKey(keywords);
+      if (locationCache[cacheKey]) {
+        console.log(`Using cached location data for trip: ${tripName}`);
+        return {
+          ...locationCache[cacheKey],
+          event: {
+            id: 'trip-location',
+            type: 'destination',
+            date: new Date().toISOString(),
+            placeName: trip.name,
+          } as Event
+        };
+      }
 
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keywords)}`
@@ -115,10 +200,20 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
       const data = await response.json();
       
       if (data && data.length > 0) {
-        return {
+        const locationData = {
           lat: parseFloat(data[0].lat),
           lon: parseFloat(data[0].lon),
-          displayName: data[0].display_name,
+          displayName: data[0].display_name
+        };
+        
+        // Cache the result
+        locationCache[cacheKey] = locationData;
+        
+        // Save updated cache to localStorage
+        saveLocationCache();
+        
+        return {
+          ...locationData,
           event: {
             id: 'trip-location',
             type: 'destination',
@@ -170,8 +265,21 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
           }
 
           if (!searchQuery) return null;
+          
+          // Check cache first
+          const cacheKey = getLocationCacheKey(searchQuery);
+          if (locationCache[cacheKey]) {
+            console.log(`Using cached location data for: ${searchQuery}`);
+            return {
+              ...locationCache[cacheKey],
+              event: event as Event
+            };
+          }
 
           try {
+            // Add a small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             const response = await fetch(
               `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`
             );
@@ -183,10 +291,20 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
             const data = await response.json();
             
             if (data && data.length > 0) {
-              return {
+              const locationData = {
                 lat: parseFloat(data[0].lat),
                 lon: parseFloat(data[0].lon),
-                displayName: data[0].display_name,
+                displayName: data[0].display_name
+              };
+              
+              // Cache the result
+              locationCache[cacheKey] = locationData;
+              
+              // Save updated cache to localStorage
+              saveLocationCache();
+              
+              return {
+                ...locationData,
                 event: event as Event
               };
             }
@@ -306,7 +424,7 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
             weight={3}
             opacity={0.7}
           >
-            <Tooltip permanent direction="center" offset={[0, -10]} className="bg-white px-2 py-1 rounded shadow">
+            <Tooltip permanent direction="center" offset={[0, -10]} className="bg-white px-2 py-1 rounded shadow text-xs font-medium">
               {formatDuration(route.duration / 60)} • {formatDistance(route.distance)}
             </Tooltip>
           </Polyline>
