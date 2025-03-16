@@ -1038,21 +1038,16 @@ const TripDetails: React.FC = () => {
     <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 space-y-6">
       <div className="relative">
         {/* Full width thumbnail image with overlay */}
-        <div className="w-full h-[300px] relative rounded-none md:rounded-lg overflow-hidden">
+        <div className="w-full h-[300px] sm:h-[300px] md:h-[300px] relative rounded-none md:rounded-lg overflow-hidden">
           <img
             src={trip.thumbnailUrl || tripThumbnail || PREDEFINED_THUMBNAILS.default}
             alt={trip.name}
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent"></div>
           
-          {/* Trip Title - Moved to top left */}
-          <div className="absolute top-4 left-4 sm:left-6 z-20">
-            <h1 className="text-4xl md:text-5xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">{trip.name}</h1>
-          </div>
-          
-          {/* Action Buttons - Moved to top right */}
-          <div className="absolute top-4 right-4 sm:right-6 flex items-center space-x-2 z-20">
+          {/* Action Buttons - Above title on mobile, to the right on larger screens */}
+          <div className="absolute top-4 right-4 sm:right-6 flex sm:flex-row flex-wrap justify-end gap-2 z-20 bg-black/30 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none rounded-full p-1.5 sm:p-0">
             {canEdit && (
               <button
                 onClick={() => setIsEditingTrip(true)}
@@ -1092,26 +1087,26 @@ const TripDetails: React.FC = () => {
             </div>
             
             {/* Collaborators button */}
-              <button
-                onClick={() => setIsCollaboratorModalOpen(true)}
+            <button
+              onClick={() => setIsCollaboratorModalOpen(true)}
               className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
               title="Collaborators"
-              >
+            >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
               </svg>
-              </button>
+            </button>
             
             {/* Share button */}
-              <button
-                onClick={() => setIsShareModalOpen(true)}
+            <button
+              onClick={() => setIsShareModalOpen(true)}
               className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
               title="Share Trip"
-              >
+            >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
               </svg>
-              </button>
+            </button>
             
             {/* Add Event button - Only for users who can edit */}
             {canEdit && (
@@ -1148,8 +1143,13 @@ const TripDetails: React.FC = () => {
                 </svg>
               </button>
             )}
-      </div>
-
+          </div>
+          
+          {/* Trip Title - Responsive positioning */}
+          <div className="absolute top-[calc(4rem+8px)] sm:top-4 left-4 sm:left-6 z-20 max-w-[calc(100%-32px)] sm:max-w-[calc(100%-120px)]">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] truncate">{trip.name}</h1>
+          </div>
+          
           {/* Owner and Collaborator Avatars - Keep at bottom right */}
           <div className="absolute bottom-6 right-4 sm:right-6 flex -space-x-3 z-10">
             {/* Owner Avatar */}
@@ -1163,7 +1163,7 @@ const TripDetails: React.FC = () => {
                 />
                 <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                   {trip.owner.name} • Owner
-            </div>
+                </div>
               </div>
             )}
             {/* Collaborator Avatars */}
@@ -1183,19 +1183,19 @@ const TripDetails: React.FC = () => {
                     />
                     <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                       {collaborator.user.name} • {roleDisplay}
-          </div>
-        </div>
+                    </div>
+                  </div>
                 );
               })}
-            </div>
+          </div>
           
           {/* Shared trip info - Keep for non-owners */}
           {user && trip.owner._id !== user._id && (
-            <div className="absolute top-16 right-4 z-10">
+            <div className="absolute top-[calc(8rem+8px)] sm:top-16 right-4 z-10">
               <div className="flex flex-col items-end gap-2 bg-black/40 backdrop-blur-sm p-3 rounded-lg">
                 <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-white text-indigo-700 shadow-sm">
-                Shared
-              </span>
+                  Shared
+                </span>
                 <div className="flex flex-col items-end gap-2">
                   <span className="text-sm font-medium text-white">
                     {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' 
@@ -1210,17 +1210,17 @@ const TripDetails: React.FC = () => {
                       >
                         Activity Log
                       </Link>
-            )}
-          </div>
-        </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
-      </div>
+        </div>
 
         {/* Events and Map section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-20 mt-4">
-      {/* Events list */}
+          {/* Events list */}
           <div className="bg-white shadow rounded-none md:rounded-lg flex flex-col h-[700px]">
             <div className="px-4 py-5 sm:px-6 flex-shrink-0">
               <div className="flex justify-between items-center">
@@ -1233,10 +1233,10 @@ const TripDetails: React.FC = () => {
                     Add Event
                   </button>
                 )}
-        </div>
+              </div>
             </div>
             <div className="border-t border-gray-200 flex-1 overflow-auto">
-          <ul className="divide-y divide-gray-200">
+              <ul className="divide-y divide-gray-200">
                 {trip.events
                   .sort((a, b) => {
                     const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
@@ -1244,7 +1244,7 @@ const TripDetails: React.FC = () => {
                     return dateA - dateB;
                   })
                   .map((event) => (
-              <li key={event.id} className="px-4 py-4 sm:px-6">
+                    <li key={event.id} className="px-4 py-4 sm:px-6">
                       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                         <div className="flex-shrink-0">
                           <img
@@ -1258,10 +1258,10 @@ const TripDetails: React.FC = () => {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-indigo-600 capitalize">
-                      {event.type}
-                    </p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-indigo-600 capitalize">
+                              {event.type}
+                            </p>
                             {canEdit && (
                               <div className="flex space-x-2 ml-2">
                                 <button
@@ -1287,7 +1287,7 @@ const TripDetails: React.FC = () => {
                                     <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                                   </svg>
                                 </button>
-                  </div>
+                              </div>
                             )}
                           </div>
                           {event.type === 'stay' ? (
@@ -1386,12 +1386,12 @@ const TripDetails: React.FC = () => {
                             </div>
                           )}
                         </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          </div>
 
           {/* Map view */}
           <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
@@ -1592,21 +1592,21 @@ const TripDetails: React.FC = () => {
 
       {/* Collaborator and Share Modals */}
       <div style={{ zIndex: 1000 }}>
-      <CollaboratorModal
+        <CollaboratorModal
           trip={{
             ...trip,
             _id: trip._id || id || ''
           }}
-        isOpen={isCollaboratorModalOpen}
-        onClose={() => setIsCollaboratorModalOpen(false)}
-        onUpdate={handleTripUpdate}
-      />
-      <ShareModal
-        trip={trip}
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        onUpdate={handleTripUpdate}
-      />
+          isOpen={isCollaboratorModalOpen}
+          onClose={() => setIsCollaboratorModalOpen(false)}
+          onUpdate={handleTripUpdate}
+        />
+        <ShareModal
+          trip={trip}
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          onUpdate={handleTripUpdate}
+        />
       </div>
     </div>
   );
