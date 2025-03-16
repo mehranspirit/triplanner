@@ -671,11 +671,11 @@ const TripDetails: React.FC = () => {
     }
 
     try {
-      if (isEditingEvent) {
+    if (isEditingEvent) {
         if (!trip._id) {
-          setError('Trip ID is missing');
-          return;
-        }
+        setError('Trip ID is missing');
+        return;
+      }
         console.log('Updating event with ID:', newEvent.id, 'Status:', newEvent.status);
         await updateEvent(trip._id, newEvent);
         
@@ -702,11 +702,11 @@ const TripDetails: React.FC = () => {
             }
           }
         }
-      } else {
+    } else {
         if (!trip._id) {
-          setError('Trip ID is missing');
-          return;
-        }
+        setError('Trip ID is missing');
+        return;
+      }
         console.log('Adding new event with status:', newEvent.status);
         await addEvent(trip._id, newEvent);
         
@@ -718,32 +718,32 @@ const TripDetails: React.FC = () => {
         setEditedTrip(updatedTrip);
       }
       
-      setIsModalOpen(false);
-      setIsEditingEvent(null);
-      setEventData({
-        thumbnailUrl: '',
-        date: '',
-        location: '',
+    setIsModalOpen(false);
+    setIsEditingEvent(null);
+    setEventData({
+      thumbnailUrl: '',
+      date: '',
+      location: '',
         notes: '',
         status: 'confirmed',
         priority: 3,
         source: '',
-        flightNumber: '',
-        airline: '',
-        time: '',
-        airport: '',
-        terminal: '',
-        gate: '',
-        bookingReference: '',
-        accommodationName: '',
-        address: '',
-        checkIn: '',
-        checkOut: '',
-        reservationNumber: '',
-        contactInfo: '',
-        placeName: '',
-        description: '',
-        openingHours: '',
+      flightNumber: '',
+      airline: '',
+      time: '',
+      airport: '',
+      terminal: '',
+      gate: '',
+      bookingReference: '',
+      accommodationName: '',
+      address: '',
+      checkIn: '',
+      checkOut: '',
+      reservationNumber: '',
+      contactInfo: '',
+      placeName: '',
+      description: '',
+      openingHours: '',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update event');
@@ -1487,7 +1487,7 @@ const TripDetails: React.FC = () => {
                     {groupedEventEntries.map(([dateString, events]) => (
                       <div key={dateString}>
                         {/* Date header */}
-                        <div className="sticky top-0 z-10 bg-indigo-50 px-4 py-3 border-b border-indigo-100 shadow-sm">
+                        <div className="sticky top-0 z-[5] bg-indigo-50 px-4 py-3 border-b border-indigo-100 shadow-sm">
                           <h3 className="text-sm font-medium text-indigo-800 flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1501,7 +1501,7 @@ const TripDetails: React.FC = () => {
                         </div>
                         
                         {/* Events for this date */}
-                        <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-gray-200">
                           {events.map((event) => (
                             <li 
                               key={event.id} 
@@ -1531,11 +1531,11 @@ const TripDetails: React.FC = () => {
                                   />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
-                                      <p className="text-sm font-medium text-indigo-600 capitalize">
-                                        {event.type}
-                                      </p>
+                    <p className="text-sm font-medium text-indigo-600 capitalize">
+                      {event.type}
+                    </p>
                                       {event.status && (
                                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                                           event.status === 'confirmed' ? 'bg-blue-50 text-blue-700' :
@@ -1547,7 +1547,7 @@ const TripDetails: React.FC = () => {
                                            '⟳ Alternative'}
                                         </span>
                                       )}
-                                    </div>
+                  </div>
                                     {canEdit && (
                                       <div className="flex space-x-2 ml-2">
                                         <button
@@ -1574,11 +1574,11 @@ const TripDetails: React.FC = () => {
                                           </button>
                                           {statusMenuOpen === event.id && (
                                             <div 
-                                              className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-[999]"
+                                              className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-[9999]"
                                               ref={statusMenuRef}
                                               style={{ 
                                                 position: 'absolute', 
-                                                zIndex: 999,
+                                                zIndex: 9999,
                                                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
                                               }}
                                             >
@@ -1943,17 +1943,17 @@ const TripDetails: React.FC = () => {
                                     </div>
                                   )}
                                 </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
+                </div>
+              </li>
+            ))}
+          </ul>
                       </div>
                     ))}
                   </div>
                 );
               })()}
-            </div>
-          </div>
+        </div>
+      </div>
 
           {/* Map view */}
           <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
