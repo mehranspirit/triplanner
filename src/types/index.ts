@@ -36,7 +36,7 @@ export interface BaseEvent {
   date: string;
   location?: string;
   notes?: string;
-  status?: 'confirmed' | 'exploring' | 'alternative';
+  status?: 'confirmed' | 'exploring';
   priority?: number;
   source?: string;
   createdBy?: {

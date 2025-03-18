@@ -170,7 +170,7 @@ const TripDetails: React.FC = () => {
   const [isEditingEvent, setIsEditingEvent] = useState<string | null>(null);
   const [editedTrip, setEditedTrip] = useState<Trip | null>(null);
   const [tripThumbnail, setTripThumbnail] = useState<string>('');
-  const [eventStatusFilter, setEventStatusFilter] = useState<'all' | 'confirmed' | 'exploring' | 'alternative'>('all');
+  const [eventStatusFilter, setEventStatusFilter] = useState<'confirmed' | 'exploring'>('confirmed');
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
   const [eventData, setEventData] = useState({
@@ -178,7 +178,7 @@ const TripDetails: React.FC = () => {
     date: '',
     location: '',
     notes: '',
-    status: 'confirmed' as 'confirmed' | 'exploring' | 'alternative',
+    status: 'confirmed' as 'confirmed' | 'exploring',
     priority: 3,
     source: '',
     // Arrival/Departure fields
@@ -482,7 +482,7 @@ const TripDetails: React.FC = () => {
     }
   };
 
-  const handleStatusChange = async (eventId: string, newStatus: 'confirmed' | 'exploring' | 'alternative') => {
+  const handleStatusChange = async (eventId: string, newStatus: 'confirmed' | 'exploring') => {
     if (!trip || !trip._id) return;
     
     try {
@@ -613,7 +613,7 @@ const TripDetails: React.FC = () => {
       date: eventData.date,
       location: eventData.location || undefined,
       notes: eventData.notes || undefined,
-      status: status,
+      status: status as 'confirmed' | 'exploring',
       priority: eventData.priority,
       source: eventData.source || undefined,
       createdBy: creatorInfo,
@@ -751,12 +751,18 @@ const TripDetails: React.FC = () => {
   };
 
   const handleEditEvent = (eventId: string) => {
-    if (!trip) return;
-    
-    setIsEditingEvent(eventId);
-    setIsModalOpen(true); // Add this line to open the modal
-    const eventToEdit = trip.events.find(e => e.id === eventId);
+    const eventToEdit = trip?.events.find(e => e.id === eventId);
     if (!eventToEdit) return;
+    
+    let baseEventData: any = {
+      thumbnailUrl: eventToEdit.thumbnailUrl || '',
+      date: eventToEdit.date || '',
+      location: eventToEdit.location || '',
+      notes: eventToEdit.notes || '',
+      status: (eventToEdit.status || 'confirmed') as 'confirmed' | 'exploring',
+      priority: eventToEdit.priority || 3,
+      source: eventToEdit.source || ''
+    };
     
     setEventType(eventToEdit.type);
     
@@ -873,13 +879,12 @@ const TripDetails: React.FC = () => {
           <select
             value={eventData.status}
             onChange={(e) =>
-              setEventData({ ...eventData, status: e.target.value as 'confirmed' | 'exploring' | 'alternative' })
+              setEventData({ ...eventData, status: e.target.value as 'confirmed' | 'exploring' })
             }
             className="input"
           >
             <option value="confirmed">Confirmed</option>
             <option value="exploring">Exploring</option>
-            <option value="alternative">Alternative</option>
           </select>
         </div>
         {eventData.status === 'exploring' && (
@@ -1424,18 +1429,6 @@ const TripDetails: React.FC = () => {
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium text-gray-900">Events</h3>
                 <div className="flex items-center space-x-2">
-                  <div className="relative">
-                    <select
-                      value={eventStatusFilter}
-                      onChange={(e) => setEventStatusFilter(e.target.value as 'all' | 'confirmed' | 'exploring' | 'alternative')}
-                      className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                    >
-                      <option value="all">All Events</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="exploring">Exploring</option>
-                      <option value="alternative">Alternative</option>
-                    </select>
-        </div>
                   {canEdit && (
                     <button
                       onClick={() => setIsModalOpen(true)}
@@ -1447,11 +1440,42 @@ const TripDetails: React.FC = () => {
                 </div>
               </div>
             </div>
+            
+            {/* Status filter tabs - updated to be full width */}
+            <div className="mt-4 border-b border-gray-200">
+              <div className="flex w-full">
+                <button
+                  onClick={() => setEventStatusFilter('confirmed')}
+                  className={`flex-1 text-center py-3 ${
+                    eventStatusFilter === 'confirmed'
+                      ? 'border-b-2 border-blue-500 text-blue-600 font-medium'
+                      : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Confirmed
+                </button>
+                <button
+                  onClick={() => setEventStatusFilter('exploring')}
+                  className={`flex-1 text-center py-3 ${
+                    eventStatusFilter === 'exploring'
+                      ? 'border-b-2 border-green-500 text-green-600 font-medium'
+                      : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Exploring
+                </button>
+              </div>
+            </div>
+            
             <div className="border-t border-gray-200 flex-1 overflow-auto">
               {(() => {
-                // Filter events based on status filter
+                // Fix the filtering logic to only show events with the selected status
                 const filteredEvents = trip.events
-                  .filter(event => eventStatusFilter === 'all' || event.status === eventStatusFilter || (eventStatusFilter === 'confirmed' && !event.status));
+                  .filter(event => {
+                    // Use the event status or default to 'confirmed'
+                    const status = (event.status || 'confirmed') as 'confirmed' | 'exploring';
+                    return status === eventStatusFilter;
+                  });
                 
                 // Sort events by date
                 const sortedEvents = filteredEvents.sort((a, b) => {
@@ -1505,11 +1529,7 @@ const TripDetails: React.FC = () => {
                           {events.map((event) => (
                             <li 
                               key={event.id} 
-                              className={`px-4 py-3 sm:px-6 relative ${
-                                event.status === 'exploring' ? 'bg-green-50 border-l-4 border-green-300' : 
-                                event.status === 'alternative' ? 'bg-purple-50 border-l-4 border-purple-300' : 
-                                'bg-white'
-                              }`}
+                              className="px-4 py-3 sm:px-6 relative bg-white"
                               style={{
                                 opacity: 1,
                                 borderStyle: statusMenuOpen === event.id ? 'dashed' : 'solid',
@@ -1531,23 +1551,12 @@ const TripDetails: React.FC = () => {
                                   />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
+                                  <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
-                    <p className="text-sm font-medium text-indigo-600 capitalize">
-                      {event.type}
-                    </p>
-                                      {event.status && (
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                          event.status === 'confirmed' ? 'bg-blue-50 text-blue-700' :
-                                          event.status === 'exploring' ? 'bg-green-50 text-green-700' :
-                                          'bg-purple-50 text-purple-700'
-                                        }`}>
-                                          {event.status === 'confirmed' ? '✓ Confirmed' :
-                                           event.status === 'exploring' ? '🔍 Exploring' :
-                                           '⟳ Alternative'}
-                                        </span>
-                                      )}
-                  </div>
+                                      <p className="text-sm font-medium text-indigo-600 capitalize">
+                                        {event.type}
+                                      </p>
+                                    </div>
                                     {canEdit && (
                                       <div className="flex space-x-2 ml-2">
                                         <button
@@ -1594,12 +1603,6 @@ const TripDetails: React.FC = () => {
                                                   className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'exploring' ? 'bg-green-50 text-green-700' : 'text-gray-700 hover:bg-gray-100'}`}
                                                 >
                                                   🔍 Exploring
-                                                </button>
-                                                <button
-                                                  onClick={() => handleStatusChange(event.id, 'alternative')}
-                                                  className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'alternative' ? 'bg-purple-50 text-purple-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                                                >
-                                                  ⟳ Alternative
                                                 </button>
                                               </div>
                                             </div>
