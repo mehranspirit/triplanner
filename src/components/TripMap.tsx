@@ -509,7 +509,7 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-0.5 bg-blue-600"></div>
-                <span className="text-sm">Driving Route (Between Confirmed Events Only)</span>
+                <span className="text-sm">Driving Route (Confirmed Events)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
@@ -518,10 +518,6 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-green-500 rounded-full"></div>
                 <span className="text-sm">Exploring</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-violet-500 rounded-full"></div>
-                <span className="text-sm">Alternative</span>
               </div>
             </div>
           </div>

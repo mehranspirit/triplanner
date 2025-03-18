@@ -1437,7 +1437,7 @@ const TripDetails: React.FC = () => {
                       Add Event
                     </button>
                   )}
-                </div>
+        </div>
               </div>
             </div>
             
@@ -1551,12 +1551,12 @@ const TripDetails: React.FC = () => {
                                   />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
-                                      <p className="text-sm font-medium text-indigo-600 capitalize">
-                                        {event.type}
-                                      </p>
-                                    </div>
+                    <p className="text-sm font-medium text-indigo-600 capitalize">
+                      {event.type}
+                    </p>
+                  </div>
                                     {canEdit && (
                                       <div className="flex space-x-2 ml-2">
                                         <button
@@ -1705,7 +1705,7 @@ const TripDetails: React.FC = () => {
                                             </p>
                                             <div className="flex ml-2">
                                               {/* Creator avatar */}
-                                              <div className="relative group" style={{ zIndex: 50 }}>
+                                              <div className="relative group" style={{ zIndex: 1 }}>
                                                 {(() => {
                                                   console.log('EVENT CARD AVATAR - About to render Avatar component:', {
                                                     eventId: event.id,
@@ -1725,7 +1725,7 @@ const TripDetails: React.FC = () => {
                                                 />
                                                 
                                                 {/* Tooltip */}
-                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 60 }}>
+                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
                                                   <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
                                                     {`Added by ${creatorInfo.name}`}
                                                   </div>
@@ -1808,7 +1808,7 @@ const TripDetails: React.FC = () => {
                                             </p>
                                             <div className="flex ml-2">
                                               {/* Creator avatar */}
-                                              <div className="relative group" style={{ zIndex: 50 }}>
+                                              <div className="relative group" style={{ zIndex: 1 }}>
                                                 {(() => {
                                                   console.log('EVENT CARD AVATAR - About to render Avatar component:', {
                                                     eventId: event.id,
@@ -1828,7 +1828,7 @@ const TripDetails: React.FC = () => {
                                                 />
                                                 
                                                 {/* Tooltip */}
-                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 60 }}>
+                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
                                                   <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
                                                     {`Added by ${creatorInfo.name}`}
                                                   </div>
@@ -1912,7 +1912,7 @@ const TripDetails: React.FC = () => {
                                             </p>
                                             <div className="flex ml-2">
                                               {/* Creator avatar */}
-                                              <div className="relative group" style={{ zIndex: 50 }}>
+                                              <div className="relative group" style={{ zIndex: 1 }}>
                                                 {(() => {
                                                   console.log('EVENT CARD AVATAR - About to render Avatar component:', {
                                                     eventId: event.id,
@@ -1932,7 +1932,7 @@ const TripDetails: React.FC = () => {
                                                 />
                                                 
                                                 {/* Tooltip */}
-                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 60 }}>
+                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
                                                   <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
                                                     {`Added by ${creatorInfo.name}`}
                                                   </div>
