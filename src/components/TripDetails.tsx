@@ -209,6 +209,8 @@ const TripDetails: React.FC = () => {
   const [eventThumbnails, setEventThumbnails] = useState<{ [key: string]: string }>({});
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formFeedback, setFormFeedback] = useState({ type: '', message: '' });
 
   const fetchAirports = async (query: string) => {
     if (query.length < 2) {
@@ -536,6 +538,82 @@ const TripDetails: React.FC = () => {
     }
   };
 
+  const handleEventVote = async (eventId: string, voteType: 'like' | 'dislike' | 'remove') => {
+    if (!trip) return;
+    
+    try {
+      setIsSaving(true);
+      
+      let updatedTrip;
+      
+      if (voteType === 'remove') {
+        updatedTrip = await api.removeVote(trip._id, eventId);
+      } else {
+        updatedTrip = await api.voteEvent(trip._id, eventId, voteType);
+      }
+      
+      // Update the trip in the context
+      if (updatedTrip) {
+        setTrip(updatedTrip);
+      }
+      
+      // Show success message
+      setFormFeedback({
+        type: 'success',
+        message: `Vote ${voteType === 'remove' ? 'removed' : 'submitted'} successfully!`
+      });
+      
+    } catch (error) {
+      console.error('Error voting on event:', error);
+      setFormFeedback({
+        type: 'error',
+        message: 'Failed to submit vote. Please try again.'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Get user vote status
+  const getUserVoteStatus = (event: Event): 'liked' | 'disliked' | null => {
+    if (!user || !event.likes || !event.dislikes) return null;
+    
+    if (event.likes.includes(user._id)) {
+      return 'liked';
+    } else if (event.dislikes.includes(user._id)) {
+      return 'disliked';
+    }
+    
+    return null;
+  };
+
+  // Helper function to get names of users who liked/disliked an event
+  const getVoterNames = (event: Event, voteType: 'like' | 'dislike'): string => {
+    if (!event || !trip) return '';
+    
+    const voterIds = voteType === 'like' ? (event.likes || []) : (event.dislikes || []);
+    
+    if (voterIds.length === 0) return 'No votes yet';
+    
+    // Map voter IDs to user names
+    const voterNames = voterIds.map(voterId => {
+      // Check if it's the owner
+      if (voterId === trip.owner._id) {
+        return trip.owner.name;
+      }
+      
+      // Check if it's a collaborator
+      const collaborator = trip.collaborators.find(c => c.user._id === voterId);
+      if (collaborator) {
+        return collaborator.user.name;
+      }
+      
+      return 'Unknown User';
+    });
+    
+    return voterNames.join(', ');
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -751,24 +829,23 @@ const TripDetails: React.FC = () => {
   };
 
   const handleEditEvent = (eventId: string) => {
-    const eventToEdit = trip?.events.find(e => e.id === eventId);
-    if (!eventToEdit) return;
+    console.log('Edit event clicked:', eventId);
+    if (!trip) return;
     
-    let baseEventData: any = {
-      thumbnailUrl: eventToEdit.thumbnailUrl || '',
-      date: eventToEdit.date || '',
-      location: eventToEdit.location || '',
-      notes: eventToEdit.notes || '',
-      status: (eventToEdit.status || 'confirmed') as 'confirmed' | 'exploring',
-      priority: eventToEdit.priority || 3,
-      source: eventToEdit.source || ''
-    };
+    const eventToEdit = trip.events.find(e => e.id === eventId);
+    if (!eventToEdit) {
+      console.error(`Event with id ${eventId} not found`);
+      return;
+    }
     
+    // Set the event type based on the event being edited
     setEventType(eventToEdit.type);
     
-    // Set common fields
-    setEventData(prev => ({
-      ...prev,
+    // Set isEditingEvent to the event ID to indicate we're in edit mode
+    setIsEditingEvent(eventId);
+    
+    // Initialize with default empty values
+    const baseEventData = {
       thumbnailUrl: eventToEdit.thumbnailUrl || '',
       date: eventToEdit.date || '',
       location: eventToEdit.location || '',
@@ -776,50 +853,60 @@ const TripDetails: React.FC = () => {
       status: eventToEdit.status || 'confirmed',
       priority: eventToEdit.priority || 3,
       source: eventToEdit.source || '',
-    }));
+      
+      // Initialize all fields with empty values first
+      flightNumber: '',
+      airline: '',
+      time: '',
+      airport: '',
+      terminal: '',
+      gate: '',
+      bookingReference: '',
+      accommodationName: '',
+      address: '',
+      checkIn: '',
+      checkOut: '',
+      reservationNumber: '',
+      contactInfo: '',
+      placeName: '',
+      description: '',
+      openingHours: '',
+    };
     
-    // Set type-specific fields
-    switch (eventToEdit.type) {
-      case 'arrival':
-      case 'departure': {
-        const event = eventToEdit as ArrivalDepartureEvent;
-        setEventData(prev => ({
-          ...prev,
-          flightNumber: event.flightNumber || '',
-          airline: event.airline || '',
-          time: event.time || '',
-          airport: event.airport || '',
-          terminal: event.terminal || '',
-          gate: event.gate || '',
-          bookingReference: event.bookingReference || '',
-        }));
-        break;
-      }
-      case 'stay': {
-        const event = eventToEdit as StayEvent;
-        setEventData(prev => ({
-          ...prev,
-          accommodationName: event.accommodationName || '',
-          address: event.address || '',
-          checkIn: event.checkIn || '',
-          checkOut: event.checkOut || '',
-          reservationNumber: event.reservationNumber || '',
-          contactInfo: event.contactInfo || '',
-        }));
-        break;
-      }
-      case 'destination': {
-        const event = eventToEdit as DestinationEvent;
-        setEventData(prev => ({
-          ...prev,
-          placeName: event.placeName || '',
-          address: event.address || '',
-          description: event.description || '',
-          openingHours: event.openingHours || '',
-        }));
-        break;
-      }
+    // Add type-specific fields based on event type
+    if (eventToEdit.type === 'arrival' || eventToEdit.type === 'departure') {
+      const event = eventToEdit as ArrivalDepartureEvent;
+      baseEventData.flightNumber = event.flightNumber || '';
+      baseEventData.airline = event.airline || '';
+      baseEventData.time = event.time || '';
+      baseEventData.airport = event.airport || '';
+      baseEventData.terminal = event.terminal || '';
+      baseEventData.gate = event.gate || '';
+      baseEventData.bookingReference = event.bookingReference || '';
+    } else if (eventToEdit.type === 'stay') {
+      const event = eventToEdit as StayEvent;
+      baseEventData.accommodationName = event.accommodationName || '';
+      baseEventData.address = event.address || '';
+      baseEventData.checkIn = event.checkIn || '';
+      baseEventData.checkOut = event.checkOut || '';
+      baseEventData.reservationNumber = event.reservationNumber || '';
+      baseEventData.contactInfo = event.contactInfo || '';
+    } else if (eventToEdit.type === 'destination') {
+      const event = eventToEdit as DestinationEvent;
+      baseEventData.placeName = event.placeName || '';
+      baseEventData.description = event.description || '';
+      baseEventData.openingHours = event.openingHours || '';
+      // Ensure address is also populated for destination events
+      baseEventData.address = event.address || '';
     }
+    
+    console.log('Setting event data for editing:', baseEventData);
+    
+    // Set the event data
+    setEventData(baseEventData);
+    
+    // Open the modal
+    setIsModalOpen(true);
   };
 
   const handleAddEvent = async () => {
@@ -889,6 +976,15 @@ const TripDetails: React.FC = () => {
         </div>
         {eventData.status === 'exploring' && (
           <>
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <span className="font-medium">Exploring events</span> can be voted on by all trip members.
+                You and other collaborators will be able to like or dislike this event
+                after it's added to help decide which options to confirm.
+              </p>
+            </div>
+            
+            {/* Remove priority stars for exploring events
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Priority (1-5)</label>
               <div className="flex items-center">
@@ -906,6 +1002,7 @@ const TripDetails: React.FC = () => {
                 ))}
               </div>
             </div>
+            */}
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Source (optional)</label>
               <input
@@ -1647,7 +1744,67 @@ const TripDetails: React.FC = () => {
                                       {/* Exploration-specific fields */}
                                       {event.status === 'exploring' && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
-                                          {event.priority && (
+                                          {/* Like/Dislike system for exploring events */}
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center space-x-2">
+                                              {/* Like button */}
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const currentVote = getUserVoteStatus(event);
+                                                  if (currentVote === 'liked') {
+                                                    handleEventVote(event.id, 'remove');
+                                                  } else {
+                                                    handleEventVote(event.id, 'like');
+                                                  }
+                                                }}
+                                                className={`flex items-center px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'liked' 
+                                                    ? 'bg-green-50 text-green-600' 
+                                                    : 'bg-gray-100 text-gray-600'
+                                                } hover:opacity-80 transition-colors`}
+                                                title={`Likes: ${getVoterNames(event, 'like')}`}
+                                              >
+                                                <span className="mr-1">👍</span>
+                                                <span className="text-xs font-medium">
+                                                  {event.likes?.length || 0}
+                                                </span>
+                                              </button>
+                                              
+                                              {/* Dislike button */}
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const currentVote = getUserVoteStatus(event);
+                                                  if (currentVote === 'disliked') {
+                                                    handleEventVote(event.id, 'remove');
+                                                  } else {
+                                                    handleEventVote(event.id, 'dislike');
+                                                  }
+                                                }}
+                                                className={`flex items-center px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'disliked' 
+                                                    ? 'bg-red-50 text-red-600' 
+                                                    : 'bg-gray-100 text-gray-600'
+                                                } hover:opacity-80 transition-colors`}
+                                                title={`Dislikes: ${getVoterNames(event, 'dislike')}`}
+                                              >
+                                                <span className="mr-1">👎</span>
+                                                <span className="text-xs font-medium">
+                                                  {event.dislikes?.length || 0}
+                                                </span>
+                                              </button>
+                                            </div>
+                                            
+                                            {event.source && (
+                                              <div className="text-xs text-gray-500">
+                                                Source: {event.source}
+                                              </div>
+                                            )}
+                                          </div>
+                                          
+                                          {/* Remove star rating for exploring events */}
+                                          {event.priority && false && (
                                             <div className="flex items-center mb-1">
                                               <span className="text-xs text-gray-500 mr-2">Priority:</span>
                                               <div className="flex">
@@ -1660,9 +1817,10 @@ const TripDetails: React.FC = () => {
                                             </div>
                                           )}
                                           
-                                          {event.source && (
+                                          {/* Source info already displayed above */}
+                                          {event.source && false && (
                                             <div className="text-xs text-gray-500 mb-1">
-                                              <span className="font-medium">Source:</span> {event.source}
+                                              Source: {event.source}
                                             </div>
                                           )}
                                         </div>
@@ -1689,19 +1847,19 @@ const TripDetails: React.FC = () => {
                                         });
                                         
                                         // For events without creator info, use trip owner as fallback
-                                        const creatorInfo = event.createdBy || trip.owner;
+                                        const creatorInfo = event.createdBy || trip.owner || { name: "Unknown", _id: "unknown" };
                                         
                                         // Ensure photoUrl is properly set for both created and added events
-                                        const creatorPhotoUrl = event.createdBy?.photoUrl || trip.owner.photoUrl;
+                                        const creatorPhotoUrl = event.createdBy?.photoUrl || (trip.owner?.photoUrl || null);
+                                        
+                                        // Ensure creator name is available
+                                        const creatorName = creatorInfo?.name || "Unknown";
                                         
                                         return (
                                           <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
                                             <p className="text-xs text-gray-400 italic">
                                               {/* Use consistent "Added by" for all events for better UX */}
-                                              {`Added by ${creatorInfo.name}`}
-                                              {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                              {event.updatedBy && event.updatedBy._id !== creatorInfo._id && 
-                                                ` • Last edited by ${event.updatedBy.name}`}
+                                              {`Added by ${creatorName}`}
                                             </p>
                                             <div className="flex ml-2">
                                               {/* Creator avatar */}
@@ -1711,15 +1869,15 @@ const TripDetails: React.FC = () => {
                                                     eventId: event.id,
                                                     hasCreatedBy: !!event.createdBy,
                                                     usingFallback: !event.createdBy,
-                                                    creatorName: creatorInfo.name,
+                                                    creatorName: creatorName,
                                                     photoUrl: creatorPhotoUrl,
                                                     timestamp: new Date().toISOString()
                                                   });
                                                   return null;
                                                 })()}
                                                 <Avatar
-                                                  photoUrl={creatorPhotoUrl || null}
-                                                  name={creatorInfo.name}
+                                                  photoUrl={creatorPhotoUrl}
+                                                  name={creatorName}
                                                   size="sm"
                                                   className="ring-2 ring-white"
                                                 />
@@ -1727,7 +1885,7 @@ const TripDetails: React.FC = () => {
                                                 {/* Tooltip */}
                                                 <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
                                                   <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                                                    {`Added by ${creatorInfo.name}`}
+                                                    {`Added by ${creatorName}`}
                                                   </div>
                                                   <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
                                                 </div>
@@ -1750,7 +1908,67 @@ const TripDetails: React.FC = () => {
                                       {/* Exploration-specific fields */}
                                       {event.status === 'exploring' && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
-                                          {event.priority && (
+                                          {/* Like/Dislike system for exploring events */}
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center space-x-2">
+                                              {/* Like button */}
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const currentVote = getUserVoteStatus(event);
+                                                  if (currentVote === 'liked') {
+                                                    handleEventVote(event.id, 'remove');
+                                                  } else {
+                                                    handleEventVote(event.id, 'like');
+                                                  }
+                                                }}
+                                                className={`flex items-center px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'liked' 
+                                                    ? 'bg-green-50 text-green-600' 
+                                                    : 'bg-gray-100 text-gray-600'
+                                                } hover:opacity-80 transition-colors`}
+                                                title={`Likes: ${getVoterNames(event, 'like')}`}
+                                              >
+                                                <span className="mr-1">👍</span>
+                                                <span className="text-xs font-medium">
+                                                  {event.likes?.length || 0}
+                                                </span>
+                                              </button>
+                                              
+                                              {/* Dislike button */}
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const currentVote = getUserVoteStatus(event);
+                                                  if (currentVote === 'disliked') {
+                                                    handleEventVote(event.id, 'remove');
+                                                  } else {
+                                                    handleEventVote(event.id, 'dislike');
+                                                  }
+                                                }}
+                                                className={`flex items-center px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'disliked' 
+                                                    ? 'bg-red-50 text-red-600' 
+                                                    : 'bg-gray-100 text-gray-600'
+                                                } hover:opacity-80 transition-colors`}
+                                                title={`Dislikes: ${getVoterNames(event, 'dislike')}`}
+                                              >
+                                                <span className="mr-1">👎</span>
+                                                <span className="text-xs font-medium">
+                                                  {event.dislikes?.length || 0}
+                                                </span>
+                                              </button>
+                                            </div>
+                                            
+                                            {event.source && (
+                                              <div className="text-xs text-gray-500">
+                                                Source: {event.source}
+                                              </div>
+                                            )}
+                                          </div>
+                                          
+                                          {/* Remove star rating for exploring events */}
+                                          {event.priority && false && (
                                             <div className="flex items-center mb-1">
                                               <span className="text-xs text-gray-500 mr-2">Priority:</span>
                                               <div className="flex">
@@ -1763,9 +1981,10 @@ const TripDetails: React.FC = () => {
                                             </div>
                                           )}
                                           
-                                          {event.source && (
+                                          {/* Source info already displayed above */}
+                                          {event.source && false && (
                                             <div className="text-xs text-gray-500 mb-1">
-                                              <span className="font-medium">Source:</span> {event.source}
+                                              Source: {event.source}
                                             </div>
                                           )}
                                         </div>
@@ -1792,19 +2011,19 @@ const TripDetails: React.FC = () => {
                                         });
                                         
                                         // For events without creator info, use trip owner as fallback
-                                        const creatorInfo = event.createdBy || trip.owner;
+                                        const creatorInfo = event.createdBy || trip.owner || { name: "Unknown", _id: "unknown" };
                                         
                                         // Ensure photoUrl is properly set for both created and added events
-                                        const creatorPhotoUrl = event.createdBy?.photoUrl || trip.owner.photoUrl;
+                                        const creatorPhotoUrl = event.createdBy?.photoUrl || (trip.owner?.photoUrl || null);
+                                        
+                                        // Ensure creator name is available
+                                        const creatorName = creatorInfo?.name || "Unknown";
                                         
                                         return (
                                           <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
                                             <p className="text-xs text-gray-400 italic">
                                               {/* Use consistent "Added by" for all events for better UX */}
-                                              {`Added by ${creatorInfo.name}`}
-                                              {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                              {event.updatedBy && event.updatedBy._id !== creatorInfo._id && 
-                                                ` • Last edited by ${event.updatedBy.name}`}
+                                              {`Added by ${creatorName}`}
                                             </p>
                                             <div className="flex ml-2">
                                               {/* Creator avatar */}
@@ -1814,15 +2033,15 @@ const TripDetails: React.FC = () => {
                                                     eventId: event.id,
                                                     hasCreatedBy: !!event.createdBy,
                                                     usingFallback: !event.createdBy,
-                                                    creatorName: creatorInfo.name,
+                                                    creatorName: creatorName,
                                                     photoUrl: creatorPhotoUrl,
                                                     timestamp: new Date().toISOString()
                                                   });
                                                   return null;
                                                 })()}
                                                 <Avatar
-                                                  photoUrl={creatorPhotoUrl || null}
-                                                  name={creatorInfo.name}
+                                                  photoUrl={creatorPhotoUrl}
+                                                  name={creatorName}
                                                   size="sm"
                                                   className="ring-2 ring-white"
                                                 />
@@ -1830,7 +2049,7 @@ const TripDetails: React.FC = () => {
                                                 {/* Tooltip */}
                                                 <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
                                                   <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                                                    {`Added by ${creatorInfo.name}`}
+                                                    {`Added by ${creatorName}`}
                                                   </div>
                                                   <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
                                                 </div>
@@ -1854,7 +2073,67 @@ const TripDetails: React.FC = () => {
                                       {/* Exploration-specific fields */}
                                       {event.status === 'exploring' && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
-                                          {event.priority && (
+                                          {/* Like/Dislike system for exploring events */}
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center space-x-2">
+                                              {/* Like button */}
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const currentVote = getUserVoteStatus(event);
+                                                  if (currentVote === 'liked') {
+                                                    handleEventVote(event.id, 'remove');
+                                                  } else {
+                                                    handleEventVote(event.id, 'like');
+                                                  }
+                                                }}
+                                                className={`flex items-center px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'liked' 
+                                                    ? 'bg-green-50 text-green-600' 
+                                                    : 'bg-gray-100 text-gray-600'
+                                                } hover:opacity-80 transition-colors`}
+                                                title={`Likes: ${getVoterNames(event, 'like')}`}
+                                              >
+                                                <span className="mr-1">👍</span>
+                                                <span className="text-xs font-medium">
+                                                  {event.likes?.length || 0}
+                                                </span>
+                                              </button>
+                                              
+                                              {/* Dislike button */}
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const currentVote = getUserVoteStatus(event);
+                                                  if (currentVote === 'disliked') {
+                                                    handleEventVote(event.id, 'remove');
+                                                  } else {
+                                                    handleEventVote(event.id, 'dislike');
+                                                  }
+                                                }}
+                                                className={`flex items-center px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'disliked' 
+                                                    ? 'bg-red-50 text-red-600' 
+                                                    : 'bg-gray-100 text-gray-600'
+                                                } hover:opacity-80 transition-colors`}
+                                                title={`Dislikes: ${getVoterNames(event, 'dislike')}`}
+                                              >
+                                                <span className="mr-1">👎</span>
+                                                <span className="text-xs font-medium">
+                                                  {event.dislikes?.length || 0}
+                                                </span>
+                                              </button>
+                                            </div>
+                                            
+                                            {event.source && (
+                                              <div className="text-xs text-gray-500">
+                                                Source: {event.source}
+                                              </div>
+                                            )}
+                                          </div>
+                                          
+                                          {/* Remove star rating for exploring events */}
+                                          {event.priority && false && (
                                             <div className="flex items-center mb-1">
                                               <span className="text-xs text-gray-500 mr-2">Priority:</span>
                                               <div className="flex">
@@ -1867,9 +2146,10 @@ const TripDetails: React.FC = () => {
                                             </div>
                                           )}
                                           
-                                          {event.source && (
+                                          {/* Source info already displayed above */}
+                                          {event.source && false && (
                                             <div className="text-xs text-gray-500 mb-1">
-                                              <span className="font-medium">Source:</span> {event.source}
+                                              Source: {event.source}
                                             </div>
                                           )}
                                         </div>
@@ -1896,19 +2176,19 @@ const TripDetails: React.FC = () => {
                                         });
                                         
                                         // For events without creator info, use trip owner as fallback
-                                        const creatorInfo = event.createdBy || trip.owner;
+                                        const creatorInfo = event.createdBy || trip.owner || { name: "Unknown", _id: "unknown" };
                                         
                                         // Ensure photoUrl is properly set for both created and added events
-                                        const creatorPhotoUrl = event.createdBy?.photoUrl || trip.owner.photoUrl;
+                                        const creatorPhotoUrl = event.createdBy?.photoUrl || (trip.owner?.photoUrl || null);
+                                        
+                                        // Ensure creator name is available
+                                        const creatorName = creatorInfo?.name || "Unknown";
                                         
                                         return (
                                           <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
                                             <p className="text-xs text-gray-400 italic">
                                               {/* Use consistent "Added by" for all events for better UX */}
-                                              {`Added by ${creatorInfo.name}`}
-                                              {event.createdAt && ` on ${new Date(event.createdAt).toLocaleDateString()}`}
-                                              {event.updatedBy && event.updatedBy._id !== creatorInfo._id && 
-                                                ` • Last edited by ${event.updatedBy.name}`}
+                                              {`Added by ${creatorName}`}
                                             </p>
                                             <div className="flex ml-2">
                                               {/* Creator avatar */}
@@ -1918,15 +2198,15 @@ const TripDetails: React.FC = () => {
                                                     eventId: event.id,
                                                     hasCreatedBy: !!event.createdBy,
                                                     usingFallback: !event.createdBy,
-                                                    creatorName: creatorInfo.name,
+                                                    creatorName: creatorName,
                                                     photoUrl: creatorPhotoUrl,
                                                     timestamp: new Date().toISOString()
                                                   });
                                                   return null;
                                                 })()}
                                                 <Avatar
-                                                  photoUrl={creatorPhotoUrl || null}
-                                                  name={creatorInfo.name}
+                                                  photoUrl={creatorPhotoUrl}
+                                                  name={creatorName}
                                                   size="sm"
                                                   className="ring-2 ring-white"
                                                 />
@@ -1934,7 +2214,7 @@ const TripDetails: React.FC = () => {
                                                 {/* Tooltip */}
                                                 <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
                                                   <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                                                    {`Added by ${creatorInfo.name}`}
+                                                    {`Added by ${creatorName}`}
                                                   </div>
                                                   <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
                                                 </div>

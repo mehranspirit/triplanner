@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 
 interface AvatarProps {
   photoUrl: string | null;
-  name: string;
+  name?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
+  showFallback?: boolean;
 }
 
-const Avatar: React.FC<AvatarProps> = ({ photoUrl, name, size = 'md', className = '' }) => {
-  const [showFallback, setShowFallback] = useState(!photoUrl);
+const Avatar: React.FC<AvatarProps> = ({ photoUrl, name = 'User', size = 'md', className = '', showFallback: initialShowFallback }) => {
+  const [showFallback, setShowFallback] = useState(initialShowFallback || !photoUrl);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   // Determine if this is likely an event card avatar based on props
@@ -96,6 +97,12 @@ const Avatar: React.FC<AvatarProps> = ({ photoUrl, name, size = 'md', className 
   }, [photoUrl, name]);
 
   const getInitials = (name: string) => {
+    // Handle undefined, null, or empty name
+    if (!name || typeof name !== 'string') {
+      console.warn('Avatar received invalid name:', name);
+      return '?';
+    }
+    
     return name
       .split(' ')
       .map(part => part[0])

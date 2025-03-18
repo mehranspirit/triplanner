@@ -18,7 +18,7 @@ const ActivitySchema = new Schema({
   },
   actionType: {
     type: String,
-    enum: ['trip_create', 'trip_update', 'trip_delete', 'event_create', 'event_update', 'event_delete', 'collaborator_add', 'collaborator_remove', 'collaborator_role_change'],
+    enum: ['trip_create', 'trip_update', 'trip_delete', 'event_create', 'event_update', 'event_delete', 'collaborator_add', 'collaborator_remove', 'collaborator_role_change', 'event_like', 'event_dislike', 'event_vote_remove'],
     required: true
   },
   description: {

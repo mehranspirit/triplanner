@@ -41,6 +41,8 @@ interface API {
   getCurrentUser: () => Promise<User>;
   exportTripAsPDF: (tripId: string) => Promise<void>;
   exportTripAsHTML: (tripId: string) => Promise<void>;
+  voteEvent: (tripId: string, eventId: string, voteType: 'like' | 'dislike') => Promise<Trip>;
+  removeVote: (tripId: string, eventId: string) => Promise<Trip>;
 }
 
 export const api: API = {
@@ -597,6 +599,41 @@ export const api: API = {
       console.error('Error exporting trip as HTML:', error);
       throw new Error('Failed to export trip as HTML');
     }
+  },
+
+  voteEvent: async (tripId: string, eventId: string, voteType: 'like' | 'dislike'): Promise<Trip> => {
+    if (!tripId || !eventId || !voteType) throw new Error('Trip ID, event ID, and vote type are required');
+    console.log(`Voting on event: ${voteType}`, { tripId, eventId });
+    
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/events/${eventId}/vote`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ voteType }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Failed to ${voteType} event`);
+    }
+    
+    return await response.json();
+  },
+  
+  removeVote: async (tripId: string, eventId: string): Promise<Trip> => {
+    if (!tripId || !eventId) throw new Error('Trip ID and event ID are required');
+    console.log('Removing vote from event:', { tripId, eventId });
+    
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/events/${eventId}/vote`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to remove vote');
+    }
+    
+    return await response.json();
   },
 };
 

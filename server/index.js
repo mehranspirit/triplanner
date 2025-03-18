@@ -17,6 +17,22 @@ const { logActivity } = require('./utils/activityLogger');
 const { generatePDF, generateHTML } = require('./utils/exportUtils');
 const jwt = require('jsonwebtoken');
 
+// Helper function to get a human-readable event name
+const getEventName = (event) => {
+  switch (event.type) {
+    case 'stay':
+      return event.accommodationName || 'Stay';
+    case 'destination':
+      return event.placeName || 'Destination';
+    case 'arrival':
+      return `Arrival at ${event.airport || 'airport'}`;
+    case 'departure':
+      return `Departure from ${event.airport || 'airport'}`;
+    default:
+      return 'Event';
+  }
+};
+
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
 // Check S3 connectivity
@@ -1391,6 +1407,167 @@ app.post('/api/trips/:id/export/html', async (req, res) => {
   } catch (error) {
     console.error('Error exporting trip as HTML:', error);
     res.status(500).json({ message: 'Failed to export trip as HTML' });
+  }
+});
+
+// Vote on an event (like or dislike)
+app.post('/api/trips/:id/events/:eventId/vote', auth, async (req, res) => {
+  try {
+    const { id, eventId } = req.params;
+    const { voteType } = req.body;
+    
+    if (!['like', 'dislike'].includes(voteType)) {
+      return res.status(400).json({ message: 'Invalid vote type. Must be "like" or "dislike".' });
+    }
+    
+    const trip = await Trip.findById(id);
+    
+    if (!trip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+    
+    // Check if user has access to the trip
+    const userId = req.user.id;
+    const isOwner = trip.owner.toString() === userId;
+    const isCollaborator = trip.collaborators.some(collab => collab.user.toString() === userId);
+    
+    if (!isOwner && !isCollaborator) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    // Find the event in the trip
+    const eventIndex = trip.events.findIndex(e => e.id === eventId);
+    
+    if (eventIndex === -1) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    
+    const event = trip.events[eventIndex];
+    
+    // Only allow voting on exploring events
+    if (event.status !== 'exploring') {
+      return res.status(400).json({ message: 'Can only vote on exploring events' });
+    }
+    
+    // Initialize likes and dislikes arrays if they don't exist
+    if (!event.likes) event.likes = [];
+    if (!event.dislikes) event.dislikes = [];
+    
+    // Remove any existing votes by this user
+    event.likes = event.likes.filter(id => id !== userId);
+    event.dislikes = event.dislikes.filter(id => id !== userId);
+    
+    // Add the new vote
+    if (voteType === 'like') {
+      event.likes.push(userId);
+    } else {
+      event.dislikes.push(userId);
+    }
+    
+    // Update the event in the trip
+    trip.events[eventIndex] = event;
+    
+    // Mark the trip as modified
+    trip.markModified('events');
+    
+    // Save the trip
+    await trip.save();
+    
+    // Get event name
+    const eventName = getEventName(event);
+    
+    // Log the activity
+    await logActivity({
+      userId: req.user._id,
+      tripId: trip._id,
+      eventId: eventId,
+      actionType: voteType === 'like' ? 'event_like' : 'event_dislike',
+      description: `${voteType === 'like' ? 'Liked' : 'Disliked'} the event "${eventName}" in "${trip.name}"`,
+      details: { 
+        eventType: event.type,
+        eventName: eventName,
+        voteType
+      }
+    });
+    
+    return res.status(200).json(trip);
+  } catch (error) {
+    console.error('Error voting on event:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Remove a vote from an event
+app.delete('/api/trips/:id/events/:eventId/vote', auth, async (req, res) => {
+  try {
+    const { id, eventId } = req.params;
+    
+    const trip = await Trip.findById(id);
+    
+    if (!trip) {
+      return res.status(404).json({ message: 'Trip not found' });
+    }
+    
+    // Check if user has access to the trip
+    const userId = req.user.id;
+    const isOwner = trip.owner.toString() === userId;
+    const isCollaborator = trip.collaborators.some(collab => collab.user.toString() === userId);
+    
+    if (!isOwner && !isCollaborator) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    // Find the event in the trip
+    const eventIndex = trip.events.findIndex(e => e.id === eventId);
+    
+    if (eventIndex === -1) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    
+    const event = trip.events[eventIndex];
+    
+    // Only allow removing votes from exploring events
+    if (event.status !== 'exploring') {
+      return res.status(400).json({ message: 'Can only remove votes from exploring events' });
+    }
+    
+    // Initialize likes and dislikes arrays if they don't exist
+    if (!event.likes) event.likes = [];
+    if (!event.dislikes) event.dislikes = [];
+    
+    // Remove any existing votes by this user
+    event.likes = event.likes.filter(id => id !== userId);
+    event.dislikes = event.dislikes.filter(id => id !== userId);
+    
+    // Update the event in the trip
+    trip.events[eventIndex] = event;
+    
+    // Mark the trip as modified
+    trip.markModified('events');
+    
+    // Save the trip
+    await trip.save();
+    
+    // Get event name
+    const eventName = getEventName(event);
+    
+    // Log the activity
+    await logActivity({
+      userId: req.user._id,
+      tripId: trip._id,
+      eventId: eventId,
+      actionType: 'event_vote_remove',
+      description: `Removed vote from the event "${eventName}" in "${trip.name}"`,
+      details: { 
+        eventType: event.type,
+        eventName: eventName
+      }
+    });
+    
+    return res.status(200).json(trip);
+  } catch (error) {
+    console.error('Error removing vote from event:', error);
+    return res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

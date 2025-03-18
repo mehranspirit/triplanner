@@ -285,9 +285,27 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
             <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
           </svg>
         );
+      case 'event_like':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+          </svg>
+        );
+      case 'event_dislike':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667v-5.43a2 2 0 00-1.105-1.79l-.05-.025A4 4 0 0011.055 2H5.64a2 2 0 00-1.962 1.608l-1.2 6A2 2 0 004.44 12H8v4a2 2 0 002 2 1 1 0 001-1v-.667a4 4 0 01.8-2.4l1.4-1.866a4 4 0 00.8-2.4z" />
+          </svg>
+        );
+      case 'event_vote_remove':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+          </svg>
+        );
       case 'collaborator_add':
-      case 'collaborator_remove':
-      case 'collaborator_role_change':
+        case 'collaborator_remove':
+        case 'collaborator_role_change':
         return (
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
             <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
@@ -304,10 +322,35 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
 
   // Helper function to render event details
   const renderEventDetails = (activity: Activity) => {
-    if (!['event_create', 'event_update', 'event_delete'].includes(activity.actionType)) {
+    const voteActions = ['event_like', 'event_dislike', 'event_vote_remove'];
+    const eventActions = ['event_create', 'event_update', 'event_delete'];
+    
+    if (![...eventActions, ...voteActions].includes(activity.actionType)) {
       return null;
     }
 
+    // For vote actions, show event name and type
+    if (voteActions.includes(activity.actionType)) {
+      const eventName = activity.details?.eventName || activity.event?.title || 'Event';
+      const eventType = activity.details?.eventType || activity.event?.type || '';
+      
+      let actionText = '';
+      if (activity.actionType === 'event_like') {
+        actionText = 'Liked';
+      } else if (activity.actionType === 'event_dislike') {
+        actionText = 'Disliked';
+      } else if (activity.actionType === 'event_vote_remove') {
+        actionText = 'Removed vote for';
+      }
+      
+      return (
+        <span className="ml-1 text-gray-500">
+          <span className="text-gray-400">•</span> {actionText} <strong>{eventName}</strong> {eventType && `(${eventType})`}
+        </span>
+      );
+    }
+
+    // For regular event actions
     const eventType = activity.details?.eventType || activity.event?.type || 'Event';
     const eventTitle = getEventTitle(activity);
     
@@ -320,7 +363,7 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
         </span>
       ) : null;
     }
-    
+
     if (activity.actionType === 'event_update') {
       const changedFields = activity.details?.changedFields || [];
       
@@ -340,7 +383,7 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
             </span>
             {/* Show creator info if available and different from the activity user */}
             {activity.details?.event?.createdBy && 
-             activity.details.event.createdBy._id !== activity.user._id && (
+              activity.details.event.createdBy._id !== activity.user._id && (
               <span className="text-gray-400 ml-1">
                 • Created by {activity.details.event.createdBy.name}
               </span>
@@ -354,7 +397,7 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
             {activity.details?.date && ` (${formatDate(activity.details.date, true)})`}
             {/* Show creator info if available and different from the activity user */}
             {activity.details?.event?.createdBy && 
-             activity.details.event.createdBy._id !== activity.user._id && (
+              activity.details.event.createdBy._id !== activity.user._id && (
               <span className="text-gray-400 ml-1">
                 • Created by {activity.details.event.createdBy.name}
               </span>
@@ -363,8 +406,8 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
         );
       }
     }
-    
-    // For create and delete, just show the title and date
+
+    // For create and delete, show the title and date
     return (
       <span className="ml-1 text-gray-500">
         <span className="text-gray-400">•</span> {eventTitle}

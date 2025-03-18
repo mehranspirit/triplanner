@@ -38,6 +38,8 @@ export interface BaseEvent {
   notes?: string;
   status?: 'confirmed' | 'exploring';
   priority?: number;
+  likes?: string[];
+  dislikes?: string[];
   source?: string;
   createdBy?: {
     _id: string;

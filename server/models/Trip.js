@@ -22,6 +22,8 @@ const eventSchema = new mongoose.Schema({
     max: 5,
     default: 3
   },
+  likes: [String], // User IDs of users who liked this event
+  dislikes: [String], // User IDs of users who disliked this event
   source: String,
   // Arrival/Departure fields
   flightNumber: String,
