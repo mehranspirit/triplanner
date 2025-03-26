@@ -99,7 +99,7 @@ const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
               // Find the first event date and last event date
               const eventDates = trip.events.map(event => 
                 event.type === 'stay' 
-                  ? [new Date(event.checkIn), new Date(event.checkOut)]
+                  ? [new Date((event as any).checkIn), new Date((event as any).checkOut)]
                   : [new Date(event.date), new Date(event.date)]
               ).flat();
 
@@ -132,7 +132,7 @@ const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
               // Find the first event date and last event date
               const eventDates = trip.events.map(event => 
                 event.type === 'stay' 
-                  ? [new Date(event.checkIn), new Date(event.checkOut)]
+                  ? [new Date((event as any).checkIn), new Date((event as any).checkOut)]
                   : [new Date(event.date), new Date(event.date)]
               ).flat();
 

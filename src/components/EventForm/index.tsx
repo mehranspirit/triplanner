@@ -27,7 +27,7 @@ const EventForm: React.FC<EventFormProps> = ({
   showAirportSuggestions,
   airportInputRef
 }) => {
-  const handleChange = <T extends Event>(field: keyof T, value: string) => {
+  const handleChange = <T extends Event>(field: keyof T, value: any) => {
     onEventDataChange({ ...eventData, [field]: value } as Partial<Event>);
   };
 
@@ -92,8 +92,8 @@ const EventForm: React.FC<EventFormProps> = ({
         <label className="block text-gray-700 mb-2">Location (optional)</label>
         <input
           type="text"
-          value={eventData.location || ''}
-          onChange={(e) => handleChange('location', e.target.value)}
+          value={eventData.location?.address || ''}
+          onChange={(e) => handleChange('location', { ...eventData.location, address: e.target.value })}
           className="input"
           placeholder="Enter location"
         />

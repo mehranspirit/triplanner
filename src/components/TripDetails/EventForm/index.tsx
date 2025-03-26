@@ -25,7 +25,7 @@ const EventForm: React.FC<EventFormProps> = ({
   const [showAirportSuggestions, setShowAirportSuggestions] = useState(false);
   const airportInputRef = useRef<HTMLInputElement>(null) as React.RefObject<HTMLInputElement>;
 
-  const handleChange = <T extends Event>(field: keyof T, value: string) => {
+  const handleChange = <T extends Event>(field: keyof T, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -120,8 +120,8 @@ const EventForm: React.FC<EventFormProps> = ({
         <label className="block text-gray-700 mb-2">Location (optional)</label>
         <input
           type="text"
-          value={formData.location || ''}
-          onChange={(e) => handleChange<Event>('location', e.target.value)}
+          value={formData.location?.address || ''}
+          onChange={(e) => handleChange<Event>('location', { ...formData.location, address: e.target.value })}
           className="input"
           placeholder="Enter location"
         />

@@ -226,6 +226,11 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
             type: 'destination',
             date: new Date().toISOString(),
             placeName: trip.name,
+            status: 'exploring',
+            createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           } as Event
         };
       }
@@ -260,6 +265,11 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
             type: 'destination',
             date: new Date().toISOString(),
             placeName: trip.name,
+            status: 'exploring',
+            createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           } as Event
         };
       }
@@ -294,14 +304,14 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
           let searchQuery = '';
           
           if (event.location) {
-            searchQuery = event.location;
+            searchQuery = event.location.address || `${event.location.lat},${event.location.lng}`;
           } else {
             if (event.type === 'arrival' || event.type === 'departure') {
-              searchQuery = event.airport || '';
+              searchQuery = (event as any).airport || '';
             } else if (event.type === 'stay') {
-              searchQuery = `${event.accommodationName || ''} ${event.address || ''}`.trim();
+              searchQuery = `${(event as any).accommodationName || ''} ${(event as any).address || ''}`.trim();
             } else if (event.type === 'destination') {
-              searchQuery = `${event.placeName || ''} ${event.address || ''}`.trim();
+              searchQuery = `${(event as any).placeName || ''} ${(event as any).address || ''}`.trim();
             }
           }
 
@@ -313,7 +323,13 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
             console.log(`Using cached location data for: ${searchQuery}`);
             return {
               ...locationCache[cacheKey],
-              event: event as Event
+              event: {
+                ...event,
+                createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              } as Event
             };
           }
 
@@ -346,7 +362,13 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
               
               return {
                 ...locationData,
-                event: event as Event
+                event: {
+                  ...event,
+                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                } as Event
               };
             }
             return null;
@@ -419,20 +441,20 @@ const TripMap: React.FC<TripMapProps> = React.memo(({ trip }) => {
       case 'arrival':
       case 'departure':
         return {
-          title: `${event.type.charAt(0).toUpperCase() + event.type.slice(1)} - ${event.airport}`,
-          details: `${event.airline} ${event.flightNumber}`,
+          title: `${event.type.charAt(0).toUpperCase() + event.type.slice(1)} - ${(event as any).airport}`,
+          details: `${(event as any).airline} ${(event as any).flightNumber}`,
           date: formatDate(event.date)
         };
       case 'stay':
         return {
-          title: event.accommodationName,
-          details: event.address || '',
-          date: `${formatDate(event.checkIn)} - ${formatDate(event.checkOut)}`
+          title: (event as any).accommodationName,
+          details: (event as any).address || '',
+          date: `${formatDate((event as any).checkIn)} - ${formatDate((event as any).checkOut)}`
         };
       case 'destination':
         return {
-          title: event.placeName,
-          details: event.address || '',
+          title: (event as any).placeName,
+          details: (event as any).address || '',
           date: formatDate(event.date)
         };
     }

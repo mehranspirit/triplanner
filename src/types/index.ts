@@ -43,6 +43,7 @@ export interface StayEvent extends Event {
   type: 'stay';
   accommodationName: string;
   address?: string;
+  checkIn: string; // YYYY-MM-DD format
   checkOut: string; // YYYY-MM-DD format
   reservationNumber?: string;
   contactInfo?: string;
