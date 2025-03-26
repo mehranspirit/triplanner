@@ -1851,7 +1851,7 @@ const TripDetails: React.FC = () => {
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
               </svg>
               </button>
-
+            
             {/* Leave/Delete Trip button */}
             {isOwner ? (
               <button
@@ -1873,8 +1873,8 @@ const TripDetails: React.FC = () => {
                   <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                 </svg>
               </button>
-            )}
-          </div>
+          )}
+        </div>
           
           {/* Trip Title - Responsive positioning */}
           <div className="absolute top-[calc(4rem+8px)] sm:top-4 left-4 sm:left-6 z-20 max-w-[calc(100%-32px)] sm:max-w-[calc(100%-120px)]">

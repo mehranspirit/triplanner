@@ -61,6 +61,8 @@ export interface Trip {
   name: string;
   description?: string;
   thumbnailUrl?: string;
+  startDate?: string;
+  endDate?: string;
   owner: User;
   collaborators: Array<{
     user: User;

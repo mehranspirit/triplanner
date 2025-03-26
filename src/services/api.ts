@@ -586,7 +586,7 @@ export const api: API = {
         console.error('Error opening window:', windowError);
         // Create a temporary element to display the HTML
         const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
+        const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `trip_${tripId}_itinerary.html`;
