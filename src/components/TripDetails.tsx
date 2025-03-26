@@ -3,13 +3,23 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent } from '../types';
+import { 
+  Trip, 
+  Event, 
+  EventType, 
+  ArrivalDepartureEvent, 
+  StayEvent, 
+  DestinationEvent, 
+  EventFormData,
+  User 
+} from '../types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
 import TripMap from './TripMap';
 import Avatar from './Avatar';
+import EventForm from './EventForm';
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
@@ -173,33 +183,29 @@ const TripDetails: React.FC = () => {
   const [eventStatusFilter, setEventStatusFilter] = useState<'confirmed' | 'exploring'>('confirmed');
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
-  const [eventData, setEventData] = useState({
-    thumbnailUrl: '',
+  const [eventData, setEventData] = useState<EventFormData>({
+    type: 'arrival',
     date: '',
-    location: '',
-    notes: '',
-    status: 'confirmed' as 'confirmed' | 'exploring',
-    priority: 3,
-    source: '',
-    // Arrival/Departure fields
-    flightNumber: '',
-    airline: '',
     time: '',
     airport: '',
+    flightNumber: '',
+    airline: '',
     terminal: '',
     gate: '',
     bookingReference: '',
-    // Stays fields
     accommodationName: '',
     address: '',
-    checkIn: '',
     checkOut: '',
     reservationNumber: '',
     contactInfo: '',
-    // Destinations fields
     placeName: '',
     description: '',
     openingHours: '',
+    notes: '',
+    status: 'confirmed',
+    thumbnailUrl: '',
+    source: 'manual',
+    location: undefined
   });
   const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -284,31 +290,28 @@ const TripDetails: React.FC = () => {
         
         // Debug log for event creators
         if (fetchedTrip.events && fetchedTrip.events.length > 0) {
-          console.log('EVENT CREATOR CHECK - All events:', fetchedTrip.events.map(event => ({
+          console.log('EVENT CREATOR CHECK - Raw events from server:', fetchedTrip.events.map(event => ({
             eventId: event.id,
             eventType: event.type,
             createdBy: event.createdBy,
-            hasCreator: !!event.createdBy,
-            creatorHasPhotoUrl: event.createdBy ? !!event.createdBy.photoUrl : false
+            createdByType: typeof event.createdBy,
+            createdById: typeof event.createdBy === 'object' ? event.createdBy._id : event.createdBy,
+            creatorPhotoUrl: typeof event.createdBy === 'object' ? event.createdBy.photoUrl : null,
+            creatorName: typeof event.createdBy === 'object' ? event.createdBy.name : null
           })));
           
-          // Count events with creators
-          const eventsWithCreators = fetchedTrip.events.filter(event => !!event.createdBy);
-          console.log(`EVENT CREATOR CHECK - ${eventsWithCreators.length} out of ${fetchedTrip.events.length} events have creator information`);
-          
-          if (eventsWithCreators.length > 0) {
-            // Log details of the first event with a creator
-            const sampleEvent = eventsWithCreators[0];
-            console.log('EVENT CREATOR CHECK - Sample event with creator:', {
-              eventId: sampleEvent.id,
-              eventType: sampleEvent.type,
-              creatorId: sampleEvent.createdBy?._id,
-              creatorName: sampleEvent.createdBy?.name,
-              creatorEmail: sampleEvent.createdBy?.email,
-              creatorPhotoUrl: sampleEvent.createdBy?.photoUrl,
-              fullCreatorObject: sampleEvent.createdBy
-            });
-          }
+          // Log the first event's creator details in depth
+          const firstEvent = fetchedTrip.events[0];
+          console.log('EVENT CREATOR CHECK - First event creator details:', {
+            eventId: firstEvent.id,
+            eventType: firstEvent.type,
+            createdBy: firstEvent.createdBy,
+            createdByType: typeof firstEvent.createdBy,
+            createdById: typeof firstEvent.createdBy === 'object' ? firstEvent.createdBy._id : firstEvent.createdBy,
+            creatorPhotoUrl: typeof firstEvent.createdBy === 'object' ? firstEvent.createdBy.photoUrl : null,
+            creatorName: typeof firstEvent.createdBy === 'object' ? firstEvent.createdBy.name : null,
+            fullCreatorObject: firstEvent.createdBy
+          });
         }
         
         // Update only the local state
@@ -401,7 +404,7 @@ const TripDetails: React.FC = () => {
       });
     } else {
       // Create a deep copy of the updated trip to avoid reference issues
-      const tripCopy = JSON.parse(JSON.stringify(updatedTrip));
+      const tripCopy = JSON.parse(JSON.stringify(updatedTrip)) as Trip;
       // Update the local state with the full new trip
       setTrip(tripCopy);
     }
@@ -415,7 +418,7 @@ const TripDetails: React.FC = () => {
       // If context update fails, fetch the latest trip data from the server
       try {
         const latestTrip = await api.getTrip(updatedTrip._id || id || '');
-        setTrip(latestTrip);
+        setTrip(latestTrip as Trip);
       } catch (fetchErr) {
         console.error('Failed to fetch latest trip data after error:', fetchErr);
       }
@@ -447,13 +450,102 @@ const TripDetails: React.FC = () => {
   const mapTripData = useMemo(() => {
     if (!trip) return null;
     
-    return {
+    const mappedTrip: Trip = {
       _id: trip._id,
       name: trip.name,
-      events: trip.events,
-      // Include required Trip properties but with minimal data
-      owner: trip.owner,
-      collaborators: [], // Empty array since collaborators aren't needed for the map
+      events: trip.events.map(event => {
+        // Helper function to get user info from ID
+        const getUserFromId = (userId: string): User | undefined => {
+          // Check if it's the current user
+          if (user && user._id === userId) {
+            return {
+              _id: user._id,
+              name: user.name,
+              email: user.email,
+              photoUrl: user.photoUrl
+            };
+          }
+          
+          // Check if it's the trip owner
+          if (trip.owner._id === userId) {
+            return {
+              _id: trip.owner._id,
+              name: trip.owner.name,
+              email: trip.owner.email,
+              photoUrl: trip.owner.photoUrl
+            };
+          }
+          
+          // Check collaborators
+          const collaborator = trip.collaborators.find(c => {
+            if (typeof c === 'string') {
+              return c === userId;
+            }
+            return c.user._id === userId;
+          });
+          
+          if (collaborator && typeof collaborator !== 'string') {
+            return {
+              _id: collaborator.user._id,
+              name: collaborator.user.name,
+              email: collaborator.user.email,
+              photoUrl: collaborator.user.photoUrl
+            };
+          }
+          
+          return undefined;
+        };
+
+        const mappedEvent: Event = {
+          ...event,
+          createdBy: typeof event.createdBy === 'object' && event.createdBy !== null
+            ? {
+                _id: event.createdBy._id,
+                name: event.createdBy.name,
+                email: event.createdBy.email,
+                photoUrl: event.createdBy.photoUrl
+              }
+            : getUserFromId(event.createdBy as string) || {
+                _id: event.createdBy as string,
+                name: 'Unknown',
+                email: '',
+                photoUrl: null
+              },
+          updatedBy: typeof event.updatedBy === 'object' && event.updatedBy !== null
+            ? {
+                _id: event.updatedBy._id,
+                name: event.updatedBy.name,
+                email: event.updatedBy.email,
+                photoUrl: event.updatedBy.photoUrl
+              }
+            : getUserFromId(event.updatedBy as string) || {
+                _id: event.updatedBy as string,
+                name: 'Unknown',
+                email: '',
+                photoUrl: null
+              }
+        };
+        return mappedEvent;
+      }),
+      owner: {
+        ...trip.owner,
+        photoUrl: trip.owner.photoUrl
+      },
+      collaborators: trip.collaborators.map(collaborator => {
+        if (typeof collaborator === 'string') {
+          return {
+            user: { _id: collaborator, name: '', email: '', photoUrl: null },
+            role: 'viewer' as const
+          };
+        }
+        return {
+          ...collaborator,
+          user: {
+            ...collaborator.user,
+            photoUrl: collaborator.user.photoUrl
+          }
+        };
+      }),
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt,
       isPublic: trip.isPublic,
@@ -461,7 +553,9 @@ const TripDetails: React.FC = () => {
       thumbnailUrl: trip.thumbnailUrl,
       shareableLink: trip.shareableLink
     };
-  }, [trip?._id, trip?.name, trip?.events, trip?.owner]);
+    
+    return mappedTrip;
+  }, [trip?._id, trip?.name, trip?.events, trip?.owner, trip?.collaborators, user]);
 
   // Export functions
   const handleExportPDF = async () => {
@@ -485,134 +579,143 @@ const TripDetails: React.FC = () => {
   };
 
   const handleStatusChange = async (eventId: string, newStatus: 'confirmed' | 'exploring') => {
-    if (!trip || !trip._id) return;
+    if (!trip || !user) return;
     
     try {
       const eventToUpdate = trip.events.find(e => e.id === eventId);
       if (!eventToUpdate) return;
       
-      // Create a complete updated event object with the new status
-      const updatedEvent = { 
+      const updatedEvent: Event = {
         ...eventToUpdate, 
-        status: newStatus 
+        status: newStatus,
+        updatedBy: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          photoUrl: user.photoUrl
+        },
+        updatedAt: new Date().toISOString()
       };
-      
-      console.log('Updating event status:', { 
-        eventId, 
-        oldStatus: eventToUpdate.status, 
-        newStatus,
-        updatedEvent
-      });
-      
-      // Update the event in the backend
-      await updateEvent(trip._id, updatedEvent);
-      
-      // Update the local state
+
       const updatedTrip = { 
         ...trip, 
         events: trip.events.map(e => e.id === eventId ? updatedEvent : e) 
       };
-    setTrip(updatedTrip);
-      
-      // Also update the edited trip state to ensure consistency
-      setEditedTrip(updatedTrip);
-      
-      // Verify the update was successful by refetching the trip
-      const refreshedTrip = await api.getTrip(trip._id);
-      if (refreshedTrip) {
-        console.log('Refreshed trip after status update:', refreshedTrip);
-        // Check if the status was properly updated
-        const updatedEventInRefresh = refreshedTrip.events.find(e => e.id === eventId);
-        if (updatedEventInRefresh && updatedEventInRefresh.status !== newStatus) {
-          console.warn('Status not updated correctly in backend:', {
-            expected: newStatus,
-            actual: updatedEventInRefresh.status
-          });
-        }
-      }
-      
-      setStatusMenuOpen(null);
-    } catch (err) {
-      console.error('Error updating event status:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update event status');
+
+      await updateTrip(updatedTrip);
+      setTrip(updatedTrip);
+    } catch (error) {
+      console.error('Error updating event status:', error);
+      setError('Failed to update event status');
     }
   };
 
-  const handleEventVote = async (eventId: string, voteType: 'like' | 'dislike' | 'remove') => {
-    if (!trip) return;
+  const handleVote = async (eventId: string, voteType: 'like' | 'dislike' | 'remove') => {
+    if (!trip?._id) return;
     
     try {
-      setIsSaving(true);
+      const event = trip.events.find(e => e.id === eventId);
+      if (!event || !user?._id) return;
+
+      const updatedEvent = { ...event };
       
-      let updatedTrip;
+      // Initialize arrays if they don't exist
+      updatedEvent.likes = updatedEvent.likes || [];
+      updatedEvent.dislikes = updatedEvent.dislikes || [];
       
       if (voteType === 'remove') {
-        updatedTrip = await api.removeVote(trip._id, eventId);
+        updatedEvent.likes = updatedEvent.likes.filter(id => id !== user._id);
+        updatedEvent.dislikes = updatedEvent.dislikes.filter(id => id !== user._id);
+      } else if (voteType === 'like') {
+        updatedEvent.likes = [...new Set([...updatedEvent.likes, user._id])];
+        updatedEvent.dislikes = updatedEvent.dislikes.filter(id => id !== user._id);
       } else {
-        updatedTrip = await api.voteEvent(trip._id, eventId, voteType);
+        updatedEvent.dislikes = [...new Set([...updatedEvent.dislikes, user._id])];
+        updatedEvent.likes = updatedEvent.likes.filter(id => id !== user._id);
       }
-      
-      // Update the trip in the context
-      if (updatedTrip) {
-        setTrip(updatedTrip);
-      }
-      
-      // Show success message
-      setFormFeedback({
-        type: 'success',
-        message: `Vote ${voteType === 'remove' ? 'removed' : 'submitted'} successfully!`
-      });
-      
+
+      await updateEvent(trip._id, updatedEvent);
     } catch (error) {
-      console.error('Error voting on event:', error);
-      setFormFeedback({
-        type: 'error',
-        message: 'Failed to submit vote. Please try again.'
-      });
-    } finally {
-      setIsSaving(false);
+      console.error('Error updating vote:', error);
+      setError('Failed to update vote');
     }
   };
 
   // Get user vote status
-  const getUserVoteStatus = (event: Event): 'liked' | 'disliked' | null => {
-    if (!user || !event.likes || !event.dislikes) return null;
-    
-    if (event.likes.includes(user._id)) {
-      return 'liked';
-    } else if (event.dislikes.includes(user._id)) {
-      return 'disliked';
-    }
-    
+  const getUserVoteStatus = (event: Event) => {
+    if (!user?._id) return null;
+    if (event.likes?.includes(user._id)) return 'liked';
+    if (event.dislikes?.includes(user._id)) return 'disliked';
     return null;
   };
 
   // Helper function to get names of users who liked/disliked an event
-  const getVoterNames = (event: Event, voteType: 'like' | 'dislike'): string => {
-    if (!event || !trip) return '';
-    
-    const voterIds = voteType === 'like' ? (event.likes || []) : (event.dislikes || []);
-    
-    if (voterIds.length === 0) return 'No votes yet';
-    
-    // Map voter IDs to user names
-    const voterNames = voterIds.map(voterId => {
-      // Check if it's the owner
-      if (voterId === trip.owner._id) {
-        return trip.owner.name;
-      }
-      
-      // Check if it's a collaborator
-      const collaborator = trip.collaborators.find(c => c.user._id === voterId);
-      if (collaborator) {
-        return collaborator.user.name;
-      }
-      
-      return 'Unknown User';
-    });
-    
-    return voterNames.join(', ');
+  const getVoterNames = (event: Event) => {
+    const voterIds = [...(event.likes || []), ...(event.dislikes || [])];
+    return voterIds.map(id => {
+      if (id === user?._id) return 'You';
+      if (id === trip?.owner._id) return 'Trip Owner';
+      const collaborator = trip?.collaborators.find(c => 
+        (typeof c === 'string' ? c : c.user._id) === id
+      );
+      return typeof collaborator === 'string' ? 'Unknown User' : collaborator?.user.name || 'Unknown User';
+    }).filter(Boolean);
   };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!trip?._id) return;
+    
+    try {
+      await deleteEvent(trip._id, eventId);
+      setTrip(prev => prev ? {
+        ...prev,
+        events: prev.events.filter(e => e.id !== eventId)
+      } : null);
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      setError('Failed to delete event');
+    }
+  };
+
+  const handleEventTypeChange = (newType: EventType) => {
+    setEventType(newType);
+    setEventData(prev => ({ ...prev, type: newType }));
+  };
+
+  const resetEventForm = () => {
+    const defaultType = 'arrival';
+    setEventType(defaultType);
+    setEventData({
+      type: defaultType,
+      date: '',
+      time: '',
+      airport: '',
+      flightNumber: '',
+      airline: '',
+      terminal: '',
+      gate: '',
+      bookingReference: '',
+      accommodationName: '',
+      address: '',
+      checkOut: '',
+      reservationNumber: '',
+      contactInfo: '',
+      placeName: '',
+      description: '',
+      openingHours: '',
+      notes: '',
+      status: 'confirmed',
+      thumbnailUrl: '',
+      source: 'manual',
+      location: undefined
+    });
+  };
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      resetEventForm();
+    }
+  }, [isModalOpen]);
 
   if (loading) {
     return (
@@ -650,7 +753,38 @@ const TripDetails: React.FC = () => {
 
   const handleTripEdit = () => {
     if (!trip) return;
-    setEditedTrip(trip);
+    setEditedTrip({
+      ...trip,
+      owner: trip.owner,
+      collaborators: trip.collaborators.map(collaborator => {
+        if (typeof collaborator === 'string') {
+          return {
+            user: { _id: collaborator, name: '', email: '' },
+            role: 'viewer' as const
+          };
+        }
+        return collaborator;
+      }),
+      events: trip.events.map(event => ({
+        ...event,
+        createdBy: typeof event.createdBy === 'object'
+          ? event.createdBy as User
+          : {
+              _id: event.createdBy,
+              name: '',
+              email: '',
+              photoUrl: null
+            },
+        updatedBy: typeof event.updatedBy === 'object'
+          ? event.updatedBy as User
+          : {
+              _id: event.updatedBy,
+              name: '',
+              email: '',
+              photoUrl: null
+            }
+      }))
+    } as Trip);
     setIsEditingTrip(true);
   };
 
@@ -662,251 +796,166 @@ const TripDetails: React.FC = () => {
 
     try {
       const updatedTrip = await api.updateTrip(editedTrip);
-      setTrip(updatedTrip);
+      setTrip(updatedTrip as Trip);
       setIsEditingTrip(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update trip');
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEditEvent = (event: Event) => {
+    setIsEditingEvent(event.id);
+    setEventType(event.type);
+    setEventData({
+      type: event.type,
+      date: event.date,
+      time: (event as ArrivalDepartureEvent).time || '',
+      airport: (event as ArrivalDepartureEvent).airport || '',
+      flightNumber: (event as ArrivalDepartureEvent).flightNumber || '',
+      airline: (event as ArrivalDepartureEvent).airline || '',
+      terminal: (event as ArrivalDepartureEvent).terminal || '',
+      gate: (event as ArrivalDepartureEvent).gate || '',
+      bookingReference: (event as ArrivalDepartureEvent).bookingReference || '',
+      accommodationName: (event as StayEvent).accommodationName || '',
+      address: (event as StayEvent).address || '',
+      checkOut: (event as StayEvent).checkOut || '',
+      reservationNumber: (event as StayEvent).reservationNumber || '',
+      contactInfo: (event as StayEvent).contactInfo || '',
+      placeName: (event as DestinationEvent).placeName || '',
+      description: (event as DestinationEvent).description || '',
+      openingHours: (event as DestinationEvent).openingHours || '',
+      notes: event.notes || '',
+      status: event.status || 'confirmed',
+      thumbnailUrl: event.thumbnailUrl || '',
+      source: event.source || 'manual',
+      location: event.location
+    });
+    setIsModalOpen(true);  // Add this line to open the modal
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    let newEvent: Event;
+    if (!trip || !user?._id) return;
 
-    // Ensure status has a default value if not provided
-    const status = eventData.status || 'confirmed';
-
-    // Add creator information
-    const creatorInfo = user ? {
+    try {
+      const now = new Date().toISOString();
+      const baseEvent = {
+        id: isEditingEvent || uuidv4(),
+        type: eventData.type as EventType,
+        date: eventData.date,
+        notes: eventData.notes,
+        thumbnailUrl: eventData.thumbnailUrl,
+        status: eventData.status || 'confirmed',
+        source: eventData.source || 'manual',
+        createdBy: isEditingEvent ? (
+          trip.events.find(e => e.id === isEditingEvent)?.createdBy || {
       _id: user._id,
       name: user.name,
       email: user.email,
-      photoUrl: user.photoUrl || null
-    } : undefined;
+            photoUrl: user.photoUrl
+          }
+        ) : {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          photoUrl: user.photoUrl
+        },
+        updatedBy: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          photoUrl: user.photoUrl
+        },
+        createdAt: isEditingEvent ? (
+          trip.events.find(e => e.id === isEditingEvent)?.createdAt || now
+        ) : now,
+        updatedAt: now,
+        likes: isEditingEvent ? (
+          trip.events.find(e => e.id === isEditingEvent)?.likes || []
+        ) : [],
+        dislikes: isEditingEvent ? (
+          trip.events.find(e => e.id === isEditingEvent)?.dislikes || []
+        ) : [],
+        location: eventData.location
+      };
 
-    const baseEventData = {
-      id: isEditingEvent || uuidv4(),
-      type: eventType,
-      thumbnailUrl: ['stay', 'destination'].includes(eventType) ? eventData.thumbnailUrl : '',
-      date: eventData.date,
-      location: eventData.location || undefined,
-      notes: eventData.notes || undefined,
-      status: status as 'confirmed' | 'exploring',
-      priority: eventData.priority,
-      source: eventData.source || undefined,
-      createdBy: creatorInfo,
-      updatedBy: creatorInfo,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      let newEvent: Event;
+      console.log('Creating event with data:', eventData);
 
-    console.log('Creating/updating event with data:', {
-      isEditingEvent,
-      eventType,
-      status,
-      baseEventData
-    });
-
-    switch (eventType) {
-      case 'arrival':
-      case 'departure':
+      if (eventData.type === 'arrival' || eventData.type === 'departure') {
         newEvent = {
-          ...baseEventData,
-          type: eventType,
-          flightNumber: eventData.flightNumber,
+          ...baseEvent,
+          airport: eventData.airport || '',
           airline: eventData.airline,
-          time: eventData.time,
-          airport: eventData.airport,
-          terminal: eventData.terminal || undefined,
-          gate: eventData.gate || undefined,
-          bookingReference: eventData.bookingReference || undefined
-        };
-        break;
-      case 'stay':
+          flightNumber: eventData.flightNumber,
+          terminal: eventData.terminal,
+          gate: eventData.gate,
+          time: eventData.time || '12:00',
+          bookingReference: eventData.bookingReference
+        } as ArrivalDepartureEvent;
+      } else if (eventData.type === 'stay') {
         newEvent = {
-          ...baseEventData,
-          type: 'stay',
-          accommodationName: eventData.accommodationName,
+          ...baseEvent,
+          accommodationName: eventData.accommodationName || '',
           address: eventData.address,
-          checkIn: eventData.checkIn,
-          checkOut: eventData.checkOut,
-          reservationNumber: eventData.reservationNumber || undefined,
-          contactInfo: eventData.contactInfo || undefined
-        };
-        break;
-      case 'destination':
+          checkIn: eventData.date,
+          checkOut: eventData.checkOut || eventData.date,
+          reservationNumber: eventData.reservationNumber,
+          contactInfo: eventData.contactInfo
+        } as StayEvent;
+      } else {
         newEvent = {
-          ...baseEventData,
-          type: 'destination',
-          placeName: eventData.placeName,
+          ...baseEvent,
+          placeName: eventData.placeName || '',
           address: eventData.address,
           description: eventData.description,
-          openingHours: eventData.openingHours || undefined
-        };
-        break;
-      default:
-        return;
-    }
+          openingHours: eventData.openingHours
+        } as DestinationEvent;
+      }
 
-    try {
+      console.log('Final event data:', newEvent);
+
     if (isEditingEvent) {
-        if (!trip._id) {
-        setError('Trip ID is missing');
-        return;
-      }
-        console.log('Updating event with ID:', newEvent.id, 'Status:', newEvent.status);
-        await updateEvent(trip._id, newEvent);
+        // Update existing event
+        const updatedEvents = trip.events.map(e => 
+          e.id === isEditingEvent ? newEvent : e
+        );
+        console.log('Updating trip with events:', updatedEvents);
         
-        // Update local state
-        const updatedTrip = { ...trip, events: trip.events.map(e => e.id === newEvent.id ? newEvent : e) };
+        const updatedTrip = {
+          ...trip,
+          events: updatedEvents
+        };
+        
+        await updateTrip(updatedTrip);
         setTrip(updatedTrip);
-        
-        // Also update editedTrip to ensure consistency
-        setEditedTrip(updatedTrip);
-        
-        // Verify the update was successful
-        const refreshedTrip = await api.getTrip(trip._id);
-        if (refreshedTrip) {
-          console.log('Refreshed trip after event update:', refreshedTrip);
-          // Check if the event was properly updated
-          const updatedEventInRefresh = refreshedTrip.events.find(e => e.id === newEvent.id);
-          if (updatedEventInRefresh) {
-            console.log('Updated event in refreshed trip:', updatedEventInRefresh);
-            if (updatedEventInRefresh.status !== newEvent.status) {
-              console.warn('Status not updated correctly in backend:', {
-                expected: newEvent.status,
-                actual: updatedEventInRefresh.status
-              });
-            }
-          }
-        }
+        setFormFeedback({ type: 'success', message: 'Event updated successfully!' });
     } else {
-        if (!trip._id) {
-        setError('Trip ID is missing');
-        return;
-      }
-        console.log('Adding new event with status:', newEvent.status);
-        await addEvent(trip._id, newEvent);
+        // Add new event
+        const updatedTrip = {
+          ...trip,
+          events: [...trip.events, newEvent]
+        };
         
-        // Update local state
-        const updatedTrip = { ...trip, events: [...trip.events, newEvent] };
+        console.log('Adding new event to trip:', updatedTrip);
+        await updateTrip(updatedTrip);
         setTrip(updatedTrip);
-        
-        // Also update editedTrip to ensure consistency
-        setEditedTrip(updatedTrip);
+        setFormFeedback({ type: 'success', message: 'Event added successfully!' });
       }
       
+      // Reset form and close modal
+      resetEventForm();
     setIsModalOpen(false);
     setIsEditingEvent(null);
-    setEventData({
-      thumbnailUrl: '',
-      date: '',
-      location: '',
-        notes: '',
-        status: 'confirmed',
-        priority: 3,
-        source: '',
-      flightNumber: '',
-      airline: '',
-      time: '',
-      airport: '',
-      terminal: '',
-      gate: '',
-      bookingReference: '',
-      accommodationName: '',
-      address: '',
-      checkIn: '',
-      checkOut: '',
-      reservationNumber: '',
-      contactInfo: '',
-      placeName: '',
-      description: '',
-      openingHours: '',
+    } catch (error) {
+      console.error('Error saving event:', error);
+      setFormFeedback({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to save event' 
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update event');
+    } finally {
+      setIsSaving(false);
     }
-  };
-
-  const handleEditEvent = (eventId: string) => {
-    console.log('Edit event clicked:', eventId);
-    if (!trip) return;
-    
-    const eventToEdit = trip.events.find(e => e.id === eventId);
-    if (!eventToEdit) {
-      console.error(`Event with id ${eventId} not found`);
-      return;
-    }
-    
-    // Set the event type based on the event being edited
-    setEventType(eventToEdit.type);
-    
-    // Set isEditingEvent to the event ID to indicate we're in edit mode
-    setIsEditingEvent(eventId);
-    
-    // Initialize with default empty values
-    const baseEventData = {
-      thumbnailUrl: eventToEdit.thumbnailUrl || '',
-      date: eventToEdit.date || '',
-      location: eventToEdit.location || '',
-      notes: eventToEdit.notes || '',
-      status: eventToEdit.status || 'confirmed',
-      priority: eventToEdit.priority || 3,
-      source: eventToEdit.source || '',
-      
-      // Initialize all fields with empty values first
-      flightNumber: '',
-      airline: '',
-      time: '',
-      airport: '',
-      terminal: '',
-      gate: '',
-      bookingReference: '',
-      accommodationName: '',
-      address: '',
-      checkIn: '',
-      checkOut: '',
-      reservationNumber: '',
-      contactInfo: '',
-      placeName: '',
-      description: '',
-      openingHours: '',
-    };
-    
-    // Add type-specific fields based on event type
-    if (eventToEdit.type === 'arrival' || eventToEdit.type === 'departure') {
-      const event = eventToEdit as ArrivalDepartureEvent;
-      baseEventData.flightNumber = event.flightNumber || '';
-      baseEventData.airline = event.airline || '';
-      baseEventData.time = event.time || '';
-      baseEventData.airport = event.airport || '';
-      baseEventData.terminal = event.terminal || '';
-      baseEventData.gate = event.gate || '';
-      baseEventData.bookingReference = event.bookingReference || '';
-    } else if (eventToEdit.type === 'stay') {
-      const event = eventToEdit as StayEvent;
-      baseEventData.accommodationName = event.accommodationName || '';
-      baseEventData.address = event.address || '';
-      baseEventData.checkIn = event.checkIn || '';
-      baseEventData.checkOut = event.checkOut || '';
-      baseEventData.reservationNumber = event.reservationNumber || '';
-      baseEventData.contactInfo = event.contactInfo || '';
-    } else if (eventToEdit.type === 'destination') {
-      const event = eventToEdit as DestinationEvent;
-      baseEventData.placeName = event.placeName || '';
-      baseEventData.description = event.description || '';
-      baseEventData.openingHours = event.openingHours || '';
-      // Ensure address is also populated for destination events
-      baseEventData.address = event.address || '';
-    }
-    
-    console.log('Setting event data for editing:', baseEventData);
-    
-    // Set the event data
-    setEventData(baseEventData);
-    
-    // Open the modal
-    setIsModalOpen(true);
   };
 
   const handleAddEvent = async () => {
@@ -919,7 +968,6 @@ const TripDetails: React.FC = () => {
       notes: eventData.notes,
       thumbnailUrl: eventData.thumbnailUrl,
       status: eventData.status,
-      priority: eventData.priority,
       source: eventData.source,
       // ... existing event properties ...
     };
@@ -952,8 +1000,8 @@ const TripDetails: React.FC = () => {
         <div className="mb-4">
           <label className="block text-gray-700 mb-2">Date</label>
           <input
-            type="datetime-local"
-            value={eventData.date}
+            type="date"
+            value={eventData.date?.split('T')[0] || ''}
             onChange={(e) =>
               setEventData({ ...eventData, date: e.target.value })
             }
@@ -961,6 +1009,21 @@ const TripDetails: React.FC = () => {
             required
           />
         </div>
+        {(eventType === 'arrival' || eventType === 'departure') && (
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-2">Time</label>
+            <input
+              type="time"
+              value={eventData.time || ''}
+              onChange={(e) =>
+                setEventData({ ...eventData, time: e.target.value })
+              }
+              className="input"
+              required
+              placeholder="Enter time (HH:mm)"
+            />
+          </div>
+        )}
         <div className="mb-4">
           <label className="block text-gray-700 mb-2">Status</label>
           <select
@@ -983,48 +1046,15 @@ const TripDetails: React.FC = () => {
                 after it's added to help decide which options to confirm.
               </p>
             </div>
-            
-            {/* Remove priority stars for exploring events
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Priority (1-5)</label>
-              <div className="flex items-center">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setEventData({ ...eventData, priority: star })}
-                    className={`text-2xl ${
-                      star <= eventData.priority ? 'text-yellow-500' : 'text-gray-300'
-                    } focus:outline-none`}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
-            </div>
-            */}
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Source (optional)</label>
-              <input
-                type="text"
-                value={eventData.source}
-                onChange={(e) =>
-                  setEventData({ ...eventData, source: e.target.value })
-                }
-                className="input"
-                placeholder="Where did you find this idea?"
-              />
-            </div>
           </>
         )}
-        <div className="mb-4">
+        {/* Location field hidden but kept in code */}
+        <div className="mb-4 hidden">
           <label className="block text-gray-700 mb-2">Location (optional)</label>
           <input
             type="text"
-            value={eventData.location}
-            onChange={(e) =>
-              setEventData({ ...eventData, location: e.target.value })
-            }
+            value={eventData.location?.address || ''}
+            onChange={(e) => handleLocationChange(e.target.value)}
             className="input"
             placeholder="Enter location"
           />
@@ -1171,22 +1201,27 @@ const TripDetails: React.FC = () => {
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Check-in</label>
+              <label className="block text-gray-700 mb-2">Check-in Date</label>
               <input
-                type="datetime-local"
-                value={eventData.checkIn}
-                onChange={(e) =>
-                  setEventData({ ...eventData, checkIn: e.target.value })
-                }
+                type="date"
+                value={eventData.date?.split('T')[0] || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setEventData({ 
+                    ...eventData, 
+                    date: value,
+                    checkIn: value 
+                  });
+                }}
                 className="input"
                 required
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Check-out</label>
+              <label className="block text-gray-700 mb-2">Check-out Date</label>
               <input
-                type="datetime-local"
-                value={eventData.checkOut}
+                type="date"
+                value={eventData.checkOut?.split('T')[0] || ''}
                 onChange={(e) =>
                   setEventData({ ...eventData, checkOut: e.target.value })
                 }
@@ -1210,10 +1245,8 @@ const TripDetails: React.FC = () => {
               <label className="block text-gray-700 mb-2">Location (optional)</label>
               <input
                 type="text"
-                value={eventData.location}
-                onChange={(e) =>
-                  setEventData({ ...eventData, location: e.target.value })
-                }
+                value={eventData.location?.address || ''}
+                onChange={(e) => handleLocationChange(e.target.value)}
                 className="input"
                 placeholder="Enter location"
               />
@@ -1331,6 +1364,428 @@ const TripDetails: React.FC = () => {
 
   console.log('Rendering collaborators:', trip.collaborators);
 
+  const getCreatorInfo = (creatorId: string | User | undefined): User | undefined => {
+    if (!trip || !creatorId) return undefined;
+    
+    // Helper function to get user info with photo URL
+    const getUserWithPhoto = (userObj: User): User => {
+      // If the user object already has a photo URL, use it
+      if (userObj.photoUrl) {
+        return userObj;
+      }
+      
+      // Otherwise, look up the photo URL from our known users
+      if (user && user._id === userObj._id) {
+        return {
+          ...userObj,
+          photoUrl: user.photoUrl
+        };
+      }
+      
+      if (trip.owner._id === userObj._id) {
+        return {
+          ...userObj,
+          photoUrl: trip.owner.photoUrl
+        };
+      }
+      
+      const collaborator = trip.collaborators.find(c => {
+        if (typeof c === 'string') {
+          return c === userObj._id;
+        }
+        return c.user._id === userObj._id;
+      });
+      
+      if (collaborator && typeof collaborator !== 'string') {
+        return {
+          ...userObj,
+          photoUrl: collaborator.user.photoUrl
+        };
+      }
+      
+      return userObj;
+    };
+    
+    // If creatorId is already a User object with all required fields, return it with photo URL
+    if (typeof creatorId === 'object' && creatorId._id && creatorId.name) {
+      return getUserWithPhoto(creatorId);
+    }
+    
+    // If creatorId is a string or a partial User object, look up the user
+    const creatorIdString = typeof creatorId === 'string' ? creatorId : creatorId._id;
+    
+    // First check if it's the current user
+    if (user && user._id === creatorIdString) {
+      return {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        photoUrl: user.photoUrl
+      };
+    }
+    
+    // Then check if it's the trip owner
+    if (trip.owner._id === creatorIdString) {
+      return {
+        _id: trip.owner._id,
+        name: trip.owner.name,
+        email: trip.owner.email,
+        photoUrl: trip.owner.photoUrl
+      };
+    }
+    
+    // Finally check collaborators
+    const collaborator = trip.collaborators.find(c => {
+      if (typeof c === 'string') {
+        return c === creatorIdString;
+      }
+      return c.user._id === creatorIdString;
+    });
+    
+    if (collaborator && typeof collaborator !== 'string') {
+      return {
+        _id: collaborator.user._id,
+        name: collaborator.user.name,
+        email: collaborator.user.email,
+        photoUrl: collaborator.user.photoUrl
+      };
+    }
+    
+    return undefined;
+  };
+
+  const renderCreatorInfo = (event: Event) => {
+    console.log('renderCreatorInfo - Event:', {
+      eventId: event.id,
+      eventType: event.type,
+      createdBy: event.createdBy,
+      createdByType: typeof event.createdBy,
+      createdById: typeof event.createdBy === 'object' ? event.createdBy._id : event.createdBy
+    });
+    
+    const creatorInfo = getCreatorInfo(event.createdBy);
+    
+    console.log('renderCreatorInfo - Creator Info:', {
+      creatorInfo,
+      photoUrl: creatorInfo?.photoUrl,
+      name: creatorInfo?.name
+    });
+    
+    return (
+      <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
+        <div className="flex items-center space-x-2">
+          <Avatar
+            photoUrl={creatorInfo?.photoUrl || null}
+            name={creatorInfo?.name || "Unknown"}
+            size="sm"
+            className="ring-2 ring-white"
+          />
+          <span className="text-sm text-gray-600">
+            {creatorInfo?.name || "Unknown"}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEventCard = (event: Event) => {
+    const getEventIcon = () => {
+      switch (event.type) {
+        case 'arrival':
+          return '✈️';
+        case 'departure':
+          return '✈️';
+        case 'stay':
+          return '🏨';
+        case 'destination':
+          return '📍';
+        default:
+          return '📅';
+      }
+    };
+
+    const getEventTitle = () => {
+      switch (event.type) {
+        case 'arrival':
+          return `Arrival at ${(event as ArrivalDepartureEvent).airport}`;
+        case 'departure':
+          return `Departure from ${(event as ArrivalDepartureEvent).airport}`;
+        case 'stay':
+          return (event as StayEvent).accommodationName;
+        case 'destination':
+          return (event as DestinationEvent).placeName;
+        default:
+          return 'Event';
+      }
+    };
+
+    const getEventDetails = () => {
+      switch (event.type) {
+        case 'arrival':
+        case 'departure': {
+          const flightEvent = event as ArrivalDepartureEvent;
+          return (
+            <div className="text-sm text-gray-600">
+              <p>{flightEvent.time}</p>
+              {flightEvent.flightNumber && <p>Flight: {flightEvent.flightNumber}</p>}
+              {flightEvent.airline && <p>Airline: {flightEvent.airline}</p>}
+              {flightEvent.terminal && <p>Terminal: {flightEvent.terminal}</p>}
+              {flightEvent.gate && <p>Gate: {flightEvent.gate}</p>}
+            </div>
+          );
+        }
+        case 'stay': {
+          const stayEvent = event as StayEvent;
+          return (
+            <div className="text-sm text-gray-600">
+              <p>Check-out: {stayEvent.checkOut}</p>
+              {stayEvent.address && <p>Address: {stayEvent.address}</p>}
+            </div>
+          );
+        }
+        case 'destination': {
+          const destinationEvent = event as DestinationEvent;
+          return (
+            <div className="text-sm text-gray-600">
+              {destinationEvent.address && <p>Address: {destinationEvent.address}</p>}
+              {destinationEvent.description && <p>{destinationEvent.description}</p>}
+            </div>
+          );
+        }
+        default:
+          return null;
+      }
+    };
+
+    const renderEventContent = () => {
+      switch (event.type) {
+        case 'arrival':
+        case 'departure': {
+          const flightEvent = event as ArrivalDepartureEvent;
+          return (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {event.type === 'arrival' ? `Arrival at ${flightEvent.airport}` : `Departure from ${flightEvent.airport}`}
+              </p>
+              <p className="text-xs text-gray-500">
+                {flightEvent.airline && `${flightEvent.airline}`} {flightEvent.flightNumber}
+                {flightEvent.time && ` • ${flightEvent.time}`}
+              </p>
+              {flightEvent.terminal && (
+                <p className="text-xs text-gray-500">Terminal: {flightEvent.terminal}</p>
+              )}
+              {flightEvent.gate && (
+                <p className="text-xs text-gray-500">Gate: {flightEvent.gate}</p>
+              )}
+              {event.status === 'exploring' && renderExploringContent()}
+              {event.notes && renderNotes()}
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
+        
+        case 'stay': {
+          const stayEvent = event as StayEvent;
+          return (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {stayEvent.accommodationName}
+              </p>
+              <p className="text-xs text-gray-500">
+                Check-in: {stayEvent.date}
+              </p>
+              <p className="text-xs text-gray-500">
+                Check-out: {stayEvent.checkOut}
+              </p>
+              {stayEvent.address && (
+                <p className="text-xs text-gray-500 mt-1 truncate">
+                  {stayEvent.address}
+                </p>
+              )}
+              {event.status === 'exploring' && renderExploringContent()}
+              {event.notes && renderNotes()}
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
+        
+        case 'destination': {
+          const destinationEvent = event as DestinationEvent;
+          return (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {destinationEvent.placeName}
+              </p>
+              {destinationEvent.address && (
+                <p className="text-xs text-gray-500 mt-1 truncate">
+                  {destinationEvent.address}
+                </p>
+              )}
+              {destinationEvent.description && (
+                <p className="text-xs text-gray-500 mt-1 truncate">
+                  {destinationEvent.description}
+                </p>
+              )}
+              {destinationEvent.openingHours && (
+                <p className="text-xs text-gray-500">
+                  Hours: {destinationEvent.openingHours}
+                </p>
+              )}
+              {event.status === 'exploring' && renderExploringContent()}
+              {event.notes && renderNotes()}
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
+        
+        default:
+          return null;
+      }
+    };
+
+    const renderExploringContent = () => (
+      <div className="mt-2 pt-2 border-t border-gray-100">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const currentVote = getUserVoteStatus(event);
+                if (currentVote === 'liked') {
+                  handleVote(event.id, 'remove');
+                } else {
+                  handleVote(event.id, 'like');
+                }
+              }}
+              className={`flex items-center px-2 py-1 rounded ${
+                getUserVoteStatus(event) === 'liked' 
+                  ? 'bg-green-50 text-green-600' 
+                  : 'bg-gray-100 text-gray-600'
+              } hover:opacity-80 transition-colors`}
+              title={`Likes: ${getVoterNames(event)}`}
+            >
+              <span className="mr-1">👍</span>
+              <span className="text-xs font-medium">
+                {event.likes?.length || 0}
+              </span>
+            </button>
+            
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const currentVote = getUserVoteStatus(event);
+                if (currentVote === 'disliked') {
+                  handleVote(event.id, 'remove');
+                } else {
+                  handleVote(event.id, 'dislike');
+                }
+              }}
+              className={`flex items-center px-2 py-1 rounded ${
+                getUserVoteStatus(event) === 'disliked' 
+                  ? 'bg-red-50 text-red-600' 
+                  : 'bg-gray-100 text-gray-600'
+              } hover:opacity-80 transition-colors`}
+              title={`Dislikes: ${getVoterNames(event)}`}
+            >
+              <span className="mr-1">👎</span>
+              <span className="text-xs font-medium">
+                {event.dislikes?.length || 0}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
+    const renderNotes = () => (
+      <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+        Notes: <span dangerouslySetInnerHTML={{ __html: event.notes?.replace(
+          /(https?:\/\/[^\s]+)/g,
+          '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
+        ) || '' }} />
+      </p>
+    );
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+        <div className="flex items-start">
+          <div className="text-2xl mr-3">{getEventIcon()}</div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900">{getEventTitle()}</h3>
+            <p className="text-sm text-gray-500">{event.date}</p>
+            {getEventDetails()}
+            {renderEventContent()}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const sortEvents = (events: Event[]): Event[] => {
+    return [...events].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return dateA - dateB;
+    });
+  };
+
+  const getEventDate = (event: Event): Date => {
+    return new Date(event.date);
+  };
+
+  const renderEventDetails = (event: Event) => {
+    switch (event.type) {
+      case 'arrival':
+      case 'departure': {
+        const flightEvent = event as ArrivalDepartureEvent;
+        return (
+          <div className="text-sm text-gray-600">
+            <p>Time: {flightEvent.time}</p>
+            <p>Airport: {flightEvent.airport}</p>
+            {flightEvent.flightNumber && <p>Flight: {flightEvent.flightNumber}</p>}
+            {flightEvent.airline && <p>Airline: {flightEvent.airline}</p>}
+            {flightEvent.terminal && <p>Terminal: {flightEvent.terminal}</p>}
+            {flightEvent.gate && <p>Gate: {flightEvent.gate}</p>}
+            {flightEvent.bookingReference && <p>Booking Ref: {flightEvent.bookingReference}</p>}
+          </div>
+        );
+      }
+      case 'stay': {
+        const stayEvent = event as StayEvent;
+        return (
+          <div className="text-sm text-gray-600">
+            <p>Check-out: {stayEvent.checkOut}</p>
+            {stayEvent.address && <p>Address: {stayEvent.address}</p>}
+            {stayEvent.reservationNumber && <p>Reservation: {stayEvent.reservationNumber}</p>}
+            {stayEvent.contactInfo && <p>Contact: {stayEvent.contactInfo}</p>}
+          </div>
+        );
+      }
+      case 'destination': {
+        const destinationEvent = event as DestinationEvent;
+        return (
+          <div className="text-sm text-gray-600">
+            {destinationEvent.address && <p>Address: {destinationEvent.address}</p>}
+            {destinationEvent.description && <p>{destinationEvent.description}</p>}
+            {destinationEvent.openingHours && <p>Hours: {destinationEvent.openingHours}</p>}
+          </div>
+        );
+      }
+      default:
+        return null;
+    }
+  };
+
+  const handleLocationChange = (address: string) => {
+    setEventData(prev => ({
+      ...prev,
+      location: prev.location ? {
+        ...prev.location,
+        address
+      } : undefined
+    }));
+  };
+
   return (
     <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 space-y-6">
       <div className="relative">
@@ -1396,31 +1851,7 @@ const TripDetails: React.FC = () => {
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
               </svg>
               </button>
-            
-            {/* Share button */}
-              <button
-                onClick={() => setIsShareModalOpen(true)}
-              className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
-              title="Share Trip"
-              >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
-              </svg>
-              </button>
-            
-            {/* Add Event button - Only for users who can edit */}
-            {canEdit && (
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="p-2 bg-indigo-600 hover:bg-indigo-700 rounded-full text-white shadow-md transition-colors"
-                title="Add Event"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                </svg>
-              </button>
-            )}
-            
+
             {/* Leave/Delete Trip button */}
             {isOwner ? (
               <button
@@ -1442,8 +1873,8 @@ const TripDetails: React.FC = () => {
                   <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                 </svg>
               </button>
-          )}
-        </div>
+            )}
+          </div>
           
           {/* Trip Title - Responsive positioning */}
           <div className="absolute top-[calc(4rem+8px)] sm:top-4 left-4 sm:left-6 z-20 max-w-[calc(100%-32px)] sm:max-w-[calc(100%-120px)]">
@@ -1575,20 +2006,14 @@ const TripDetails: React.FC = () => {
                   });
                 
                 // Sort events by date
-                const sortedEvents = filteredEvents.sort((a, b) => {
-                  const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
-                  const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
-                  return dateA - dateB;
-                });
+                const sortedEvents = sortEvents(filteredEvents);
                 
                 // Group events by date
                 const eventsByDate: Record<string, Event[]> = {};
                 
                 sortedEvents.forEach(event => {
                   // Get the date string (YYYY-MM-DD) for grouping
-                  const eventDate = event.type === 'stay' 
-                    ? new Date((event as StayEvent).checkIn) 
-                    : new Date(event.date);
+                  const eventDate = getEventDate(event);
                   
                   const dateString = eventDate.toISOString().split('T')[0];
                   
@@ -1657,7 +2082,7 @@ const TripDetails: React.FC = () => {
                                     {canEdit && (
                                       <div className="flex space-x-2 ml-2">
                                         <button
-                                          onClick={() => handleEditEvent(event.id)}
+                                          onClick={() => handleEditEvent(event)}
                                           className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
                                           title="Edit Event"
                                         >
@@ -1708,8 +2133,7 @@ const TripDetails: React.FC = () => {
                                         <button
                                           onClick={() => {
                                             if (trip._id) {
-                                              deleteEvent(trip._id, event.id);
-                                              setTrip({ ...trip, events: trip.events.filter(e => e.id !== event.id) });
+                                              handleDeleteEvent(event.id);
                                             }
                                           }}
                                           className="p-1.5 bg-white/90 hover:bg-white rounded-full text-red-600 hover:text-red-900 shadow-sm transition-colors"
@@ -1724,38 +2148,111 @@ const TripDetails: React.FC = () => {
                                   </div>
                                   
                                   {/* Event type-specific content */}
-                                  {event.type === 'stay' ? (
                                     <div className="mt-1">
+                                    {(() => {
+                                      switch (event.type) {
+                                        case 'arrival': {
+                                          const flightEvent = event as ArrivalDepartureEvent;
+                                          return (
+                                            <>
                                       <p className="text-sm font-medium text-gray-900 truncate">
-                                        {(event as StayEvent).accommodationName}
+                                                Arrival at {flightEvent.airport}
                                       </p>
                                       <p className="text-xs text-gray-500">
-                                        Check-in: {new Date((event as StayEvent).checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                                {flightEvent.airline && `${flightEvent.airline}`} {flightEvent.flightNumber}
+                                                {flightEvent.time && ` • ${flightEvent.time}`}
+                                              </p>
+                                              {flightEvent.terminal && (
+                                                <p className="text-xs text-gray-500">Terminal: {flightEvent.terminal}</p>
+                                              )}
+                                              {flightEvent.gate && (
+                                                <p className="text-xs text-gray-500">Gate: {flightEvent.gate}</p>
+                                              )}
+                                            </>
+                                          );
+                                        }
+                                        case 'departure': {
+                                          const flightEvent = event as ArrivalDepartureEvent;
+                                          return (
+                                            <>
+                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                                Departure from {flightEvent.airport}
                                       </p>
                                       <p className="text-xs text-gray-500">
-                                        Check-out: {new Date((event as StayEvent).checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                                {flightEvent.airline && `${flightEvent.airline}`} {flightEvent.flightNumber}
+                                                {flightEvent.time && ` • ${flightEvent.time}`}
+                                              </p>
+                                              {flightEvent.terminal && (
+                                                <p className="text-xs text-gray-500">Terminal: {flightEvent.terminal}</p>
+                                              )}
+                                              {flightEvent.gate && (
+                                                <p className="text-xs text-gray-500">Gate: {flightEvent.gate}</p>
+                                              )}
+                                            </>
+                                          );
+                                        }
+                                        case 'stay': {
+                                          const stayEvent = event as StayEvent;
+                                        return (
+                                            <>
+                                              <p className="text-sm font-medium text-gray-900 truncate">
+                                                {stayEvent.accommodationName}
+                                              </p>
+                                              <p className="text-xs text-gray-500">
+                                                Check-in: {stayEvent.date}
+                                              </p>
+                                              <p className="text-xs text-gray-500">
+                                                Check-out: {stayEvent.checkOut}
+                                              </p>
+                                              {stayEvent.address && (
+                                                <p className="text-xs text-gray-500 mt-1 truncate">
+                                                  {stayEvent.address}
+                                                </p>
+                                              )}
+                                            </>
+                                          );
+                                        }
+                                        case 'destination': {
+                                          const destinationEvent = event as DestinationEvent;
+                                          return (
+                                            <>
+                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                                {destinationEvent.placeName}
                                       </p>
-                                      {(event as StayEvent).address && (
+                                              {destinationEvent.address && (
                                         <p className="text-xs text-gray-500 mt-1 truncate">
-                                          {(event as StayEvent).address}
+                                                  {destinationEvent.address}
                                         </p>
                                       )}
-                                      
-                                      {/* Exploration-specific fields */}
+                                              {destinationEvent.description && (
+                                                <p className="text-xs text-gray-500 mt-1 truncate">
+                                                  {destinationEvent.description}
+                                                </p>
+                                              )}
+                                              {destinationEvent.openingHours && (
+                                                <p className="text-xs text-gray-500">
+                                                  Hours: {destinationEvent.openingHours}
+                                                </p>
+                                              )}
+                                            </>
+                                          );
+                                        }
+                                        default:
+                                          return null;
+                                      }
+                                    })()}
                                       {event.status === 'exploring' && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
-                                          {/* Like/Dislike system for exploring events */}
                                           <div className="flex items-center justify-between mb-1">
                                             <div className="flex items-center space-x-2">
-                                              {/* Like button */}
                                               <button 
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   const currentVote = getUserVoteStatus(event);
                                                   if (currentVote === 'liked') {
-                                                    handleEventVote(event.id, 'remove');
+                                                  handleVote(event.id, 'remove');
                                                   } else {
-                                                    handleEventVote(event.id, 'like');
+                                                  handleVote(event.id, 'like');
                                                   }
                                                 }}
                                                 className={`flex items-center px-2 py-1 rounded ${
@@ -1763,7 +2260,7 @@ const TripDetails: React.FC = () => {
                                                     ? 'bg-green-50 text-green-600' 
                                                     : 'bg-gray-100 text-gray-600'
                                                 } hover:opacity-80 transition-colors`}
-                                                title={`Likes: ${getVoterNames(event, 'like')}`}
+                                              title={`Likes: ${getVoterNames(event)}`}
                                               >
                                                 <span className="mr-1">👍</span>
                                                 <span className="text-xs font-medium">
@@ -1771,15 +2268,14 @@ const TripDetails: React.FC = () => {
                                                 </span>
                                               </button>
                                               
-                                              {/* Dislike button */}
                                               <button 
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   const currentVote = getUserVoteStatus(event);
                                                   if (currentVote === 'disliked') {
-                                                    handleEventVote(event.id, 'remove');
+                                                  handleVote(event.id, 'remove');
                                                   } else {
-                                                    handleEventVote(event.id, 'dislike');
+                                                  handleVote(event.id, 'dislike');
                                                   }
                                                 }}
                                                 className={`flex items-center px-2 py-1 rounded ${
@@ -1787,7 +2283,7 @@ const TripDetails: React.FC = () => {
                                                     ? 'bg-red-50 text-red-600' 
                                                     : 'bg-gray-100 text-gray-600'
                                                 } hover:opacity-80 transition-colors`}
-                                                title={`Dislikes: ${getVoterNames(event, 'dislike')}`}
+                                              title={`Dislikes: ${getVoterNames(event)}`}
                                               >
                                                 <span className="mr-1">👎</span>
                                                 <span className="text-xs font-medium">
@@ -1795,436 +2291,31 @@ const TripDetails: React.FC = () => {
                                                 </span>
                                               </button>
                                             </div>
-                                            
-                                            {event.source && (
-                                              <div className="text-xs text-gray-500">
-                                                Source: {event.source}
-                                              </div>
-                                            )}
-                                          </div>
-                                          
-                                          {/* Remove star rating for exploring events */}
-                                          {event.priority && false && (
-                                            <div className="flex items-center mb-1">
-                                              <span className="text-xs text-gray-500 mr-2">Priority:</span>
-                                              <div className="flex">
-                                                {[1, 2, 3, 4, 5].map(star => (
-                                                  <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
-                                                    ★
-                                                  </span>
-                                                ))}
                                               </div>
                                             </div>
                                           )}
-                                          
-                                          {/* Source info already displayed above */}
-                                          {event.source && false && (
-                                            <div className="text-xs text-gray-500 mb-1">
-                                              Source: {event.source}
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                      
                                       {event.notes && (
                                         <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                          Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
+                                        Notes: <span dangerouslySetInnerHTML={{ __html: event.notes?.replace(
                                             /(https?:\/\/[^\s]+)/g,
                                             '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                          ) }} />
+                                        ) || '' }} />
                                         </p>
                                       )}
-                                      
-                                      {/* Creator information */}
-                                      {(() => {
-                                        // Debug log
-                                        console.log('EVENT CARD AVATAR - Creator information section rendering:', {
-                                          eventId: event.id,
-                                          creatorName: event.createdBy?.name,
-                                          creatorPhotoUrl: event.createdBy?.photoUrl,
-                                          creatorObject: event.createdBy,
-                                          timestamp: new Date().toISOString()
-                                        });
-                                        
-                                        // For events without creator info, use trip owner as fallback
-                                        const creatorInfo = event.createdBy || trip.owner || { name: "Unknown", _id: "unknown" };
-                                        
-                                        // Ensure photoUrl is properly set for both created and added events
-                                        const creatorPhotoUrl = event.createdBy?.photoUrl || (trip.owner?.photoUrl || null);
-                                        
-                                        // Ensure creator name is available
-                                        const creatorName = creatorInfo?.name || "Unknown";
-                                        
-                                        return (
                                           <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
-                                            <p className="text-xs text-gray-400 italic">
-                                              {/* Use consistent "Added by" for all events for better UX */}
-                                              {`Added by ${creatorName}`}
-                                            </p>
-                                            <div className="flex ml-2">
-                                              {/* Creator avatar */}
-                                              <div className="relative group" style={{ zIndex: 1 }}>
-                                                {(() => {
-                                                  console.log('EVENT CARD AVATAR - About to render Avatar component:', {
-                                                    eventId: event.id,
-                                                    hasCreatedBy: !!event.createdBy,
-                                                    usingFallback: !event.createdBy,
-                                                    creatorName: creatorName,
-                                                    photoUrl: creatorPhotoUrl,
-                                                    timestamp: new Date().toISOString()
-                                                  });
-                                                  return null;
-                                                })()}
+                                      <div className="flex items-center space-x-2">
                                                 <Avatar
-                                                  photoUrl={creatorPhotoUrl}
-                                                  name={creatorName}
+                                          photoUrl={getCreatorInfo(event.createdBy)?.photoUrl || null}
+                                          name={getCreatorInfo(event.createdBy)?.name || "Unknown"}
                                                   size="sm"
                                                   className="ring-2 ring-white"
                                                 />
-                                                
-                                                {/* Tooltip */}
-                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
-                                                  <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                                                    {`Added by ${creatorName}`}
+                                        <span className="text-sm text-gray-600">
+                                          {getCreatorInfo(event.createdBy)?.name || "Unknown"}
+                                        </span>
                                                   </div>
-                                                  <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
                                                 </div>
                                               </div>
-                                            </div>
-                                          </div>
-                                        );
-                                      })()}
-                                    </div>
-                                  ) : event.type === 'arrival' || event.type === 'departure' ? (
-                                    <div className="mt-1">
-                                      <p className="text-sm font-medium text-gray-900 truncate">
-                                        {(event as ArrivalDepartureEvent).airport}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        {(event as ArrivalDepartureEvent).airline} {(event as ArrivalDepartureEvent).flightNumber}
-                                        {(event as ArrivalDepartureEvent).time && ` • ${(event as ArrivalDepartureEvent).time}`}
-                                      </p>
-                                      
-                                      {/* Exploration-specific fields */}
-                                      {event.status === 'exploring' && (
-                                        <div className="mt-2 pt-2 border-t border-gray-100">
-                                          {/* Like/Dislike system for exploring events */}
-                                          <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center space-x-2">
-                                              {/* Like button */}
-                                              <button 
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const currentVote = getUserVoteStatus(event);
-                                                  if (currentVote === 'liked') {
-                                                    handleEventVote(event.id, 'remove');
-                                                  } else {
-                                                    handleEventVote(event.id, 'like');
-                                                  }
-                                                }}
-                                                className={`flex items-center px-2 py-1 rounded ${
-                                                  getUserVoteStatus(event) === 'liked' 
-                                                    ? 'bg-green-50 text-green-600' 
-                                                    : 'bg-gray-100 text-gray-600'
-                                                } hover:opacity-80 transition-colors`}
-                                                title={`Likes: ${getVoterNames(event, 'like')}`}
-                                              >
-                                                <span className="mr-1">👍</span>
-                                                <span className="text-xs font-medium">
-                                                  {event.likes?.length || 0}
-                                                </span>
-                                              </button>
-                                              
-                                              {/* Dislike button */}
-                                              <button 
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const currentVote = getUserVoteStatus(event);
-                                                  if (currentVote === 'disliked') {
-                                                    handleEventVote(event.id, 'remove');
-                                                  } else {
-                                                    handleEventVote(event.id, 'dislike');
-                                                  }
-                                                }}
-                                                className={`flex items-center px-2 py-1 rounded ${
-                                                  getUserVoteStatus(event) === 'disliked' 
-                                                    ? 'bg-red-50 text-red-600' 
-                                                    : 'bg-gray-100 text-gray-600'
-                                                } hover:opacity-80 transition-colors`}
-                                                title={`Dislikes: ${getVoterNames(event, 'dislike')}`}
-                                              >
-                                                <span className="mr-1">👎</span>
-                                                <span className="text-xs font-medium">
-                                                  {event.dislikes?.length || 0}
-                                                </span>
-                                              </button>
-                                            </div>
-                                            
-                                            {event.source && (
-                                              <div className="text-xs text-gray-500">
-                                                Source: {event.source}
-                                              </div>
-                                            )}
-                                          </div>
-                                          
-                                          {/* Remove star rating for exploring events */}
-                                          {event.priority && false && (
-                                            <div className="flex items-center mb-1">
-                                              <span className="text-xs text-gray-500 mr-2">Priority:</span>
-                                              <div className="flex">
-                                                {[1, 2, 3, 4, 5].map(star => (
-                                                  <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
-                                                    ★
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          )}
-                                          
-                                          {/* Source info already displayed above */}
-                                          {event.source && false && (
-                                            <div className="text-xs text-gray-500 mb-1">
-                                              Source: {event.source}
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                      
-                                      {event.notes && (
-                                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                          Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                            /(https?:\/\/[^\s]+)/g,
-                                            '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                          ) }} />
-                                        </p>
-                                      )}
-                                      
-                                      {/* Creator information */}
-                                      {(() => {
-                                        // Debug log
-                                        console.log('EVENT CARD AVATAR - Creator information section rendering:', {
-                                          eventId: event.id,
-                                          creatorName: event.createdBy?.name,
-                                          creatorPhotoUrl: event.createdBy?.photoUrl,
-                                          creatorObject: event.createdBy,
-                                          timestamp: new Date().toISOString()
-                                        });
-                                        
-                                        // For events without creator info, use trip owner as fallback
-                                        const creatorInfo = event.createdBy || trip.owner || { name: "Unknown", _id: "unknown" };
-                                        
-                                        // Ensure photoUrl is properly set for both created and added events
-                                        const creatorPhotoUrl = event.createdBy?.photoUrl || (trip.owner?.photoUrl || null);
-                                        
-                                        // Ensure creator name is available
-                                        const creatorName = creatorInfo?.name || "Unknown";
-                                        
-                                        return (
-                                          <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
-                                            <p className="text-xs text-gray-400 italic">
-                                              {/* Use consistent "Added by" for all events for better UX */}
-                                              {`Added by ${creatorName}`}
-                                            </p>
-                                            <div className="flex ml-2">
-                                              {/* Creator avatar */}
-                                              <div className="relative group" style={{ zIndex: 1 }}>
-                                                {(() => {
-                                                  console.log('EVENT CARD AVATAR - About to render Avatar component:', {
-                                                    eventId: event.id,
-                                                    hasCreatedBy: !!event.createdBy,
-                                                    usingFallback: !event.createdBy,
-                                                    creatorName: creatorName,
-                                                    photoUrl: creatorPhotoUrl,
-                                                    timestamp: new Date().toISOString()
-                                                  });
-                                                  return null;
-                                                })()}
-                                                <Avatar
-                                                  photoUrl={creatorPhotoUrl}
-                                                  name={creatorName}
-                                                  size="sm"
-                                                  className="ring-2 ring-white"
-                                                />
-                                                
-                                                {/* Tooltip */}
-                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
-                                                  <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                                                    {`Added by ${creatorName}`}
-                                                  </div>
-                                                  <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        );
-                                      })()}
-                                    </div>
-                                  ) : (
-                                    <div className="mt-1">
-                                      <p className="text-sm font-medium text-gray-900 truncate">
-                                        {(event as DestinationEvent).placeName}
-                                      </p>
-                                      {(event as DestinationEvent).address && (
-                                        <p className="text-xs text-gray-500 mt-1 truncate">
-                                          {(event as DestinationEvent).address}
-                                        </p>
-                                      )}
-                                      
-                                      {/* Exploration-specific fields */}
-                                      {event.status === 'exploring' && (
-                                        <div className="mt-2 pt-2 border-t border-gray-100">
-                                          {/* Like/Dislike system for exploring events */}
-                                          <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center space-x-2">
-                                              {/* Like button */}
-                                              <button 
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const currentVote = getUserVoteStatus(event);
-                                                  if (currentVote === 'liked') {
-                                                    handleEventVote(event.id, 'remove');
-                                                  } else {
-                                                    handleEventVote(event.id, 'like');
-                                                  }
-                                                }}
-                                                className={`flex items-center px-2 py-1 rounded ${
-                                                  getUserVoteStatus(event) === 'liked' 
-                                                    ? 'bg-green-50 text-green-600' 
-                                                    : 'bg-gray-100 text-gray-600'
-                                                } hover:opacity-80 transition-colors`}
-                                                title={`Likes: ${getVoterNames(event, 'like')}`}
-                                              >
-                                                <span className="mr-1">👍</span>
-                                                <span className="text-xs font-medium">
-                                                  {event.likes?.length || 0}
-                                                </span>
-                                              </button>
-                                              
-                                              {/* Dislike button */}
-                                              <button 
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const currentVote = getUserVoteStatus(event);
-                                                  if (currentVote === 'disliked') {
-                                                    handleEventVote(event.id, 'remove');
-                                                  } else {
-                                                    handleEventVote(event.id, 'dislike');
-                                                  }
-                                                }}
-                                                className={`flex items-center px-2 py-1 rounded ${
-                                                  getUserVoteStatus(event) === 'disliked' 
-                                                    ? 'bg-red-50 text-red-600' 
-                                                    : 'bg-gray-100 text-gray-600'
-                                                } hover:opacity-80 transition-colors`}
-                                                title={`Dislikes: ${getVoterNames(event, 'dislike')}`}
-                                              >
-                                                <span className="mr-1">👎</span>
-                                                <span className="text-xs font-medium">
-                                                  {event.dislikes?.length || 0}
-                                                </span>
-                                              </button>
-                                            </div>
-                                            
-                                            {event.source && (
-                                              <div className="text-xs text-gray-500">
-                                                Source: {event.source}
-                                              </div>
-                                            )}
-                                          </div>
-                                          
-                                          {/* Remove star rating for exploring events */}
-                                          {event.priority && false && (
-                                            <div className="flex items-center mb-1">
-                                              <span className="text-xs text-gray-500 mr-2">Priority:</span>
-                                              <div className="flex">
-                                                {[1, 2, 3, 4, 5].map(star => (
-                                                  <span key={star} className={star <= event.priority! ? 'text-yellow-500' : 'text-gray-300'}>
-                                                    ★
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          )}
-                                          
-                                          {/* Source info already displayed above */}
-                                          {event.source && false && (
-                                            <div className="text-xs text-gray-500 mb-1">
-                                              Source: {event.source}
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                      
-                                      {event.notes && (
-                                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                          Notes: <span dangerouslySetInnerHTML={{ __html: event.notes.replace(
-                                            /(https?:\/\/[^\s]+)/g,
-                                            '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-                                          ) }} />
-                                        </p>
-                                      )}
-                                      
-                                      {/* Creator information */}
-                                      {(() => {
-                                        // Debug log
-                                        console.log('EVENT CARD AVATAR - Creator information section rendering:', {
-                                          eventId: event.id,
-                                          creatorName: event.createdBy?.name,
-                                          creatorPhotoUrl: event.createdBy?.photoUrl,
-                                          creatorObject: event.createdBy,
-                                          timestamp: new Date().toISOString()
-                                        });
-                                        
-                                        // For events without creator info, use trip owner as fallback
-                                        const creatorInfo = event.createdBy || trip.owner || { name: "Unknown", _id: "unknown" };
-                                        
-                                        // Ensure photoUrl is properly set for both created and added events
-                                        const creatorPhotoUrl = event.createdBy?.photoUrl || (trip.owner?.photoUrl || null);
-                                        
-                                        // Ensure creator name is available
-                                        const creatorName = creatorInfo?.name || "Unknown";
-                                        
-                                        return (
-                                          <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
-                                            <p className="text-xs text-gray-400 italic">
-                                              {/* Use consistent "Added by" for all events for better UX */}
-                                              {`Added by ${creatorName}`}
-                                            </p>
-                                            <div className="flex ml-2">
-                                              {/* Creator avatar */}
-                                              <div className="relative group" style={{ zIndex: 1 }}>
-                                                {(() => {
-                                                  console.log('EVENT CARD AVATAR - About to render Avatar component:', {
-                                                    eventId: event.id,
-                                                    hasCreatedBy: !!event.createdBy,
-                                                    usingFallback: !event.createdBy,
-                                                    creatorName: creatorName,
-                                                    photoUrl: creatorPhotoUrl,
-                                                    timestamp: new Date().toISOString()
-                                                  });
-                                                  return null;
-                                                })()}
-                                                <Avatar
-                                                  photoUrl={creatorPhotoUrl}
-                                                  name={creatorName}
-                                                  size="sm"
-                                                  className="ring-2 ring-white"
-                                                />
-                                                
-                                                {/* Tooltip */}
-                                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block" style={{ zIndex: 2 }}>
-                                                  <div className="bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                                                    {`Added by ${creatorName}`}
-                                                  </div>
-                                                  <div className="w-2 h-2 bg-black transform rotate-45 absolute -bottom-1 right-3"></div>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        );
-                                      })()}
-                                    </div>
-                                  )}
                                 </div>
                 </div>
               </li>
@@ -2279,7 +2370,7 @@ const TripDetails: React.FC = () => {
                 <label className="block text-gray-700 mb-2">Event Type</label>
                 <select
                   value={eventType}
-                  onChange={(e) => setEventType(e.target.value as EventType)}
+                  onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
                   className="input"
                 >
                   <option value="arrival">Arrival</option>

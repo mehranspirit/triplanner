@@ -9,18 +9,16 @@ const eventSchema = new mongoose.Schema({
   },
   thumbnailUrl: String,
   date: String,
-  location: String,
+  location: {
+    lat: Number,
+    lng: Number,
+    address: String
+  },
   notes: String,
   status: {
     type: String,
     enum: ['confirmed', 'exploring', 'alternative'],
     default: 'confirmed'
-  },
-  priority: {
-    type: Number,
-    min: 1,
-    max: 5,
-    default: 3
   },
   likes: [String], // User IDs of users who liked this event
   dislikes: [String], // User IDs of users who disliked this event
@@ -51,7 +49,8 @@ const eventSchema = new mongoose.Schema({
       ref: 'User'
     },
     name: String,
-    email: String
+    email: String,
+    photoUrl: String
   },
   updatedBy: {
     _id: {
@@ -59,7 +58,8 @@ const eventSchema = new mongoose.Schema({
       ref: 'User'
     },
     name: String,
-    email: String
+    email: String,
+    photoUrl: String
   },
   createdAt: {
     type: Date,

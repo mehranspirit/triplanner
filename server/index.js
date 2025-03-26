@@ -510,51 +510,40 @@ app.get('/api/trips/:id', auth, async (req, res) => {
 
 app.put('/api/trips/:id', auth, async (req, res) => {
   try {
-    const trip = await Trip.findById(req.params.id)
-      .populate('owner', 'name email')
-     .populate('collaborators.user', 'name email');
+    console.log('Updating trip with data:', JSON.stringify(req.body, null, 2));
     
+    const trip = await Trip.findById(req.params.id);
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
     }
 
-    // Check if user has edit access (owner or editor)
-    const accessRole = trip.hasAccess(req.user._id);
-    if (!accessRole || (accessRole === 'viewer')) {
-      return res.status(403).json({ message: 'You do not have permission to edit this trip' });
+    // Check if user has access to modify this trip
+    const access = trip.hasAccess(req.user._id);
+    if (!access || (access !== 'owner' && access !== 'editor')) {
+      return res.status(403).json({ message: 'Access denied' });
     }
 
-    // Preserve existing data that shouldn't be overwritten
-    const updateData = {
-      ...req.body,
-      owner: trip.owner,  // Preserve the original owner
-      collaborators: trip.collaborators  // Preserve existing collaborators
-    };
-
-    // Update the trip
-    const updatedTrip = await Trip.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate('owner', 'name email')
-     .populate('collaborators.user', 'name email');
-
-    console.log('Trip updated:', {
-      tripId: updatedTrip._id,
-      events: updatedTrip.events.length,
-      collaborators: updatedTrip.collaborators.length
-    });
-
-    // Determine what fields were updated
     const changedFields = [];
-    if (req.body.name && req.body.name !== trip.name) changedFields.push('name');
-    if (req.body.description && req.body.description !== trip.description) changedFields.push('description');
-    if (req.body.startDate && req.body.startDate !== trip.startDate) changedFields.push('start date');
-    if (req.body.endDate && req.body.endDate !== trip.endDate) changedFields.push('end date');
     
-    // Check for event changes
-    let eventActivity = null;
+    // Update basic trip fields
+    if (req.body.name && req.body.name !== trip.name) {
+      changedFields.push('name');
+      trip.name = req.body.name;
+    }
+    
+    if (req.body.description !== trip.description) {
+      changedFields.push('description');
+      trip.description = req.body.description;
+    }
+    
+    if (req.body.isPublic !== undefined && req.body.isPublic !== trip.isPublic) {
+      changedFields.push('isPublic');
+      trip.isPublic = req.body.isPublic;
+    }
+
+    // Handle events update
     if (req.body.events && JSON.stringify(req.body.events) !== JSON.stringify(trip.events)) {
+      console.log('Event data received:', JSON.stringify(req.body.events, null, 2));
       changedFields.push('events');
       
       // Find added, updated, and deleted events
@@ -568,217 +557,240 @@ app.put('/api/trips/:id', auth, async (req, res) => {
         newIds: newEvents.map(e => e.id)
       });
       
-      // Find added events (exist in new but not in old)
-      const addedEvents = newEvents.filter(newEvent => 
-        !oldEvents.some(oldEvent => oldEvent.id === newEvent.id)
-      ).map(event => ({
-        ...event,
-        createdBy: {
-          _id: req.user._id,
-          name: req.user.name,
-          email: req.user.email
-        },
-        updatedBy: {
-          _id: req.user._id,
-          name: req.user.name,
-          email: req.user.email
-        },
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }));
-      
-      // Find deleted events (exist in old but not in new)
+      // Find deleted events
       const deletedEvents = oldEvents.filter(oldEvent => 
         !newEvents.some(newEvent => newEvent.id === oldEvent.id)
       );
       
-      // Find potentially updated events (exist in both)
-      const updatedEvents = newEvents.filter(newEvent => 
-        oldEvents.some(oldEvent => oldEvent.id === newEvent.id)
-      ).map(newEvent => {
+      // Log deleted events
+      for (const deletedEvent of deletedEvents) {
+        const eventName = getEventName(deletedEvent);
+        await logActivity({
+          userId: req.user._id,
+          tripId: trip._id,
+          eventId: deletedEvent.id,
+          actionType: 'event_delete',
+          description: `Deleted the ${eventName} event from "${trip.name}"`,
+          details: {
+            eventType: deletedEvent.type,
+            eventName: eventName,
+            date: deletedEvent.date
+          }
+        }).catch(err => console.error('Error logging event deletion activity:', err));
+      }
+
+      // Update the events array
+      trip.events = newEvents.map(newEvent => {
         const oldEvent = oldEvents.find(e => e.id === newEvent.id);
         
-        // Determine which fields were changed
-        const changedEventFields = [];
-        const previousValues = {};
-        const newValues = {};
-        
-        // Compare all fields
-        Object.keys(newEvent).forEach(key => {
-          // Skip the id field and creator fields
-          if (key === 'id' || key === 'createdBy' || key === 'createdAt') return;
+        // For existing events
+        if (oldEvent) {
+          console.log('Updating existing event:', {
+            id: newEvent.id,
+            type: newEvent.type,
+            oldData: oldEvent,
+            newData: newEvent
+          });
           
-          // Check if the field exists in both and has changed
-          if (oldEvent[key] !== undefined && 
-              JSON.stringify(oldEvent[key]) !== JSON.stringify(newEvent[key])) {
-            changedEventFields.push(key);
-            previousValues[key] = oldEvent[key];
-            newValues[key] = newEvent[key];
+          // Log the event edit activity
+          const eventName = getEventName(newEvent);
+          const changedFields = [];
+          const fieldChanges = {};
+          
+          // Compare fields to determine what changed
+          if (newEvent.date !== oldEvent.date) {
+            changedFields.push('date');
+            fieldChanges.date = { old: oldEvent.date, new: newEvent.date };
           }
-          // Check if the field is new
-          else if (oldEvent[key] === undefined && newEvent[key] !== undefined) {
-            changedEventFields.push(key);
-            previousValues[key] = null;
-            newValues[key] = newEvent[key];
+          if (newEvent.status !== oldEvent.status) {
+            changedFields.push('status');
+            fieldChanges.status = { old: oldEvent.status, new: newEvent.status };
           }
-        });
+          if (newEvent.notes !== oldEvent.notes) {
+            changedFields.push('notes');
+            fieldChanges.notes = { old: oldEvent.notes, new: newEvent.notes };
+          }
+          if (newEvent.thumbnailUrl !== oldEvent.thumbnailUrl) {
+            changedFields.push('thumbnail');
+            fieldChanges.thumbnail = { old: oldEvent.thumbnailUrl, new: newEvent.thumbnailUrl };
+          }
+          
+          // Type-specific field comparisons
+          if (newEvent.type === 'arrival' || newEvent.type === 'departure') {
+            if ((newEvent.airport || '') !== (oldEvent.airport || '')) {
+              changedFields.push('airport');
+              fieldChanges.airport = { old: oldEvent.airport || '', new: newEvent.airport || '' };
+            }
+            if ((newEvent.airline || '') !== (oldEvent.airline || '')) {
+              changedFields.push('airline');
+              fieldChanges.airline = { old: oldEvent.airline || '', new: newEvent.airline || '' };
+            }
+            if ((newEvent.flightNumber || '') !== (oldEvent.flightNumber || '')) {
+              changedFields.push('flight number');
+              fieldChanges.flightNumber = { old: oldEvent.flightNumber || '', new: newEvent.flightNumber || '' };
+            }
+            if ((newEvent.terminal || '') !== (oldEvent.terminal || '')) {
+              changedFields.push('terminal');
+              fieldChanges.terminal = { old: oldEvent.terminal || '', new: newEvent.terminal || '' };
+            }
+            if ((newEvent.gate || '') !== (oldEvent.gate || '')) {
+              changedFields.push('gate');
+              fieldChanges.gate = { old: oldEvent.gate || '', new: newEvent.gate || '' };
+            }
+            if ((newEvent.time || '') !== (oldEvent.time || '')) {
+              changedFields.push('time');
+              fieldChanges.time = { old: oldEvent.time || '', new: newEvent.time || '' };
+            }
+            if ((newEvent.bookingReference || '') !== (oldEvent.bookingReference || '')) {
+              changedFields.push('booking reference');
+              fieldChanges.bookingReference = { old: oldEvent.bookingReference || '', new: newEvent.bookingReference || '' };
+            }
+          } else if (newEvent.type === 'stay') {
+            if (newEvent.accommodationName !== oldEvent.accommodationName) {
+              changedFields.push('accommodation name');
+              fieldChanges.accommodationName = { old: oldEvent.accommodationName, new: newEvent.accommodationName };
+            }
+            if (newEvent.address !== oldEvent.address) {
+              changedFields.push('address');
+              fieldChanges.address = { old: oldEvent.address, new: newEvent.address };
+            }
+            if (newEvent.checkIn !== oldEvent.checkIn) {
+              changedFields.push('check-in date');
+              fieldChanges.checkIn = { old: oldEvent.checkIn, new: newEvent.checkIn };
+            }
+            if (newEvent.checkOut !== oldEvent.checkOut) {
+              changedFields.push('check-out date');
+              fieldChanges.checkOut = { old: oldEvent.checkOut, new: newEvent.checkOut };
+            }
+            if (newEvent.reservationNumber !== oldEvent.reservationNumber) {
+              changedFields.push('reservation number');
+              fieldChanges.reservationNumber = { old: oldEvent.reservationNumber, new: newEvent.reservationNumber };
+            }
+            if (newEvent.contactInfo !== oldEvent.contactInfo) {
+              changedFields.push('contact info');
+              fieldChanges.contactInfo = { old: oldEvent.contactInfo, new: newEvent.contactInfo };
+            }
+          } else if (newEvent.type === 'destination') {
+            if (newEvent.placeName !== oldEvent.placeName) {
+              changedFields.push('place name');
+              fieldChanges.placeName = { old: oldEvent.placeName, new: newEvent.placeName };
+            }
+            if (newEvent.address !== oldEvent.address) {
+              changedFields.push('address');
+              fieldChanges.address = { old: oldEvent.address, new: newEvent.address };
+            }
+            if (newEvent.description !== oldEvent.description) {
+              changedFields.push('description');
+              fieldChanges.description = { old: oldEvent.description, new: newEvent.description };
+            }
+            if (newEvent.openingHours !== oldEvent.openingHours) {
+              changedFields.push('opening hours');
+              fieldChanges.openingHours = { old: oldEvent.openingHours, new: newEvent.openingHours };
+            }
+          }
+          
+          // Only log activity if fields actually changed
+          if (changedFields.length > 0) {
+            // Filter out any field changes where old and new are both empty/undefined/null
+            const actualChanges = {};
+            for (const [field, change] of Object.entries(fieldChanges)) {
+              // Convert undefined/null to empty string for comparison
+              const oldValue = change.old === undefined || change.old === null ? '' : change.old;
+              const newValue = change.new === undefined || change.new === null ? '' : change.new;
+              
+              if (oldValue !== newValue) {
+                actualChanges[field] = {
+                  old: oldValue,
+                  new: newValue
+                };
+              }
+            }
+            
+            // Only log if there are actual changes
+            if (Object.keys(actualChanges).length > 0) {
+              logActivity({
+            userId: req.user._id,
+                tripId: trip._id,
+                eventId: newEvent.id,
+                actionType: 'event_update',
+                description: `Updated the ${eventName} event in "${trip.name}"`,
+            details: {
+                  eventType: newEvent.type,
+                  eventName: eventName,
+                  changedFields: Object.keys(actualChanges),
+                  fieldChanges: actualChanges,
+                  date: newEvent.date
+                }
+              }).catch(err => console.error('Error logging event update activity:', err));
+            }
+          }
+          
+          return {
+            ...oldEvent.toObject(),
+            ...newEvent,
+            createdBy: oldEvent.createdBy,
+            createdAt: oldEvent.createdAt,
+            updatedBy: {
+              _id: req.user._id,
+              name: req.user.name,
+              email: req.user.email
+            },
+            updatedAt: new Date()
+          };
+        }
         
-        // Preserve the original creator information
-        const updatedEvent = {
+        // For new events
+        console.log('Creating new event:', newEvent);
+        const eventName = getEventName(newEvent);
+        
+        // Log new event creation
+        logActivity({
+        userId: req.user._id,
+          tripId: trip._id,
+          eventId: newEvent.id,
+          actionType: 'event_create',
+          description: `Added a new ${eventName} event to "${trip.name}"`,
+        details: {
+            eventType: newEvent.type,
+            eventName: eventName,
+            date: newEvent.date,
+            ...(newEvent.type === 'arrival' || newEvent.type === 'departure' ? {
+              airport: newEvent.airport || '',
+              airline: newEvent.airline || '',
+              flightNumber: newEvent.flightNumber || '',
+              terminal: newEvent.terminal || '',
+              gate: newEvent.gate || '',
+              time: newEvent.time || '',
+              bookingReference: newEvent.bookingReference || ''
+            } : {})
+          }
+        }).catch(err => console.error('Error logging event creation activity:', err));
+
+        return {
           ...newEvent,
-          createdBy: oldEvent.createdBy || {
+          createdBy: {
             _id: req.user._id,
             name: req.user.name,
             email: req.user.email
           },
-          createdAt: oldEvent.createdAt || new Date(),
-          // Update the updater information
           updatedBy: {
             _id: req.user._id,
             name: req.user.name,
             email: req.user.email
           },
+          createdAt: new Date(),
           updatedAt: new Date()
         };
-        
-        return {
-          event: updatedEvent,
-          oldEvent,
-          changedFields: changedEventFields,
-          previousValues,
-          newValues
-        };
-      }).filter(update => update.changedFields.length > 0);
-      
-      console.log('Event changes detected:', {
-        added: addedEvents.length,
-        updated: updatedEvents.length,
-        deleted: deletedEvents.length
       });
-      
-      // Log event activities
-      if (addedEvents.length > 0) {
-        for (const event of addedEvents) {
-          await logActivity({
-            userId: req.user._id,
-            tripId: updatedTrip._id,
-            eventId: event.id, // Use the string ID directly, don't convert to ObjectId
-            actionType: 'event_create',
-            description: `Added ${event.type} to trip "${updatedTrip.name}"`,
-            details: {
-              tripName: updatedTrip.name,
-              eventType: event.type,
-              eventId: event.id,
-              ...event
-            }
-          });
-        }
-      }
-      
-      if (updatedEvents.length > 0) {
-        for (const update of updatedEvents) {
-          // Create a more detailed description of what changed
-          const eventTypeDisplay = update.event.type.charAt(0).toUpperCase() + update.event.type.slice(1);
-          let eventName = '';
-          
-          // Get a descriptive name based on event type
-          switch (update.event.type) {
-            case 'arrival':
-            case 'departure':
-              eventName = `${update.event.airline || ''} ${update.event.flightNumber || ''} - ${update.event.airport || ''}`;
-              break;
-            case 'stay':
-              eventName = update.event.accommodationName || 'Accommodation';
-              break;
-            case 'destination':
-              eventName = update.event.placeName || update.event.location || 'Destination';
-              break;
-            default:
-              eventName = `Event ${update.event.id.substring(0, 8)}`;
-          }
-          
-          // Format the description to be more specific
-          const description = `Updated ${eventTypeDisplay} "${eventName}" in trip "${updatedTrip.name}" (changed: ${update.changedFields.join(', ')})`;
-          
-          await logActivity({
-            userId: req.user._id,
-            tripId: updatedTrip._id,
-            eventId: update.event.id, // Use the string ID directly
-            actionType: 'event_update',
-            description,
-            details: {
-              tripName: updatedTrip.name,
-              eventType: update.event.type,
-              eventId: update.event.id,
-              changedFields: update.changedFields,
-              previousValues: update.previousValues,
-              newValues: update.newValues,
-              // Include full event details for better context
-              event: update.event
-            }
-          });
-        }
-      }
-      
-      if (deletedEvents.length > 0) {
-        for (const event of deletedEvents) {
-          // Create a more descriptive name for the deleted event
-          const eventTypeDisplay = event.type.charAt(0).toUpperCase() + event.type.slice(1);
-          let eventName = '';
-          
-          // Get a descriptive name based on event type
-          switch (event.type) {
-            case 'arrival':
-            case 'departure':
-              eventName = `${event.airline || ''} ${event.flightNumber || ''} - ${event.airport || ''}`;
-              break;
-            case 'stay':
-              eventName = event.accommodationName || 'Accommodation';
-              break;
-            case 'destination':
-              eventName = event.placeName || event.location || 'Destination';
-              break;
-            default:
-              eventName = `Event ${event.id.substring(0, 8)}`;
-          }
-          
-          await logActivity({
-            userId: req.user._id,
-            tripId: updatedTrip._id,
-            eventId: event.id, // Use the string ID directly
-            actionType: 'event_delete',
-            description: `Removed ${eventTypeDisplay} "${eventName}" from trip "${updatedTrip.name}"`,
-            details: {
-              tripName: updatedTrip.name,
-              eventType: event.type,
-              eventId: event.id,
-              date: event.date,
-              ...event
-            }
-          });
-        }
-      }
+
+      // Mark the events array as modified
+      trip.markModified('events');
+      console.log('Final events array:', JSON.stringify(trip.events, null, 2));
     }
 
-    // Log trip update activity (only if there are non-event changes or no specific event activities were logged)
-    if (changedFields.length > 0 && (changedFields.length > 1 || !changedFields.includes('events'))) {
-      await logActivity({
-        userId: req.user._id,
-        tripId: updatedTrip._id,
-        actionType: 'trip_update',
-        description: `Updated trip "${updatedTrip.name}"${changedFields.length > 0 ? ` (changed: ${changedFields.join(', ')})` : ''}`,
-        details: {
-          tripName: updatedTrip.name,
-          changedFields,
-          previousValues: {
-            name: trip.name,
-            description: trip.description,
-            startDate: trip.startDate,
-            endDate: trip.endDate
-          }
-        }
-      });
-    }
+    // Save the updated trip
+    const updatedTrip = await trip.save();
+    console.log('Saved trip data:', JSON.stringify(updatedTrip, null, 2));
 
     res.json(updatedTrip);
   } catch (error) {

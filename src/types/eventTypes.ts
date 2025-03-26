@@ -43,6 +43,7 @@ export interface StayEvent extends Event {
   type: 'stay';
   accommodationName: string;
   address?: string;
+  checkIn: string; // YYYY-MM-DD format
   checkOut: string; // YYYY-MM-DD format
   reservationNumber?: string;
   contactInfo?: string;
@@ -82,7 +83,7 @@ export interface AuthState {
   token: string | null;
 }
 
-export type EventFormData = {
+export interface EventFormData {
   type: EventType;
   date: string;
   time?: string;
@@ -94,6 +95,7 @@ export type EventFormData = {
   bookingReference?: string;
   accommodationName?: string;
   address?: string;
+  checkIn?: string;
   checkOut?: string;
   reservationNumber?: string;
   contactInfo?: string;
@@ -109,4 +111,4 @@ export type EventFormData = {
     lng: number;
     address?: string;
   };
-}; 
+} 

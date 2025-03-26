@@ -366,45 +366,35 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
 
     if (activity.actionType === 'event_update') {
       const changedFields = activity.details?.changedFields || [];
+      const fieldChanges = activity.details?.fieldChanges || {};
       
       if (changedFields.length === 0) {
         return null;
       }
       
-      // Only show changed fields if they're not already mentioned in the description
-      if (!activity.description.includes('changed:')) {
-        return (
-          <span className="ml-1 text-gray-500">
-            <span className="text-gray-400">•</span> {eventTitle} 
-            {activity.details?.date && ` (${formatDate(activity.details.date, true)})`}
+      return (
+        <span className="ml-1 text-gray-500">
+          <span className="text-gray-400">•</span> {eventTitle} 
+          {activity.details?.date && ` (${formatDate(activity.details.date, true)})`}
+          <span className="text-gray-400 ml-1">
+            • {changedFields.map((field: string) => {
+              const change = fieldChanges[field];
+              // Convert empty values to a readable format
+              const oldValue = !change?.old || change.old === '' ? 'empty' : change.old;
+              const newValue = !change?.new || change.new === '' ? 'empty' : change.new;
+              // Only show the change if values are different
+              return oldValue === newValue ? field : `${field}: ${oldValue} → ${newValue}`;
+            }).join(', ')}
+          </span>
+          {/* Show creator info if available and different from the activity user */}
+          {activity.details?.event?.createdBy && 
+            activity.details.event.createdBy._id !== activity.user._id && (
             <span className="text-gray-400 ml-1">
-              • {changedFields.slice(0, 2).join(', ')}
-              {changedFields.length > 2 && '...'}
+              • Created by {activity.details.event.createdBy.name}
             </span>
-            {/* Show creator info if available and different from the activity user */}
-            {activity.details?.event?.createdBy && 
-              activity.details.event.createdBy._id !== activity.user._id && (
-              <span className="text-gray-400 ml-1">
-                • Created by {activity.details.event.createdBy.name}
-              </span>
-            )}
-          </span>
-        );
-      } else {
-        return (
-          <span className="ml-1 text-gray-500">
-            <span className="text-gray-400">•</span> {eventTitle}
-            {activity.details?.date && ` (${formatDate(activity.details.date, true)})`}
-            {/* Show creator info if available and different from the activity user */}
-            {activity.details?.event?.createdBy && 
-              activity.details.event.createdBy._id !== activity.user._id && (
-              <span className="text-gray-400 ml-1">
-                • Created by {activity.details.event.createdBy.name}
-              </span>
-            )}
-          </span>
-        );
-      }
+          )}
+        </span>
+      );
     }
 
     // For create and delete, show the title and date
