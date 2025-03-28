@@ -1,8 +1,11 @@
 import React, { RefObject } from 'react';
-import { Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent } from '../../types';
+import { Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent } from '../../types';
 import ArrivalFields from './EventTypeFields/ArrivalFields';
 import StayFields from './EventTypeFields/StayFields';
 import DestinationFields from './EventTypeFields/DestinationFields';
+import FlightFields from './EventTypeFields/FlightFields';
+import TrainFields from './EventTypeFields/TrainFields';
+import RentalCarFields from './EventTypeFields/RentalCarFields';
 
 interface EventFormProps {
   eventType: EventType;
@@ -136,6 +139,27 @@ const EventForm: React.FC<EventFormProps> = ({
         return (
           <DestinationFields
             eventData={eventData as Partial<DestinationEvent>}
+            onChange={handleChange}
+          />
+        );
+      case 'flight':
+        return (
+          <FlightFields
+            eventData={eventData as Partial<FlightEvent>}
+            onChange={handleChange}
+          />
+        );
+      case 'train':
+        return (
+          <TrainFields
+            eventData={eventData as Partial<TrainEvent>}
+            onChange={handleChange}
+          />
+        );
+      case 'rental_car':
+        return (
+          <RentalCarFields
+            eventData={eventData as Partial<RentalCarEvent>}
             onChange={handleChange}
           />
         );

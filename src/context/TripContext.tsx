@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { Trip, Event } from '../types/eventTypes';
+import { Trip, Event } from '@/types';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
 

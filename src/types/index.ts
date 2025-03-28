@@ -1,4 +1,4 @@
-export type EventType = 'arrival' | 'departure' | 'stay' | 'destination';
+export type EventType = 'arrival' | 'departure' | 'stay' | 'destination' | 'flight' | 'train' | 'rental_car';
 
 export interface User {
   _id: string;
@@ -112,4 +112,42 @@ export type EventFormData = {
     lng: number;
     address?: string;
   };
-}; 
+};
+
+export interface FlightEvent extends Event {
+  type: 'flight';
+  airline?: string;
+  flightNumber?: string;
+  departureAirport?: string;
+  arrivalAirport?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  terminal?: string;
+  gate?: string;
+  bookingReference?: string;
+}
+
+export interface TrainEvent extends Event {
+  type: 'train';
+  trainNumber?: string;
+  trainOperator?: string;
+  departureStation?: string;
+  arrivalStation?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  carriageNumber?: string;
+  seatNumber?: string;
+  bookingReference?: string;
+}
+
+export interface RentalCarEvent extends Event {
+  type: 'rental_car';
+  carCompany?: string;
+  pickupLocation?: string;
+  dropoffLocation?: string;
+  pickupTime?: string;
+  dropoffTime?: string;
+  carType?: string;
+  bookingReference?: string;
+  licensePlate?: string;
+} 

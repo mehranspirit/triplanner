@@ -327,27 +327,16 @@ function formatTime(date) {
  */
 function formatEventDetails(event) {
   let details = '';
-  
-  // Add event type tag with appropriate class
-  details += `<div class="event-type-tag event-type-tag-${event.type}">${event.type.toUpperCase()}</div>`;
-  
+
   switch (event.type) {
     case 'arrival':
-      details += `<p>Arrival at ${event.airport || 'airport'}</p>`;
-      if (event.airline) details += `<p><strong>Airline:</strong> ${event.airline}</p>`;
-      if (event.flightNumber) details += `<p><strong>Flight:</strong> ${event.flightNumber}</p>`;
-      if (event.terminal) details += `<p><strong>Terminal:</strong> ${event.terminal}</p>`;
-      if (event.gate) details += `<p><strong>Gate:</strong> ${event.gate}</p>`;
-      if (event.bookingReference) details += `<p><strong>Booking Ref:</strong> ${event.bookingReference}</p>`;
-      break;
-      
     case 'departure':
-      details += `<p>Departure from ${event.airport || 'airport'}</p>`;
+      details += `<p>${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${event.airport}</p>`;
       if (event.airline) details += `<p><strong>Airline:</strong> ${event.airline}</p>`;
       if (event.flightNumber) details += `<p><strong>Flight:</strong> ${event.flightNumber}</p>`;
       if (event.terminal) details += `<p><strong>Terminal:</strong> ${event.terminal}</p>`;
       if (event.gate) details += `<p><strong>Gate:</strong> ${event.gate}</p>`;
-      if (event.bookingReference) details += `<p><strong>Booking Ref:</strong> ${event.bookingReference}</p>`;
+      if (event.bookingReference) details += `<p><strong>Booking Reference:</strong> ${event.bookingReference}</p>`;
       break;
       
     case 'stay':
@@ -364,6 +353,39 @@ function formatEventDetails(event) {
       if (event.address) details += `<p><strong>Address:</strong> ${event.address}</p>`;
       if (event.description) details += `<p><strong>Description:</strong> ${event.description}</p>`;
       if (event.openingHours) details += `<p><strong>Hours:</strong> ${event.openingHours}</p>`;
+      break;
+
+    case 'flight':
+      details += `<p>${event.airline || 'Flight'} ${event.flightNumber || ''}</p>`;
+      if (event.departureAirport) details += `<p><strong>From:</strong> ${event.departureAirport}</p>`;
+      if (event.arrivalAirport) details += `<p><strong>To:</strong> ${event.arrivalAirport}</p>`;
+      if (event.departureTime) details += `<p><strong>Departure:</strong> ${event.departureTime}</p>`;
+      if (event.arrivalTime) details += `<p><strong>Arrival:</strong> ${event.arrivalTime}</p>`;
+      if (event.terminal) details += `<p><strong>Terminal:</strong> ${event.terminal}</p>`;
+      if (event.gate) details += `<p><strong>Gate:</strong> ${event.gate}</p>`;
+      if (event.bookingReference) details += `<p><strong>Booking Reference:</strong> ${event.bookingReference}</p>`;
+      break;
+
+    case 'train':
+      details += `<p>${event.trainOperator || 'Train'} ${event.trainNumber || ''}</p>`;
+      if (event.departureStation) details += `<p><strong>From:</strong> ${event.departureStation}</p>`;
+      if (event.arrivalStation) details += `<p><strong>To:</strong> ${event.arrivalStation}</p>`;
+      if (event.departureTime) details += `<p><strong>Departure:</strong> ${event.departureTime}</p>`;
+      if (event.arrivalTime) details += `<p><strong>Arrival:</strong> ${event.arrivalTime}</p>`;
+      if (event.carriageNumber) details += `<p><strong>Carriage:</strong> ${event.carriageNumber}</p>`;
+      if (event.seatNumber) details += `<p><strong>Seat:</strong> ${event.seatNumber}</p>`;
+      if (event.bookingReference) details += `<p><strong>Booking Reference:</strong> ${event.bookingReference}</p>`;
+      break;
+
+    case 'rental_car':
+      details += `<p>${event.carCompany || 'Rental Car'}</p>`;
+      if (event.carType) details += `<p><strong>Car Type:</strong> ${event.carType}</p>`;
+      if (event.pickupLocation) details += `<p><strong>Pickup Location:</strong> ${event.pickupLocation}</p>`;
+      if (event.dropoffLocation) details += `<p><strong>Dropoff Location:</strong> ${event.dropoffLocation}</p>`;
+      if (event.pickupTime) details += `<p><strong>Pickup Time:</strong> ${event.pickupTime}</p>`;
+      if (event.dropoffTime) details += `<p><strong>Dropoff Time:</strong> ${event.dropoffTime}</p>`;
+      if (event.licensePlate) details += `<p><strong>License Plate:</strong> ${event.licensePlate}</p>`;
+      if (event.bookingReference) details += `<p><strong>Booking Reference:</strong> ${event.bookingReference}</p>`;
       break;
       
     default:

@@ -1,4 +1,4 @@
-import { EventType, Event, ArrivalDepartureEvent, StayEvent, DestinationEvent } from '../../types';
+import { EventType, Event, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent } from '../../types';
 
 export interface EventTypeConfig {
   type: EventType;
@@ -82,6 +82,54 @@ const eventTypes: Record<EventType, EventTypeConfig> = {
       return !!(
         destinationEvent.date &&
         destinationEvent.placeName
+      );
+    }
+  },
+  flight: {
+    type: 'flight',
+    label: 'Flight',
+    icon: '✈️',
+    defaultThumbnail: '/images/flight.jpg',
+    fields: {
+      required: ['date'],
+      optional: ['airline', 'flightNumber', 'departureAirport', 'arrivalAirport', 'departureTime', 'arrivalTime', 'terminal', 'gate', 'bookingReference', 'notes', 'source']
+    },
+    validate: (event: Event) => {
+      const flightEvent = event as FlightEvent;
+      return !!(
+        flightEvent.date
+      );
+    }
+  },
+  train: {
+    type: 'train',
+    label: 'Train',
+    icon: '🚂',
+    defaultThumbnail: '/images/train.jpg',
+    fields: {
+      required: ['date'],
+      optional: ['trainNumber', 'trainOperator', 'departureStation', 'arrivalStation', 'departureTime', 'arrivalTime', 'carriageNumber', 'seatNumber', 'bookingReference', 'notes', 'source']
+    },
+    validate: (event: Event) => {
+      const trainEvent = event as TrainEvent;
+      return !!(
+        trainEvent.date
+      );
+    }
+  },
+  rental_car: {
+    type: 'rental_car',
+    label: 'Rental Car',
+    icon: '🚗',
+    defaultThumbnail: '/images/rental_car.jpg',
+    fields: {
+      required: ['date'],
+      optional: ['carCompany', 'pickupLocation', 'dropoffLocation', 'pickupTime', 'dropoffTime', 'carType', 'bookingReference', 'licensePlate', 'notes', 'source']
+    },
+    validate: (event: Event) => {
+      const rentalCarEvent = event as RentalCarEvent;
+      return !!(
+        rentalCarEvent.date
       );
     }
   }

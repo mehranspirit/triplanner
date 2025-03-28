@@ -11,8 +11,11 @@ import {
   StayEvent, 
   DestinationEvent, 
   EventFormData,
-  User 
-} from '../types/eventTypes';
+  User,
+  FlightEvent,
+  TrainEvent,
+  RentalCarEvent
+} from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
 import CollaboratorModal from './CollaboratorModal';
@@ -28,7 +31,10 @@ const DEFAULT_THUMBNAILS = {
   arrival: 'https://images.pexels.com/photos/358319/pexels-photo-358319.jpeg?auto=compress&cs=tinysrgb&w=300',
   departure: 'https://images.pexels.com/photos/723240/pexels-photo-723240.jpeg?auto=compress&cs=tinysrgb&w=300',
   stay: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=300',
-  destination: 'https://images.pexels.com/photos/1483053/pexels-photo-1483053.jpeg?auto=compress&cs=tinysrgb&w=300'
+  destination: 'https://images.pexels.com/photos/1483053/pexels-photo-1483053.jpeg?auto=compress&cs=tinysrgb&w=300',
+  flight: 'https://images.pexels.com/photos/358319/pexels-photo-358319.jpeg?auto=compress&cs=tinysrgb&w=300',
+  train: 'https://images.pexels.com/photos/723240/pexels-photo-723240.jpeg?auto=compress&cs=tinysrgb&w=300',
+  rental_car: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=300'
 };
 
 // Predefined thumbnails as fallback
@@ -50,14 +56,23 @@ const getEventThumbnail = async (event: Event): Promise<string> => {
   // Determine search term based on event type
   switch (event.type) {
     case 'stay':
-      searchTerm = (event as StayEvent).accommodationName;
+      searchTerm = (event as StayEvent).accommodationName || 'hotel accommodation';
       break;
     case 'destination':
-      searchTerm = (event as DestinationEvent).placeName;
+      searchTerm = (event as DestinationEvent).placeName || 'travel destination';
       break;
     case 'arrival':
     case 'departure':
-      searchTerm = (event as ArrivalDepartureEvent).airport;
+      searchTerm = (event as ArrivalDepartureEvent).airport || 'airport terminal';
+      break;
+    case 'flight':
+      searchTerm = (event as FlightEvent).arrivalAirport || (event as FlightEvent).departureAirport || 'airplane';
+      break;
+    case 'train':
+      searchTerm = (event as TrainEvent).arrivalStation || (event as TrainEvent).departureStation || 'train station';
+      break;
+    case 'rental_car':
+      searchTerm = (event as RentalCarEvent).pickupLocation || (event as RentalCarEvent).dropoffLocation || 'car rental';
       break;
   }
 
@@ -175,6 +190,8 @@ const TripDetails: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLeaveWarningOpen, setIsLeaveWarningOpen] = useState(false);
+  const [isDeleteEventWarningOpen, setIsDeleteEventWarningOpen] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState<string | null>(null);
   const [eventType, setEventType] = useState<EventType>('arrival');
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [isEditingEvent, setIsEditingEvent] = useState<string | null>(null);
@@ -183,7 +200,7 @@ const TripDetails: React.FC = () => {
   const [eventStatusFilter, setEventStatusFilter] = useState<'confirmed' | 'exploring'>('confirmed');
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
-  const [eventData, setEventData] = useState<EventFormData>({
+  const [eventData, setEventData] = useState({
     type: 'arrival',
     date: '',
     time: '',
@@ -205,7 +222,27 @@ const TripDetails: React.FC = () => {
     status: 'confirmed',
     thumbnailUrl: '',
     source: 'manual',
-    location: undefined
+    location: undefined as { lat: number; lng: number; address?: string } | undefined,
+    // Flight fields
+    departureAirport: '',
+    arrivalAirport: '',
+    departureTime: '',
+    arrivalTime: '',
+    // Train fields
+    trainOperator: '',
+    trainNumber: '',
+    departureStation: '',
+    arrivalStation: '',
+    carriageNumber: '',
+    seatNumber: '',
+    // Rental Car fields
+    carCompany: '',
+    carType: '',
+    pickupLocation: '',
+    dropoffLocation: '',
+    pickupTime: '',
+    dropoffTime: '',
+    licensePlate: ''
   });
   const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -217,6 +254,7 @@ const TripDetails: React.FC = () => {
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formFeedback, setFormFeedback] = useState({ type: '', message: '' });
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
   const fetchAirports = async (query: string) => {
     if (query.length < 2) {
@@ -569,13 +607,254 @@ const TripDetails: React.FC = () => {
   };
 
   const handleExportHTML = async () => {
-    try {
-      if (!trip?._id) return;
-      await api.exportTripAsHTML(trip._id);
-      setShowExportMenu(false);
-    } catch (error) {
-      setError('Failed to export trip as HTML');
-    }
+    if (!trip) return;
+
+    const getEventIcon = (type: string) => {
+      switch (type) {
+        case 'arrival':
+        case 'departure':
+          return '✈️';
+        case 'stay':
+          return '🏨';
+        case 'destination':
+          return '📍';
+        case 'flight':
+          return '✈️';
+        case 'train':
+          return '🚂';
+        case 'rental_car':
+          return '🚗';
+        default:
+          return '📅';
+      }
+    };
+
+    const getEventTitle = (event: Event) => {
+      switch (event.type) {
+        case 'arrival':
+        case 'departure':
+          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport}`;
+        case 'stay':
+          return (event as StayEvent).accommodationName;
+        case 'destination':
+          return (event as DestinationEvent).placeName;
+        case 'flight': {
+          const e = event as FlightEvent;
+          return `${e.departureAirport || ''} to ${e.arrivalAirport || ''}`;
+        }
+        case 'train': {
+          const e = event as TrainEvent;
+          return `${e.departureStation || ''} to ${e.arrivalStation || ''}`;
+        }
+        case 'rental_car': {
+          const e = event as RentalCarEvent;
+          return `${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`;
+        }
+        default:
+          return 'Event';
+      }
+    };
+
+    const confirmedEvents = trip.events.filter(event => event.status === 'confirmed');
+    const sortedEvents = sortEvents(confirmedEvents);
+    
+    // Group events by date
+    const eventsByDate: Record<string, Event[]> = {};
+    sortedEvents.forEach(event => {
+      const dateString = event.date.split('T')[0];
+      if (!eventsByDate[dateString]) {
+        eventsByDate[dateString] = [];
+      }
+      eventsByDate[dateString].push(event);
+    });
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${trip.name} - Itinerary</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .date-header {
+              background-color: #EEF2FF;
+              padding: 10px 15px;
+              margin: 20px 0 10px;
+              border-radius: 6px;
+              font-weight: 500;
+              color: #3730A3;
+            }
+            .event-card {
+              border: 1px solid #E5E7EB;
+              border-radius: 8px;
+              padding: 15px;
+              margin-bottom: 15px;
+              background-color: white;
+            }
+            .event-header {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin-bottom: 10px;
+            }
+            .event-icon {
+              font-size: 24px;
+            }
+            .event-type {
+              color: #4F46E5;
+              font-weight: 500;
+              text-transform: capitalize;
+            }
+            .event-title {
+              font-weight: 600;
+              color: #111827;
+              margin: 5px 0;
+            }
+            .event-details {
+              color: #6B7280;
+              font-size: 0.9em;
+            }
+            .event-time {
+              color: #4B5563;
+              font-size: 0.9em;
+            }
+            .event-notes {
+              margin-top: 10px;
+              padding-top: 10px;
+              border-top: 1px solid #E5E7EB;
+              color: #6B7280;
+              font-style: italic;
+            }
+            @media print {
+              body {
+                padding: 0;
+              }
+              .event-card {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+              .date-header {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <h1 style="text-align: center; color: #111827; margin-bottom: 30px;">${trip.name}</h1>
+          ${Object.entries(eventsByDate)
+            .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
+            .map(([dateString, events]) => {
+              const [year, month, day] = dateString.split('-').map(Number);
+              const date = new Date(year, month - 1, day, 12);
+              const formattedDate = date.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                month: 'long', 
+                day: 'numeric'
+              });
+              
+              return `
+                <div class="date-header">${formattedDate}</div>
+                ${events.map(event => `
+                  <div class="event-card">
+                    <div class="event-header">
+                      <span class="event-icon">${getEventIcon(event.type)}</span>
+                      <span class="event-type">${event.type.replace('_', ' ')}</span>
+                    </div>
+                    <div class="event-title">${getEventTitle(event)}</div>
+                    ${'time' in event && event.time && `<div class="event-time">${event.time}</div>`}
+                    ${(() => {
+                      switch (event.type) {
+                        case 'arrival':
+                        case 'departure': {
+                          const e = event as ArrivalDepartureEvent;
+                          return `
+                            <div class="event-details">
+                              ${e.airline && `<div>Airline: ${e.airline}</div>`}
+                              ${e.flightNumber && `<div>Flight: ${e.flightNumber}</div>`}
+                              ${e.terminal && `<div>Terminal: ${e.terminal}</div>`}
+                              ${e.gate && `<div>Gate: ${e.gate}</div>`}
+                            </div>
+                          `;
+                        }
+                        case 'stay': {
+                          const e = event as StayEvent;
+                          return `
+                            <div class="event-details">
+                              ${e.checkOut && `<div>Check-out: ${e.checkOut}</div>`}
+                              ${e.address && `<div>Address: ${e.address}</div>`}
+                            </div>
+                          `;
+                        }
+                        case 'destination': {
+                          const e = event as DestinationEvent;
+                          return `
+                            <div class="event-details">
+                              ${e.address && `<div>Address: ${e.address}</div>`}
+                              ${e.openingHours && `<div>Hours: ${e.openingHours}</div>`}
+                            </div>
+                          `;
+                        }
+                        case 'flight': {
+                          const e = event as FlightEvent;
+                          return `
+                            <div class="event-details">
+                              ${e.airline && `<div>Airline: ${e.airline}</div>`}
+                              ${e.flightNumber && `<div>Flight: ${e.flightNumber}</div>`}
+                              ${e.terminal && `<div>Terminal: ${e.terminal}</div>`}
+                              ${e.gate && `<div>Gate: ${e.gate}</div>`}
+                            </div>
+                          `;
+                        }
+                        case 'train': {
+                          const e = event as TrainEvent;
+                          return `
+                            <div class="event-details">
+                              ${e.trainNumber && `<div>Train: ${e.trainNumber}</div>`}
+                              ${e.departureTime && `<div>Departure: ${e.departureTime}</div>`}
+                              ${e.arrivalTime && `<div>Arrival: ${e.arrivalTime}</div>`}
+                            </div>
+                          `;
+                        }
+                        case 'rental_car': {
+                          const e = event as RentalCarEvent;
+                          return `
+                            <div class="event-details">
+                              ${e.carCompany && `<div>Company: ${e.carCompany}</div>`}
+                              ${e.carType && `<div>Car: ${e.carType}</div>`}
+                              ${e.pickupTime && `<div>Pickup: ${e.pickupTime}</div>`}
+                              ${e.dropoffTime && `<div>Dropoff: ${e.dropoffTime}</div>`}
+                            </div>
+                          `;
+                        }
+                        default:
+                          return '';
+                      }
+                    })()}
+                    ${event.notes && `<div class="event-notes">${event.notes}</div>`}
+                  </div>
+                `).join('')}
+              `;
+            }).join('')}
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${trip.name.toLowerCase().replace(/\s+/g, '-')}-itinerary.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleStatusChange = async (eventId: string, newStatus: 'confirmed' | 'exploring') => {
@@ -635,6 +914,14 @@ const TripDetails: React.FC = () => {
       }
 
       await updateEvent(trip._id, updatedEvent);
+      
+      // Update local trip state
+      if (trip) {
+        const updatedEvents = trip.events.map(e => 
+          e.id === eventId ? updatedEvent : e
+        );
+        setTrip({ ...trip, events: updatedEvents });
+      }
     } catch (error) {
       console.error('Error updating vote:', error);
       setError('Failed to update vote');
@@ -663,17 +950,23 @@ const TripDetails: React.FC = () => {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
+    try {
     if (!trip?._id) return;
     
-    try {
-      await deleteEvent(trip._id, eventId);
-      setTrip(prev => prev ? {
-        ...prev,
-        events: prev.events.filter(e => e.id !== eventId)
-      } : null);
+      const response = await fetch(`/api/trips/${trip._id}/events/${eventId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete event');
+      }
+
+      const updatedTrip = await response.json();
+      setTrip(updatedTrip);
+      setIsDeleteEventWarningOpen(false);
+      setEventToDelete(null);
     } catch (error) {
       console.error('Error deleting event:', error);
-      setError('Failed to delete event');
     }
   };
 
@@ -707,7 +1000,27 @@ const TripDetails: React.FC = () => {
       status: 'confirmed',
       thumbnailUrl: '',
       source: 'manual',
-      location: undefined
+      location: undefined,
+      // Flight fields
+      departureAirport: '',
+      arrivalAirport: '',
+      departureTime: '',
+      arrivalTime: '',
+      // Train fields
+      trainOperator: '',
+      trainNumber: '',
+      departureStation: '',
+      arrivalStation: '',
+      carriageNumber: '',
+      seatNumber: '',
+      // Rental Car fields
+      carCompany: '',
+      carType: '',
+      pickupLocation: '',
+      dropoffLocation: '',
+      pickupTime: '',
+      dropoffTime: '',
+      licensePlate: ''
     });
   };
 
@@ -716,6 +1029,23 @@ const TripDetails: React.FC = () => {
       resetEventForm();
     }
   }, [isModalOpen]);
+
+  const toggleEventExpansion = (eventId: string, e: React.MouseEvent) => {
+    // Don't toggle if clicking on buttons or links
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) {
+      return;
+    }
+    
+    setExpandedEvents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(eventId)) {
+        newSet.delete(eventId);
+      } else {
+        newSet.add(eventId);
+      }
+      return newSet;
+    });
+  };
 
   if (loading) {
     return (
@@ -828,9 +1158,29 @@ const TripDetails: React.FC = () => {
       status: event.status || 'confirmed',
       thumbnailUrl: event.thumbnailUrl || '',
       source: event.source || 'manual',
-      location: event.location
+      location: event.location,
+      // Flight fields
+      departureAirport: (event as FlightEvent).departureAirport || '',
+      arrivalAirport: (event as FlightEvent).arrivalAirport || '',
+      departureTime: (event as FlightEvent).departureTime || '',
+      arrivalTime: (event as FlightEvent).arrivalTime || '',
+      // Train fields
+      trainOperator: (event as TrainEvent).trainOperator || '',
+      trainNumber: (event as TrainEvent).trainNumber || '',
+      departureStation: (event as TrainEvent).departureStation || '',
+      arrivalStation: (event as TrainEvent).arrivalStation || '',
+      carriageNumber: (event as TrainEvent).carriageNumber || '',
+      seatNumber: (event as TrainEvent).seatNumber || '',
+      // Rental Car fields
+      carCompany: (event as RentalCarEvent).carCompany || '',
+      carType: (event as RentalCarEvent).carType || '',
+      pickupLocation: (event as RentalCarEvent).pickupLocation || '',
+      dropoffLocation: (event as RentalCarEvent).dropoffLocation || '',
+      pickupTime: (event as RentalCarEvent).pickupTime || '',
+      dropoffTime: (event as RentalCarEvent).dropoffTime || '',
+      licensePlate: (event as RentalCarEvent).licensePlate || ''
     });
-    setIsModalOpen(true);  // Add this line to open the modal
+    setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -903,6 +1253,52 @@ const TripDetails: React.FC = () => {
           reservationNumber: eventData.reservationNumber,
           contactInfo: eventData.contactInfo
         } as StayEvent;
+      } else if (eventData.type === 'destination') {
+        newEvent = {
+          ...baseEvent,
+          placeName: eventData.placeName || '',
+          address: eventData.address,
+          description: eventData.description,
+          openingHours: eventData.openingHours
+        } as DestinationEvent;
+      } else if (eventData.type === 'flight') {
+        newEvent = {
+          ...baseEvent,
+          airline: eventData.airline,
+          flightNumber: eventData.flightNumber,
+          departureAirport: eventData.departureAirport,
+          arrivalAirport: eventData.arrivalAirport,
+          departureTime: eventData.departureTime,
+          arrivalTime: eventData.arrivalTime,
+          terminal: eventData.terminal,
+          gate: eventData.gate,
+          bookingReference: eventData.bookingReference
+        } as FlightEvent;
+      } else if (eventData.type === 'train') {
+        newEvent = {
+          ...baseEvent,
+          trainNumber: eventData.trainNumber,
+          trainOperator: eventData.trainOperator,
+          departureStation: eventData.departureStation,
+          arrivalStation: eventData.arrivalStation,
+          departureTime: eventData.departureTime,
+          arrivalTime: eventData.arrivalTime,
+          carriageNumber: eventData.carriageNumber,
+          seatNumber: eventData.seatNumber,
+          bookingReference: eventData.bookingReference
+        } as TrainEvent;
+      } else if (eventData.type === 'rental_car') {
+        newEvent = {
+          ...baseEvent,
+          carCompany: eventData.carCompany,
+          carType: eventData.carType,
+          pickupLocation: eventData.pickupLocation,
+          dropoffLocation: eventData.dropoffLocation,
+          pickupTime: eventData.pickupTime,
+          dropoffTime: eventData.dropoffTime,
+          licensePlate: eventData.licensePlate,
+          bookingReference: eventData.bookingReference
+        } as RentalCarEvent;
       } else {
         newEvent = {
           ...baseEvent,
@@ -1209,8 +1605,7 @@ const TripDetails: React.FC = () => {
                   const value = e.target.value;
                   setEventData({ 
                     ...eventData, 
-                    date: value,
-                    checkIn: value 
+                    date: value
                   });
                 }}
                 className="input"
@@ -1341,6 +1736,307 @@ const TripDetails: React.FC = () => {
             </div>
           </>
         );
+      case 'flight':
+        return (
+          <>
+            {commonFields}
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Airline (optional)</label>
+              <input
+                type="text"
+                value={eventData.airline}
+                onChange={(e) =>
+                  setEventData({ ...eventData, airline: e.target.value })
+                }
+                className="input"
+                placeholder="Enter airline name"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Flight Number (optional)</label>
+              <input
+                type="text"
+                value={eventData.flightNumber}
+                onChange={(e) =>
+                  setEventData({ ...eventData, flightNumber: e.target.value })
+                }
+                className="input"
+                placeholder="Enter flight number"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Departure Airport</label>
+              <input
+                type="text"
+                value={eventData.departureAirport}
+                onChange={(e) =>
+                  setEventData({ ...eventData, departureAirport: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter departure airport"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Arrival Airport</label>
+              <input
+                type="text"
+                value={eventData.arrivalAirport}
+                onChange={(e) =>
+                  setEventData({ ...eventData, arrivalAirport: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter arrival airport"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Departure Time</label>
+              <input
+                type="time"
+                value={eventData.departureTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, departureTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Arrival Time</label>
+              <input
+                type="time"
+                value={eventData.arrivalTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, arrivalTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Terminal (optional)</label>
+              <input
+                type="text"
+                value={eventData.terminal}
+                onChange={(e) =>
+                  setEventData({ ...eventData, terminal: e.target.value })
+                }
+                className="input"
+                placeholder="Enter terminal number"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Gate (optional)</label>
+              <input
+                type="text"
+                value={eventData.gate}
+                onChange={(e) =>
+                  setEventData({ ...eventData, gate: e.target.value })
+                }
+                className="input"
+                placeholder="Enter gate number"
+              />
+            </div>
+          </>
+        );
+      case 'train':
+        return (
+          <>
+            {commonFields}
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Train Operator (optional)</label>
+              <input
+                type="text"
+                value={eventData.trainOperator}
+                onChange={(e) =>
+                  setEventData({ ...eventData, trainOperator: e.target.value })
+                }
+                className="input"
+                placeholder="Enter train operator"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Train Number (optional)</label>
+              <input
+                type="text"
+                value={eventData.trainNumber}
+                onChange={(e) =>
+                  setEventData({ ...eventData, trainNumber: e.target.value })
+                }
+                className="input"
+                placeholder="Enter train number"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Departure Station</label>
+              <input
+                type="text"
+                value={eventData.departureStation}
+                onChange={(e) =>
+                  setEventData({ ...eventData, departureStation: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter departure station"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Arrival Station</label>
+              <input
+                type="text"
+                value={eventData.arrivalStation}
+                onChange={(e) =>
+                  setEventData({ ...eventData, arrivalStation: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter arrival station"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Departure Time</label>
+              <input
+                type="time"
+                value={eventData.departureTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, departureTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Arrival Time</label>
+              <input
+                type="time"
+                value={eventData.arrivalTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, arrivalTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Carriage Number (optional)</label>
+              <input
+                type="text"
+                value={eventData.carriageNumber}
+                onChange={(e) =>
+                  setEventData({ ...eventData, carriageNumber: e.target.value })
+                }
+                className="input"
+                placeholder="Enter carriage number"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Seat Number (optional)</label>
+              <input
+                type="text"
+                value={eventData.seatNumber}
+                onChange={(e) =>
+                  setEventData({ ...eventData, seatNumber: e.target.value })
+                }
+                className="input"
+                placeholder="Enter seat number"
+              />
+            </div>
+          </>
+        );
+      case 'rental_car':
+        return (
+          <>
+            {commonFields}
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Car Company</label>
+              <input
+                type="text"
+                value={eventData.carCompany}
+                onChange={(e) =>
+                  setEventData({ ...eventData, carCompany: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter car rental company"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Car Type (optional)</label>
+              <input
+                type="text"
+                value={eventData.carType}
+                onChange={(e) =>
+                  setEventData({ ...eventData, carType: e.target.value })
+                }
+                className="input"
+                placeholder="Enter car type/model"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Pickup Location</label>
+              <input
+                type="text"
+                value={eventData.pickupLocation}
+                onChange={(e) =>
+                  setEventData({ ...eventData, pickupLocation: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter pickup location"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Dropoff Location</label>
+              <input
+                type="text"
+                value={eventData.dropoffLocation}
+                onChange={(e) =>
+                  setEventData({ ...eventData, dropoffLocation: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter dropoff location"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Pickup Time</label>
+              <input
+                type="time"
+                value={eventData.pickupTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, pickupTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Dropoff Time</label>
+              <input
+                type="time"
+                value={eventData.dropoffTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, dropoffTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">License Plate (optional)</label>
+              <input
+                type="text"
+                value={eventData.licensePlate}
+                onChange={(e) =>
+                  setEventData({ ...eventData, licensePlate: e.target.value })
+                }
+                className="input"
+                placeholder="Enter license plate number"
+              />
+            </div>
+          </>
+        );
       default:
         return null;
     }
@@ -1455,35 +2151,20 @@ const TripDetails: React.FC = () => {
   };
 
   const renderCreatorInfo = (event: Event) => {
-    console.log('renderCreatorInfo - Event:', {
-      eventId: event.id,
-      eventType: event.type,
-      createdBy: event.createdBy,
-      createdByType: typeof event.createdBy,
-      createdById: typeof event.createdBy === 'object' ? event.createdBy._id : event.createdBy
-    });
-    
     const creatorInfo = getCreatorInfo(event.createdBy);
-    
-    console.log('renderCreatorInfo - Creator Info:', {
-      creatorInfo,
-      photoUrl: creatorInfo?.photoUrl,
-      name: creatorInfo?.name
-    });
+    if (!creatorInfo) return null;
     
     return (
-      <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
-        <div className="flex items-center space-x-2">
+      <div className="flex items-center flex-shrink-0">
           <Avatar
-            photoUrl={creatorInfo?.photoUrl || null}
-            name={creatorInfo?.name || "Unknown"}
+          photoUrl={creatorInfo.photoUrl || null}
+          name={creatorInfo.name}
             size="sm"
             className="ring-2 ring-white"
           />
-          <span className="text-sm text-gray-600">
-            {creatorInfo?.name || "Unknown"}
+        <span className="text-sm text-gray-600 ml-2">
+          {creatorInfo.name}
           </span>
-        </div>
       </div>
     );
   };
@@ -1499,6 +2180,12 @@ const TripDetails: React.FC = () => {
           return '🏨';
         case 'destination':
           return '📍';
+        case 'flight':
+          return '✈️';
+        case 'train':
+          return '🚂';
+        case 'rental_car':
+          return '🚗';
         default:
           return '📅';
       }
@@ -1514,6 +2201,18 @@ const TripDetails: React.FC = () => {
           return (event as StayEvent).accommodationName;
         case 'destination':
           return (event as DestinationEvent).placeName;
+        case 'flight': {
+          const flightEvent = event as FlightEvent;
+          return `${flightEvent.airline || 'Flight'} ${flightEvent.flightNumber || ''} - ${flightEvent.departureAirport || ''} to ${flightEvent.arrivalAirport || ''}`;
+        }
+        case 'train': {
+          const trainEvent = event as TrainEvent;
+          return `${trainEvent.trainOperator || 'Train'} ${trainEvent.trainNumber || ''} - ${trainEvent.departureStation || ''} to ${trainEvent.arrivalStation || ''}`;
+        }
+        case 'rental_car': {
+          const carEvent = event as RentalCarEvent;
+          return `${carEvent.carCompany || 'Rental Car'} - ${carEvent.pickupLocation || ''} to ${carEvent.dropoffLocation || ''}`;
+        }
         default:
           return 'Event';
       }
@@ -1549,6 +2248,51 @@ const TripDetails: React.FC = () => {
             <div className="text-sm text-gray-600">
               {destinationEvent.address && <p>Address: {destinationEvent.address}</p>}
               {destinationEvent.description && <p>{destinationEvent.description}</p>}
+            </div>
+          );
+        }
+        case 'flight': {
+          const flightEvent = event as FlightEvent;
+          return (
+            <div className="text-sm text-gray-600">
+              {flightEvent.airline && <p>Airline: {flightEvent.airline}</p>}
+              {flightEvent.flightNumber && <p>Flight: {flightEvent.flightNumber}</p>}
+              {flightEvent.departureAirport && <p>From: {flightEvent.departureAirport}</p>}
+              {flightEvent.arrivalAirport && <p>To: {flightEvent.arrivalAirport}</p>}
+              {flightEvent.departureTime && <p>Departure: {flightEvent.departureTime}</p>}
+              {flightEvent.arrivalTime && <p>Arrival: {flightEvent.arrivalTime}</p>}
+              {flightEvent.terminal && <p>Terminal: {flightEvent.terminal}</p>}
+              {flightEvent.gate && <p>Gate: {flightEvent.gate}</p>}
+              {flightEvent.bookingReference && <p>Booking Ref: {flightEvent.bookingReference}</p>}
+            </div>
+          );
+        }
+        case 'train': {
+          const trainEvent = event as TrainEvent;
+          return (
+            <div className="flex justify-between items-end">
+              <div className="text-sm text-gray-600">
+                <p>Venice to Vienna</p>
+                {trainEvent.departureTime && <p>Departure: {trainEvent.departureTime}</p>}
+                {trainEvent.arrivalTime && <p>Arrival: {trainEvent.arrivalTime}</p>}
+                {trainEvent.carriageNumber && <p>Carriage: {trainEvent.carriageNumber}</p>}
+                {trainEvent.seatNumber && <p>Seat: {trainEvent.seatNumber}</p>}
+              </div>
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
+        case 'rental_car': {
+          const carEvent = event as RentalCarEvent;
+          return (
+            <div className="text-sm text-gray-600">
+              {carEvent.carType && <p>Car Type: {carEvent.carType}</p>}
+              {carEvent.pickupLocation && <p>Pickup: {carEvent.pickupLocation}</p>}
+              {carEvent.dropoffLocation && <p>Dropoff: {carEvent.dropoffLocation}</p>}
+              {carEvent.pickupTime && <p>Pickup Time: {carEvent.pickupTime}</p>}
+              {carEvent.dropoffTime && <p>Dropoff Time: {carEvent.dropoffTime}</p>}
+              {carEvent.licensePlate && <p>License Plate: {carEvent.licensePlate}</p>}
+              {carEvent.bookingReference && <p>Booking Ref: {carEvent.bookingReference}</p>}
             </div>
           );
         }
@@ -1638,6 +2382,117 @@ const TripDetails: React.FC = () => {
           );
         }
         
+        case 'flight': {
+          const flightEvent = event as FlightEvent;
+          return (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {flightEvent.airline || 'Flight'} {flightEvent.flightNumber || ''}
+              </p>
+              <p className="text-xs text-gray-500">
+                {flightEvent.departureAirport || ''} to {flightEvent.arrivalAirport || ''}
+              </p>
+              {flightEvent.departureTime && (
+                <p className="text-xs text-gray-500">
+                  Departure: {flightEvent.departureTime}
+                </p>
+              )}
+              {flightEvent.arrivalTime && (
+                <p className="text-xs text-gray-500">
+                  Arrival: {flightEvent.arrivalTime}
+                </p>
+              )}
+              {flightEvent.terminal && (
+                <p className="text-xs text-gray-500">
+                  Terminal: {flightEvent.terminal}
+                </p>
+              )}
+              {flightEvent.gate && (
+                <p className="text-xs text-gray-500">
+                  Gate: {flightEvent.gate}
+                </p>
+              )}
+              {event.status === 'exploring' && renderExploringContent()}
+              {event.notes && renderNotes()}
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
+        
+        case 'train': {
+          const trainEvent = event as TrainEvent;
+          return (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {trainEvent.trainOperator || 'Train'} {trainEvent.trainNumber || ''}
+              </p>
+              <p className="text-xs text-gray-500">
+                {trainEvent.departureStation || ''} to {trainEvent.arrivalStation || ''}
+              </p>
+              {trainEvent.departureTime && (
+                <p className="text-xs text-gray-500">
+                  Departure: {trainEvent.departureTime}
+                </p>
+              )}
+              {trainEvent.arrivalTime && (
+                <p className="text-xs text-gray-500">
+                  Arrival: {trainEvent.arrivalTime}
+                </p>
+              )}
+              {trainEvent.carriageNumber && (
+                <p className="text-xs text-gray-500">
+                  Carriage: {trainEvent.carriageNumber}
+                </p>
+              )}
+              {trainEvent.seatNumber && (
+                <p className="text-xs text-gray-500">
+                  Seat: {trainEvent.seatNumber}
+                </p>
+              )}
+              {event.status === 'exploring' && renderExploringContent()}
+              {event.notes && renderNotes()}
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
+        
+        case 'rental_car': {
+          const carEvent = event as RentalCarEvent;
+          return (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {carEvent.carCompany || 'Rental Car'}
+              </p>
+              {carEvent.carType && (
+                <p className="text-xs text-gray-500">
+                  {carEvent.carType}
+                </p>
+              )}
+              <p className="text-xs text-gray-500">
+                {carEvent.pickupLocation || ''} to {carEvent.dropoffLocation || ''}
+              </p>
+              {carEvent.pickupTime && (
+                <p className="text-xs text-gray-500">
+                  Pickup: {carEvent.pickupTime}
+                </p>
+              )}
+              {carEvent.dropoffTime && (
+                <p className="text-xs text-gray-500">
+                  Dropoff: {carEvent.dropoffTime}
+                </p>
+              )}
+              {carEvent.licensePlate && (
+                <p className="text-xs text-gray-500">
+                  License Plate: {carEvent.licensePlate}
+                </p>
+              )}
+              {event.status === 'exploring' && renderExploringContent()}
+              {event.notes && renderNotes()}
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
+        
         default:
           return null;
       }
@@ -1708,13 +2563,24 @@ const TripDetails: React.FC = () => {
 
     return (
       <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-        <div className="flex items-start">
-          <div className="text-2xl mr-3">{getEventIcon()}</div>
+        <div className="flex flex-col">
+          {/* Event type header */}
+          <div className="flex items-center mb-3">
+            <div className="text-2xl mr-2">{getEventIcon()}</div>
+            <h2 className="text-xl font-semibold text-indigo-600 capitalize">{event.type.replace('_', ' ')}</h2>
+          </div>
+
+          {/* Main content */}
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900">{getEventTitle()}</h3>
             <p className="text-sm text-gray-500">{event.date}</p>
             {getEventDetails()}
-            {renderEventContent()}
+          </div>
+
+          {/* Bottom section */}
+          <div className="mt-4">
+            {event.status === 'exploring' && renderExploringContent()}
+            {event.notes && renderNotes()}
           </div>
         </div>
       </div>
@@ -2014,8 +2880,7 @@ const TripDetails: React.FC = () => {
                 sortedEvents.forEach(event => {
                   // Get the date string (YYYY-MM-DD) for grouping
                   const eventDate = getEventDate(event);
-                  
-                  const dateString = eventDate.toISOString().split('T')[0];
+                  const dateString = event.date.split('T')[0];
                   
                   if (!eventsByDate[dateString]) {
                     eventsByDate[dateString] = [];
@@ -2038,11 +2903,16 @@ const TripDetails: React.FC = () => {
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
-                            {new Date(dateString).toLocaleDateString('en-US', { 
+                            {(() => {
+                              // Create a date object with the time set to noon to avoid timezone issues
+                              const [year, month, day] = dateString.split('-').map(Number);
+                              const date = new Date(year, month - 1, day, 12);
+                              return date.toLocaleDateString('en-US', { 
                               weekday: 'long', 
                               month: 'long', 
                               day: 'numeric'
-                            })}
+                              });
+                            })()}
                           </h3>
                         </div>
                         
@@ -2051,7 +2921,8 @@ const TripDetails: React.FC = () => {
                           {events.map((event) => (
                             <li 
                               key={event.id} 
-                              className="px-4 py-3 sm:px-6 relative bg-white"
+                              className="px-4 py-3 sm:px-6 relative bg-white cursor-pointer hover:bg-gray-50 transition-colors duration-150"
+                              onClick={(e) => toggleEventExpansion(event.id, e)}
                               style={{
                                 opacity: 1,
                                 borderStyle: statusMenuOpen === event.id ? 'dashed' : 'solid',
@@ -2074,69 +2945,71 @@ const TripDetails: React.FC = () => {
                                 </div>
                                 <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                    <p className="text-sm font-medium text-indigo-600 capitalize">
-                      {event.type}
+                                    <div className="flex items-center space-x-3">
+                                      {(() => {
+                                        switch (event.type) {
+                                          case 'arrival':
+                                          case 'departure':
+                                            return <span className="text-2xl">✈️</span>;
+                                          case 'stay':
+                                            return <span className="text-2xl">🏨</span>;
+                                          case 'destination':
+                                            return <span className="text-2xl">📍</span>;
+                                          case 'flight':
+                                            return <span className="text-2xl">✈️</span>;
+                                          case 'train':
+                                            return <span className="text-2xl">🚂</span>;
+                                          case 'rental_car':
+                                            return <span className="text-2xl">🚗</span>;
+                                          default:
+                                            return <span className="text-2xl">📅</span>;
+                                        }
+                                      })()}
+                                      <p className="text-base font-semibold text-indigo-600 capitalize">
+                                        {event.type.replace('_', ' ')}
                     </p>
                   </div>
                                     {canEdit && (
-                                      <div className="flex space-x-2 ml-2">
+                                      <div className="flex space-x-2">
                                         <button
-                                          onClick={() => handleEditEvent(event)}
-                                          className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
-                                          title="Edit Event"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleStatusChange(event.id, event.status === 'confirmed' ? 'exploring' : 'confirmed');
+                                          }}
+                                          className={`transition-colors ${
+                                            event.status === 'confirmed'
+                                              ? 'text-green-600 hover:text-green-900'
+                                              : 'text-yellow-600 hover:text-yellow-900'
+                                          }`}
+                                          title={event.status === 'confirmed' ? 'Mark as Exploring' : 'Mark as Confirmed'}
                                         >
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                                          </svg>
+                                          {event.status === 'confirmed' ? (
+                                            <span className="text-base">🤔</span>
+                                          ) : (
+                                            <span className="text-base">✅</span>
+                                          )}
                                         </button>
-                                        <div className="relative">
                                           <button
                                             onClick={(e) => {
-                                              e.stopPropagation(); // Prevent event bubbling
-                                              setStatusMenuOpen(statusMenuOpen === event.id ? null : event.id);
+                                            e.stopPropagation();
+                                            handleEditEvent(event);
                                             }}
-                                            className="p-1.5 bg-white/90 hover:bg-white rounded-full text-indigo-600 hover:text-indigo-900 shadow-sm transition-colors"
-                                            title="Change Status"
+                                          className="text-indigo-600 hover:text-indigo-900 transition-colors"
+                                          title="Edit Event"
                                           >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                                             </svg>
                                           </button>
-                                          {statusMenuOpen === event.id && (
-                                            <div 
-                                              className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-[9999]"
-                                              ref={statusMenuRef}
-                                              style={{ 
-                                                position: 'absolute', 
-                                                zIndex: 9999,
-                                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                                              }}
-                                            >
-                                              <div className="py-1">
                                                 <button
-                                                  onClick={() => handleStatusChange(event.id, 'confirmed')}
-                                                  className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'confirmed' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                                                >
-                                                  ✓ Confirmed
-                                                </button>
-                                                <button
-                                                  onClick={() => handleStatusChange(event.id, 'exploring')}
-                                                  className={`block w-full text-left px-4 py-2 text-sm ${event.status === 'exploring' ? 'bg-green-50 text-green-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                                                >
-                                                  🔍 Exploring
-                                                </button>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                        <button
-                                          onClick={() => {
+                                          onClick={(e) => {
+                                            e.stopPropagation();
                                             if (trip._id) {
-                                              handleDeleteEvent(event.id);
+                                              setEventToDelete(event.id);
+                                              setIsDeleteEventWarningOpen(true);
                                             }
                                           }}
-                                          className="p-1.5 bg-white/90 hover:bg-white rounded-full text-red-600 hover:text-red-900 shadow-sm transition-colors"
+                                          className="text-red-600 hover:text-red-900 transition-colors"
                                           title="Delete Event"
                                         >
                                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -2147,100 +3020,172 @@ const TripDetails: React.FC = () => {
                                     )}
                                   </div>
                                   
-                                  {/* Event type-specific content */}
+                                  {/* Main content - always visible */}
                                     <div className="mt-1">
+                                    <p className="text-sm font-medium text-gray-900">
                                     {(() => {
                                       switch (event.type) {
-                                        case 'arrival': {
-                                          const flightEvent = event as ArrivalDepartureEvent;
-                                          return (
-                                            <>
-                                      <p className="text-sm font-medium text-gray-900 truncate">
-                                                Arrival at {flightEvent.airport}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                                {flightEvent.airline && `${flightEvent.airline}`} {flightEvent.flightNumber}
-                                                {flightEvent.time && ` • ${flightEvent.time}`}
-                                              </p>
-                                              {flightEvent.terminal && (
-                                                <p className="text-xs text-gray-500">Terminal: {flightEvent.terminal}</p>
-                                              )}
-                                              {flightEvent.gate && (
-                                                <p className="text-xs text-gray-500">Gate: {flightEvent.gate}</p>
-                                              )}
-                                            </>
-                                          );
+                                          case 'arrival':
+                                          case 'departure':
+                                            return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport}`;
+                                          case 'stay':
+                                            return (event as StayEvent).accommodationName;
+                                          case 'destination':
+                                            return (event as DestinationEvent).placeName;
+                                          case 'flight': {
+                                            const e = event as FlightEvent;
+                                            return `${e.departureAirport || ''} to ${e.arrivalAirport || ''}`;
+                                          }
+                                          case 'train': {
+                                            const e = event as TrainEvent;
+                                            return `${e.departureStation || ''} to ${e.arrivalStation || ''}`;
+                                          }
+                                          case 'rental_car': {
+                                            const e = event as RentalCarEvent;
+                                            return `${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`;
+                                          }
+                                          default:
+                                            return 'Event';
                                         }
+                                      })()}
+                                    </p>
+                                    {event.type === 'rental_car' && (
+                                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                                        <span className="font-medium">{(event as RentalCarEvent).carCompany || 'Rental Car'}</span>
+                                        {(event as RentalCarEvent).carType && (
+                                          <>
+                                            <span>•</span>
+                                            <span>{(event as RentalCarEvent).carType}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
+                                    <div 
+                                      className="mt-2 w-full flex items-center text-sm text-gray-500 border-t border-gray-100 pt-2"
+                                      title={expandedEvents.has(event.id) ? "Show less" : "Show more details"}
+                                    >
+                                      {event.status === 'exploring' && (
+                                        <div className="flex items-center gap-2 mr-auto">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleVote(event.id, 'like');
+                                            }}
+                                            className={`text-sm transition-colors ${
+                                              event.likes?.includes(user?._id || '') ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-green-600'
+                                            }`}
+                                            title="Vote Up"
+                                          >
+                                            <span className="text-base">⬆️</span>
+                                            <span className="ml-1 text-xs">{event.likes?.length || 0}</span>
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleVote(event.id, 'dislike');
+                                            }}
+                                            className={`text-sm transition-colors ${
+                                              event.dislikes?.includes(user?._id || '') ? 'text-red-600 hover:text-red-700' : 'text-gray-400 hover:text-red-600'
+                                            }`}
+                                            title="Vote Down"
+                                          >
+                                            <span className="text-base">⬇️</span>
+                                            <span className="ml-1 text-xs">{event.dislikes?.length || 0}</span>
+                                          </button>
+                                        </div>
+                                      )}
+                                      <span 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleEventExpansion(event.id, e);
+                                        }}
+                                        className="text-base cursor-pointer hover:text-gray-700 transition-colors tracking-widest select-none text-gray-300"
+                                      >
+                                        •••
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Expanded content */}
+                                  {expandedEvents.has(event.id) && (
+                                    <>
+                                      {(() => {
+                                        switch (event.type) {
+                                          case 'arrival':
                                         case 'departure': {
-                                          const flightEvent = event as ArrivalDepartureEvent;
+                                            const e = event as ArrivalDepartureEvent;
                                           return (
-                                            <>
-                                      <p className="text-sm font-medium text-gray-900 truncate">
-                                                Departure from {flightEvent.airport}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                                {flightEvent.airline && `${flightEvent.airline}`} {flightEvent.flightNumber}
-                                                {flightEvent.time && ` • ${flightEvent.time}`}
-                                              </p>
-                                              {flightEvent.terminal && (
-                                                <p className="text-xs text-gray-500">Terminal: {flightEvent.terminal}</p>
-                                              )}
-                                              {flightEvent.gate && (
-                                                <p className="text-xs text-gray-500">Gate: {flightEvent.gate}</p>
-                                              )}
-                                            </>
+                                              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                {e.time && <p>Time: {e.time}</p>}
+                                                {e.airline && <p>Airline: {e.airline}</p>}
+                                                {e.flightNumber && <p>Flight: {e.flightNumber}</p>}
+                                                {e.terminal && <p>Terminal: {e.terminal}</p>}
+                                                {e.gate && <p>Gate: {e.gate}</p>}
+                                              </div>
                                           );
                                         }
                                         case 'stay': {
-                                          const stayEvent = event as StayEvent;
+                                            const e = event as StayEvent;
                                         return (
-                                            <>
-                                              <p className="text-sm font-medium text-gray-900 truncate">
-                                                {stayEvent.accommodationName}
-                                              </p>
-                                              <p className="text-xs text-gray-500">
-                                                Check-in: {stayEvent.date}
-                                              </p>
-                                              <p className="text-xs text-gray-500">
-                                                Check-out: {stayEvent.checkOut}
-                                              </p>
-                                              {stayEvent.address && (
-                                                <p className="text-xs text-gray-500 mt-1 truncate">
-                                                  {stayEvent.address}
-                                                </p>
-                                              )}
-                                            </>
+                                              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                <p>Check-out: {e.checkOut}</p>
+                                                {e.address && <p>Address: {e.address}</p>}
+                                              </div>
                                           );
                                         }
                                         case 'destination': {
-                                          const destinationEvent = event as DestinationEvent;
+                                            const e = event as DestinationEvent;
                                           return (
-                                            <>
-                                      <p className="text-sm font-medium text-gray-900 truncate">
-                                                {destinationEvent.placeName}
-                                      </p>
-                                              {destinationEvent.address && (
-                                        <p className="text-xs text-gray-500 mt-1 truncate">
-                                                  {destinationEvent.address}
-                                        </p>
-                                      )}
-                                              {destinationEvent.description && (
-                                                <p className="text-xs text-gray-500 mt-1 truncate">
-                                                  {destinationEvent.description}
-                                                </p>
-                                              )}
-                                              {destinationEvent.openingHours && (
-                                                <p className="text-xs text-gray-500">
-                                                  Hours: {destinationEvent.openingHours}
-                                                </p>
-                                              )}
-                                            </>
+                                              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                {e.address && <p>Address: {e.address}</p>}
+                                                {e.description && <p>{e.description}</p>}
+                                              </div>
+                                            );
+                                          }
+                                          case 'flight': {
+                                            const e = event as FlightEvent;
+                                            return (
+                                              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                {e.airline && <p>Airline: {e.airline}</p>}
+                                                {e.flightNumber && <p>Flight: {e.flightNumber}</p>}
+                                                {e.departureTime && <p>Departure: {e.departureTime}</p>}
+                                                {e.arrivalTime && <p>Arrival: {e.arrivalTime}</p>}
+                                                {e.terminal && <p>Terminal: {e.terminal}</p>}
+                                                {e.gate && <p>Gate: {e.gate}</p>}
+                                                {e.bookingReference && <p>Booking Ref: {e.bookingReference}</p>}
+                                              </div>
+                                            );
+                                          }
+                                          case 'train': {
+                                            const e = event as TrainEvent;
+                                            return (
+                                              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                {e.trainOperator && <p>Operator: {e.trainOperator}</p>}
+                                                {e.trainNumber && <p>Train: {e.trainNumber}</p>}
+                                                {e.departureTime && <p>Departure: {e.departureTime}</p>}
+                                                {e.arrivalTime && <p>Arrival: {e.arrivalTime}</p>}
+                                                {e.carriageNumber && <p>Carriage: {e.carriageNumber}</p>}
+                                                {e.seatNumber && <p>Seat: {e.seatNumber}</p>}
+                                              </div>
+                                            );
+                                          }
+                                          case 'rental_car': {
+                                            const e = event as RentalCarEvent;
+                                            return (
+                                              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                {e.carType && <p>Car Type: {e.carType}</p>}
+                                                {e.pickupTime && <p>Pickup Time: {e.pickupTime}</p>}
+                                                {e.dropoffTime && <p>Dropoff Time: {e.dropoffTime}</p>}
+                                                {e.licensePlate && <p>License Plate: {e.licensePlate}</p>}
+                                                {e.bookingReference && <p>Booking Ref: {e.bookingReference}</p>}
+                                              </div>
                                           );
                                         }
                                         default:
                                           return null;
                                       }
                                     })()}
+
                                       {event.status === 'exploring' && (
                                         <div className="mt-2 pt-2 border-t border-gray-100">
                                           <div className="flex items-center justify-between mb-1">
@@ -2294,6 +3239,7 @@ const TripDetails: React.FC = () => {
                                               </div>
                                             </div>
                                           )}
+
                                       {event.notes && (
                                         <p className="text-xs text-gray-500 mt-1 line-clamp-2">
                                         Notes: <span dangerouslySetInnerHTML={{ __html: event.notes?.replace(
@@ -2302,6 +3248,7 @@ const TripDetails: React.FC = () => {
                                         ) || '' }} />
                                         </p>
                                       )}
+
                                           <div className="flex items-center justify-between mt-2 border-t pt-2 border-gray-100">
                                       <div className="flex items-center space-x-2">
                                                 <Avatar
@@ -2315,7 +3262,8 @@ const TripDetails: React.FC = () => {
                                         </span>
                                                   </div>
                                                 </div>
-                                              </div>
+                                    </>
+                                  )}
                                 </div>
                 </div>
               </li>
@@ -2377,6 +3325,9 @@ const TripDetails: React.FC = () => {
                   <option value="departure">Departure</option>
                   <option value="stay">Stay</option>
                   <option value="destination">Destination</option>
+                  <option value="flight">Flight</option>
+                  <option value="train">Train</option>
+                  <option value="rental_car">Rental Car</option>
                 </select>
               </div>
 
@@ -2520,6 +3471,35 @@ const TripDetails: React.FC = () => {
                 className="btn btn-danger"
               >
                 Leave Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Event Warning Modal */}
+      {isDeleteEventWarningOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Delete Event</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Are you sure you want to delete this event? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsDeleteEventWarningOpen(false);
+                  setEventToDelete(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => eventToDelete && handleDeleteEvent(eventToDelete)}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+              >
+                Delete
               </button>
             </div>
           </div>

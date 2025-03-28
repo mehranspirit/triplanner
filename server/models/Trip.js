@@ -4,7 +4,7 @@ const eventSchema = new mongoose.Schema({
   id: String,
   type: {
     type: String,
-    enum: ['arrival', 'stay', 'destination', 'departure'],
+    enum: ['arrival', 'stay', 'destination', 'departure', 'flight', 'train', 'rental_car'],
     required: true
   },
   thumbnailUrl: String,
@@ -42,6 +42,26 @@ const eventSchema = new mongoose.Schema({
   placeName: String,
   description: String,
   openingHours: String,
+  // Flight fields
+  departureAirport: String,
+  arrivalAirport: String,
+  departureTime: String,
+  arrivalTime: String,
+  // Train fields
+  trainOperator: String,
+  trainNumber: String,
+  departureStation: String,
+  arrivalStation: String,
+  carriageNumber: String,
+  seatNumber: String,
+  // Rental Car fields
+  carCompany: String,
+  carType: String,
+  pickupLocation: String,
+  dropoffLocation: String,
+  pickupTime: String,
+  dropoffTime: String,
+  licensePlate: String,
   // Creator and modifier information
   createdBy: {
     _id: {

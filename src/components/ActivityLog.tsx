@@ -5,7 +5,7 @@ import { api } from '../services/api';
 import Avatar from './Avatar';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
-import { Trip } from '../types';
+import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent } from '../types';
 
 interface Activity {
   _id: string;
@@ -418,7 +418,63 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
   const getEventTitle = (activity: Activity) => {
     const eventType = activity.details?.eventType || activity.event?.type;
     
-    if (!eventType) {
+    if (!eventType || typeof activity.event === 'string') {
+      // For newly created events, check activity.details first
+      if (activity.actionType === 'event_create' && activity.details) {
+        const details = activity.details;
+        switch (details.eventType) {
+          case 'arrival':
+          case 'departure':
+            const airline = details.airline || '';
+            const flightNumber = details.flightNumber || '';
+            const airport = details.airport || '';
+            
+            if (!airline && !flightNumber && !airport) {
+              return details.eventType.charAt(0).toUpperCase() + details.eventType.slice(1);
+            }
+            
+            const parts = [];
+            if (airline) parts.push(airline);
+            if (flightNumber) parts.push(flightNumber);
+            if (parts.length > 0 && airport) {
+              return `${parts.join(' ')} - ${airport}`;
+            } else if (airport) {
+              return airport;
+            } else {
+              return parts.join(' ');
+            }
+            
+          case 'stay':
+            return details.accommodationName || 'Accommodation';
+          case 'destination':
+            return details.placeName || details.location || 'Destination';
+          case 'flight':
+            const flightParts = [];
+            if (details.airline) flightParts.push(details.airline);
+            if (details.flightNumber) flightParts.push(details.flightNumber);
+            if (details.departureAirport && details.arrivalAirport) {
+              return `${flightParts.join(' ')} - ${details.departureAirport} to ${details.arrivalAirport}`;
+            }
+            return flightParts.join(' ') || 'Flight';
+          case 'train':
+            const trainParts = [];
+            if (details.trainOperator) trainParts.push(details.trainOperator);
+            if (details.trainNumber) trainParts.push(details.trainNumber);
+            if (details.departureStation && details.arrivalStation) {
+              return `${trainParts.join(' ')} - ${details.departureStation} to ${details.arrivalStation}`;
+            }
+            return trainParts.join(' ') || 'Train';
+          case 'rental_car':
+            const carParts = [];
+            if (details.carCompany) carParts.push(details.carCompany);
+            if (details.pickupLocation && details.dropoffLocation) {
+              return `${carParts.join(' ')} - ${details.pickupLocation} to ${details.dropoffLocation}`;
+            }
+            return carParts.join(' ') || 'Rental Car';
+          default:
+            return details.title || 'Untitled event';
+        }
+      }
       return activity.details?.title || 'Untitled event';
     }
     
@@ -449,6 +505,41 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
         return activity.details?.accommodationName || 'Accommodation';
       case 'destination':
         return activity.details?.placeName || activity.details?.location || 'Destination';
+      case 'flight': {
+        const flightEvent = activity.event && typeof activity.event === 'object' && 'type' in activity.event && activity.event.type === 'flight' 
+          ? (activity.event as unknown as FlightEvent)
+          : null;
+        const parts = [];
+        if (flightEvent?.airline) parts.push(flightEvent.airline);
+        if (flightEvent?.flightNumber) parts.push(flightEvent.flightNumber);
+        if (flightEvent?.departureAirport && flightEvent?.arrivalAirport) {
+          return `${parts.join(' ')} - ${flightEvent.departureAirport} to ${flightEvent.arrivalAirport}`;
+        }
+        return parts.join(' ') || 'Flight';
+      }
+      case 'train': {
+        const trainEvent = activity.event && typeof activity.event === 'object' && 'type' in activity.event && activity.event.type === 'train'
+          ? (activity.event as unknown as TrainEvent)
+          : null;
+        const parts = [];
+        if (trainEvent?.trainOperator) parts.push(trainEvent.trainOperator);
+        if (trainEvent?.trainNumber) parts.push(trainEvent.trainNumber);
+        if (trainEvent?.departureStation && trainEvent?.arrivalStation) {
+          return `${parts.join(' ')} - ${trainEvent.departureStation} to ${trainEvent.arrivalStation}`;
+        }
+        return parts.join(' ') || 'Train';
+      }
+      case 'rental_car': {
+        const carEvent = activity.event && typeof activity.event === 'object' && 'type' in activity.event && activity.event.type === 'rental_car'
+          ? (activity.event as unknown as RentalCarEvent)
+          : null;
+        const parts = [];
+        if (carEvent?.carCompany) parts.push(carEvent.carCompany);
+        if (carEvent?.pickupLocation && carEvent?.dropoffLocation) {
+          return `${parts.join(' ')} - ${carEvent.pickupLocation} to ${carEvent.dropoffLocation}`;
+        }
+        return parts.join(' ') || 'Rental Car';
+      }
       default:
         return activity.details?.title || 'Untitled event';
     }
