@@ -951,18 +951,17 @@ const TripDetails: React.FC = () => {
 
   const handleDeleteEvent = async (eventId: string) => {
     try {
-    if (!trip?._id) return;
-    
-      const response = await fetch(`/api/trips/${trip._id}/events/${eventId}`, {
-        method: 'DELETE',
+      if (!trip?._id) return;
+      
+      await deleteEvent(trip._id, eventId);
+      // Update local trip state by filtering out the deleted event
+      setTrip(prevTrip => {
+        if (!prevTrip) return null;
+        return {
+          ...prevTrip,
+          events: prevTrip.events.filter(event => event.id !== eventId)
+        };
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete event');
-      }
-
-      const updatedTrip = await response.json();
-      setTrip(updatedTrip);
       setIsDeleteEventWarningOpen(false);
       setEventToDelete(null);
     } catch (error) {
