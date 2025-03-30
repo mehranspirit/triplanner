@@ -1598,14 +1598,14 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Google OAuth routes
-app.get(['/api/auth/google', '/auth/google'],
+app.get('/auth/google',
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
     prompt: 'select_account'
   })
 );
 
-app.get(['/api/auth/google/callback', '/auth/google/callback'],
+app.get('/auth/google/callback',
   passport.authenticate('google', { 
     failureRedirect: '/login',
     session: false
@@ -1622,6 +1622,16 @@ app.get(['/api/auth/google/callback', '/auth/google/callback'],
     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
   }
 );
+
+// Redirect /api/auth/google to /auth/google
+app.get('/api/auth/google', (req, res) => {
+  res.redirect('/auth/google');
+});
+
+// Redirect /api/auth/google/callback to /auth/google/callback
+app.get('/api/auth/google/callback', (req, res) => {
+  res.redirect('/auth/google/callback' + (req.url.split('?')[1] || ''));
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
