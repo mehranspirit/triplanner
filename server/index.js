@@ -1599,11 +1599,17 @@ app.use(passport.session());
 
 // Google OAuth routes
 app.get('/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    prompt: 'select_account'
+  })
 );
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
+  passport.authenticate('google', { 
+    failureRedirect: '/login',
+    session: false
+  }),
   (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
