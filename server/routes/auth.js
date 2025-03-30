@@ -15,6 +15,22 @@ const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
 // Google OAuth routes
 router.get('/google',
+  (req, res, next) => {
+    console.log('Starting Google OAuth flow with:', {
+      url: req.url,
+      method: req.method,
+      headers: req.headers,
+      query: req.query,
+      params: req.params,
+      body: req.body,
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? '[SET]' : '[NOT SET]',
+        GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? '[SET]' : '[NOT SET]'
+      }
+    });
+    next();
+  },
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
     prompt: 'select_account'
@@ -22,20 +38,44 @@ router.get('/google',
 );
 
 router.get('/google/callback',
+  (req, res, next) => {
+    console.log('Received Google OAuth callback with:', {
+      url: req.url,
+      method: req.method,
+      headers: req.headers,
+      query: req.query,
+      params: req.params,
+      body: req.body
+    });
+    next();
+  },
   passport.authenticate('google', { 
     failureRedirect: '/login',
     session: false
   }),
   (req, res) => {
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: req.user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    try {
+      console.log('Google OAuth authentication successful');
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: req.user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
 
-    // Redirect to frontend with token
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+      const frontendURL = process.env.NODE_ENV === 'production'
+        ? 'https://triplanner-eight.vercel.app'
+        : process.env.FRONTEND_URL;
+
+      // Redirect to frontend with token
+      const redirectURL = `${frontendURL}/auth/callback?token=${token}`;
+      console.log('Redirecting to:', redirectURL);
+      res.redirect(redirectURL);
+    } catch (error) {
+      console.error('Error in Google OAuth callback handler:', error);
+      res.redirect('/login?error=callback_failed');
+    }
   }
 );
 
