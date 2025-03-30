@@ -1598,14 +1598,14 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Google OAuth routes
-app.get('/auth/google',
+app.get(['/api/auth/google', '/auth/google'],
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
     prompt: 'select_account'
   })
 );
 
-app.get('/auth/google/callback',
+app.get(['/api/auth/google/callback', '/auth/google/callback'],
   passport.authenticate('google', { 
     failureRedirect: '/login',
     session: false
