@@ -1597,32 +1597,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Google OAuth routes
-app.get(['/api/auth/google', '/auth/google'],
-  passport.authenticate('google', { 
-    scope: ['profile', 'email'],
-    prompt: 'select_account'
-  })
-);
-
-app.get(['/api/auth/google/callback', '/auth/google/callback'],
-  passport.authenticate('google', { 
-    failureRedirect: '/login',
-    session: false
-  }),
-  (req, res) => {
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: req.user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    // Redirect to frontend with token
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
-  }
-);
-
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

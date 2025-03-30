@@ -9,8 +9,35 @@ const nodemailer = require('nodemailer');
 const upload = require('../middleware/upload');
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { s3Client } = require('../utils/s3Config');
+const passport = require('../config/passport');
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
+
+// Google OAuth routes
+router.get('/google',
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    prompt: 'select_account'
+  })
+);
+
+router.get('/google/callback',
+  passport.authenticate('google', { 
+    failureRedirect: '/login',
+    session: false
+  }),
+  (req, res) => {
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: req.user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Redirect to frontend with token
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+  }
+);
 
 // Validate token
 router.get('/validate', auth, async (req, res) => {
