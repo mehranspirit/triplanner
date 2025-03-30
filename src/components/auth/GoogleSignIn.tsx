@@ -2,7 +2,7 @@ import React from 'react';
 
 const GoogleSignIn: React.FC = () => {
   const handleGoogleSignIn = () => {
-    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+    window.location.href = `${import.meta.env.VITE_API_URL}/auth/google`;
   };
 
   return (

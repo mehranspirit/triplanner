@@ -1597,17 +1597,21 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Google authentication routes
-app.get('/api/auth/google',
+// Google OAuth routes
+app.get('/auth/google',
   passport.authenticate('google', { scope: ['profile', 'email'] })
 );
 
-app.get('/api/auth/google/callback',
+app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login' }),
   (req, res) => {
     // Generate JWT token
-    const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET);
-    
+    const token = jwt.sign(
+      { userId: req.user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
     // Redirect to frontend with token
     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
   }
