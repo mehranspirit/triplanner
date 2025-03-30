@@ -190,6 +190,7 @@ const TripDetails: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLeaveWarningOpen, setIsLeaveWarningOpen] = useState(false);
+  const [isDeleteWarningOpen, setIsDeleteWarningOpen] = useState(false);
   const [isDeleteEventWarningOpen, setIsDeleteEventWarningOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<string | null>(null);
   const [eventType, setEventType] = useState<EventType>('arrival');
@@ -1044,6 +1045,19 @@ const TripDetails: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  const handleDeleteTrip = async () => {
+    if (!trip?._id) return;
+    try {
+      await deleteTrip(trip._id);
+      navigate('/trips');
+    } catch (err) {
+      console.error('Error deleting trip:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete trip');
+    } finally {
+      setIsDeleteWarningOpen(false);
+    }
   };
 
   if (loading) {
@@ -2720,7 +2734,7 @@ const TripDetails: React.FC = () => {
             {/* Leave/Delete Trip button */}
             {isOwner ? (
               <button
-                onClick={() => setIsLeaveWarningOpen(true)}
+                onClick={() => setIsDeleteWarningOpen(true)}
                 className="p-2 bg-red-600 hover:bg-red-700 rounded-full text-white shadow-md transition-colors"
                 title="Delete Trip"
               >
@@ -2731,14 +2745,14 @@ const TripDetails: React.FC = () => {
             ) : (
               <button
                 onClick={() => setIsLeaveWarningOpen(true)}
-                className="p-2 bg-red-600 hover:bg-red-700 rounded-full text-white shadow-md transition-colors"
+                className="p-2 bg-yellow-500 hover:bg-yellow-600 rounded-full text-white shadow-md transition-colors"
                 title="Leave Trip"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                 </svg>
               </button>
-          )}
+            )}
         </div>
           
           {/* Trip Title - Responsive positioning */}
@@ -3523,6 +3537,32 @@ const TripDetails: React.FC = () => {
         onUpdate={handleTripUpdate}
       />
       </div>
+
+      {/* Delete Trip Warning Modal */}
+      {isDeleteWarningOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-semibold mb-4">Delete Trip</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this trip? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setIsDeleteWarningOpen(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteTrip}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

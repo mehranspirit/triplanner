@@ -16,6 +16,7 @@ import { UserList } from './components/UserList';
 import Calendar from './components/Calendar';
 import { Link, NavLink } from 'react-router-dom';
 import ActivityLogPage from './pages/ActivityLogPage';
+import AuthCallback from './components/auth/AuthCallback';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -39,6 +40,7 @@ const App: React.FC = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             
             {/* Protected routes */}
             <Route

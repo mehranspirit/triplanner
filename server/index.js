@@ -16,6 +16,8 @@ const checkS3Connectivity = require('./utils/ensureUploadsDir');
 const { logActivity } = require('./utils/activityLogger');
 const { generatePDF, generateHTML } = require('./utils/exportUtils');
 const jwt = require('jsonwebtoken');
+const passport = require('./config/passport');
+const session = require('express-session');
 
 // Helper function to get a human-readable event name
 const getEventName = (event) => {
@@ -47,18 +49,14 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: function(origin, callback) {
-    const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173'];
+    const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173', 'http://localhost:5000'];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  credentials: true
 }));
 
 app.use(express.json());
@@ -1582,6 +1580,38 @@ app.delete('/api/trips/:id/events/:eventId/vote', auth, async (req, res) => {
     return res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax'
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Google authentication routes
+app.get('/api/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+app.get('/api/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  (req, res) => {
+    // Generate JWT token
+    const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET);
+    
+    // Redirect to frontend with token
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+  }
+);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

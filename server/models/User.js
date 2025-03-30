@@ -11,7 +11,9 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: function() {
+      return !this.googleId; // Password is required only if not using Google auth
+    }
   },
   name: {
     type: String,
@@ -31,7 +33,18 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
   resetToken: String,
-  resetTokenExpiry: Date
+  resetTokenExpiry: Date,
+  // Google authentication fields
+  googleId: {
+    type: String,
+    sparse: true,
+    unique: true
+  },
+  googleEmail: {
+    type: String,
+    sparse: true,
+    unique: true
+  }
 }, {
   toJSON: {
     transform: function(doc, ret) {
@@ -40,6 +53,8 @@ const userSchema = new mongoose.Schema({
       ret.photoUrl = ret.photoUrl || null;
       delete ret.__v;
       delete ret.password;
+      delete ret.googleId;
+      delete ret.googleEmail;
     }
   }
 });
@@ -47,12 +62,15 @@ const userSchema = new mongoose.Schema({
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
+  if (this.password) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
   next();
 });
 
 // Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 
