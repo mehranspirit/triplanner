@@ -61,6 +61,22 @@ app.use(cors({
 
 app.use(express.json());
 
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax'
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
 // Log all requests
 app.use((req, res, next) => {
   console.log('Incoming request:', {
@@ -1580,22 +1596,6 @@ app.delete('/api/trips/:id/events/:eventId/vote', auth, async (req, res) => {
     return res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-
-// Session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax'
-  }
-}));
-
-// Initialize Passport
-app.use(passport.initialize());
-app.use(passport.session());
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
