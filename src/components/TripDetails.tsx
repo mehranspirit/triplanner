@@ -371,9 +371,15 @@ const TripDetails: React.FC = () => {
 
   useEffect(() => {
     const loadThumbnail = async () => {
-      if (trip && !trip.thumbnailUrl) {
-        const thumbnail = await getDefaultThumbnail(trip.name);
-        setTripThumbnail(thumbnail);
+      if (trip) {
+        if (trip.thumbnailUrl) {
+          // If there's a custom thumbnail URL, use it
+          setTripThumbnail(trip.thumbnailUrl);
+        } else {
+          // Otherwise, get a default thumbnail based on the trip name
+          const thumbnail = await getDefaultThumbnail(trip.name);
+          setTripThumbnail(thumbnail);
+        }
       }
     };
     loadThumbnail();
@@ -1140,6 +1146,10 @@ const TripDetails: React.FC = () => {
     try {
       const updatedTrip = await api.updateTrip(editedTrip);
       setTrip(updatedTrip as Trip);
+      // Update tripThumbnail if the thumbnail URL has changed
+      if (updatedTrip.thumbnailUrl !== trip.thumbnailUrl) {
+        setTripThumbnail(updatedTrip.thumbnailUrl || '');
+      }
       setIsEditingTrip(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update trip');

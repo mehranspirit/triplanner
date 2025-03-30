@@ -551,6 +551,11 @@ app.put('/api/trips/:id', auth, async (req, res) => {
       trip.description = req.body.description;
     }
     
+    if (req.body.thumbnailUrl !== trip.thumbnailUrl) {
+      changedFields.push('thumbnailUrl');
+      trip.thumbnailUrl = req.body.thumbnailUrl;
+    }
+    
     if (req.body.isPublic !== undefined && req.body.isPublic !== trip.isPublic) {
       changedFields.push('isPublic');
       trip.isPublic = req.body.isPublic;
