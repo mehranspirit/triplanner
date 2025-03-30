@@ -128,8 +128,12 @@ export default function TripList() {
     const loadThumbnails = async () => {
       const thumbnails: { [key: string]: string } = {};
       for (const trip of state.trips) {
+        // Only fetch default thumbnail if there's no custom thumbnail
         if (!trip.thumbnailUrl) {
           thumbnails[trip._id] = await getDefaultThumbnail(trip.name);
+        } else {
+          // If there's a custom thumbnail, use it directly
+          thumbnails[trip._id] = trip.thumbnailUrl;
         }
       }
       setTripThumbnails(thumbnails);
@@ -425,7 +429,26 @@ export default function TripList() {
                 </p>
               )}
               {trip.description && (
-                <p className="mt-2 text-sm text-gray-600 line-clamp-2">{trip.description}</p>
+                <p className="mt-2 text-sm text-gray-600 line-clamp-1 max-w-[calc(100%-3rem)]">
+                  {trip.description.split(' ').map((word, index) => {
+                    // Check if the word is a URL
+                    if (word.match(/^https?:\/\/\S+$/)) {
+                      return (
+                        <a
+                          key={index}
+                          href={word}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {word}{' '}
+                        </a>
+                      );
+                    }
+                    return word + ' ';
+                  })}
+                </p>
               )}
             </div>
           </div>

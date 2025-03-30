@@ -1145,11 +1145,9 @@ const TripDetails: React.FC = () => {
 
     try {
       const updatedTrip = await api.updateTrip(editedTrip);
+      // Update both trip and tripThumbnail states immediately
       setTrip(updatedTrip as Trip);
-      // Update tripThumbnail if the thumbnail URL has changed
-      if (updatedTrip.thumbnailUrl !== trip.thumbnailUrl) {
-        setTripThumbnail(updatedTrip.thumbnailUrl || '');
-      }
+      setTripThumbnail(updatedTrip.thumbnailUrl || '');
       setIsEditingTrip(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update trip');
@@ -2768,7 +2766,29 @@ const TripDetails: React.FC = () => {
           {/* Trip Title - Responsive positioning */}
           <div className="absolute top-[calc(4rem+8px)] sm:top-4 left-4 sm:left-6 z-20 max-w-[calc(100%-32px)] sm:max-w-[calc(100%-120px)]">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] truncate">{trip.name}</h1>
-      </div>
+            {trip.description && (
+              <p className="mt-2 text-lg text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                {trip.description.split(' ').map((word, index) => {
+                  // Check if the word is a URL
+                  if (word.match(/^https?:\/\/\S+$/)) {
+                    return (
+                      <a
+                        key={index}
+                        href={word}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-200 hover:text-white hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {word}{' '}
+                      </a>
+                    );
+                  }
+                  return word + ' ';
+                })}
+              </p>
+            )}
+          </div>
 
           {/* Owner and Collaborator Avatars - Keep at bottom right */}
           <div className="absolute bottom-6 right-4 sm:right-6 flex -space-x-3 z-10">
