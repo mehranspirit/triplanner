@@ -356,6 +356,7 @@ app.post('/api/trips', auth, async (req, res) => {
       startDate: populatedTrip.startDate || null,
       endDate: populatedTrip.endDate || null,
       isPublic: populatedTrip.isPublic || false,
+      thumbnailUrl: populatedTrip.thumbnailUrl || null,
       createdAt: populatedTrip.createdAt.toISOString(),
       updatedAt: populatedTrip.updatedAt.toISOString()
     };
