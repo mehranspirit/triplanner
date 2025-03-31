@@ -164,6 +164,13 @@ const extractMapRelevantData = (trip: Trip) => {
       carType: 'carType' in event ? event.carType : undefined,
       pickupLocation: 'pickupLocation' in event ? event.pickupLocation : undefined,
       dropoffLocation: 'dropoffLocation' in event ? event.dropoffLocation : undefined,
+      // Bus event fields
+      busOperator: 'busOperator' in event ? event.busOperator : undefined,
+      busNumber: 'busNumber' in event ? event.busNumber : undefined,
+      departureTime: 'departureTime' in event ? event.departureTime : undefined,
+      arrivalTime: 'arrivalTime' in event ? event.arrivalTime : undefined,
+      seatNumber: 'seatNumber' in event ? event.seatNumber : undefined,
+      bookingReference: 'bookingReference' in event ? event.bookingReference : undefined,
     }))
   };
 };
@@ -492,10 +499,24 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           
           // If event has direct coordinates, use them
           if (event.location?.lat && event.location?.lng) {
+            let displayName = 'Location';
+            
+            // Get appropriate display name based on event type
+            switch (event.type) {
+              case 'stay':
+                displayName = ((event as unknown) as StayEvent).accommodationName || 'Stay';
+                break;
+              case 'destination':
+                displayName = ((event as unknown) as DestinationEvent).placeName || 'Destination';
+                break;
+              default:
+                displayName = event.location.address || 'Location';
+            }
+            
             return {
               lat: event.location.lat,
               lon: event.location.lng,
-              displayName: event.location.address || 'Location',
+              displayName,
               event: {
                 ...event,
                 createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -532,6 +553,23 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               departureLocation = await fetchTripLocation(trainEvent.departureStation || '');
               arrivalLocation = await fetchTripLocation(trainEvent.arrivalStation || '');
               if (departureLocation && arrivalLocation) {
+                // Preserve all train event information in both locations
+                departureLocation.event = {
+                  ...event,
+                  ...trainEvent,
+                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                } as Event;
+                arrivalLocation.event = {
+                  ...event,
+                  ...trainEvent,
+                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                } as Event;
                 return [departureLocation, arrivalLocation];
               }
               return null;
@@ -550,6 +588,23 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               departureLocation = await fetchTripLocation(busEvent.departureStation || '');
               arrivalLocation = await fetchTripLocation(busEvent.arrivalStation || '');
               if (departureLocation && arrivalLocation) {
+                // Preserve all bus event information in both locations
+                departureLocation.event = {
+                  ...event,
+                  ...busEvent,
+                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                } as Event;
+                arrivalLocation.event = {
+                  ...event,
+                  ...busEvent,
+                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                } as Event;
                 return [departureLocation, arrivalLocation];
               }
               return null;
@@ -729,7 +784,13 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: `${trainEvent.trainOperator || 'Train'} ${trainEvent.trainNumber || ''}`,
           details: `${trainEvent.departureStation || ''} to ${trainEvent.arrivalStation || ''}`,
-          date: formatDate(event.date)
+          date: formatDate(event.date),
+          additionalInfo: [
+            trainEvent.departureTime && `Departure: ${trainEvent.departureTime}`,
+            trainEvent.arrivalTime && `Arrival: ${trainEvent.arrivalTime}`,
+            trainEvent.seatNumber && `Seat: ${trainEvent.seatNumber}`,
+            trainEvent.bookingReference && `Booking Reference: ${trainEvent.bookingReference}`
+          ].filter(Boolean).join(' • ')
         };
       }
       case 'rental_car': {
@@ -745,7 +806,13 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: `${busEvent.busOperator || 'Bus'} ${busEvent.busNumber || ''}`,
           details: `${busEvent.departureStation || ''} to ${busEvent.arrivalStation || ''}`,
-          date: formatDate(event.date)
+          date: formatDate(event.date),
+          additionalInfo: [
+            busEvent.departureTime && `Departure: ${busEvent.departureTime}`,
+            busEvent.arrivalTime && `Arrival: ${busEvent.arrivalTime}`,
+            busEvent.seatNumber && `Seat: ${busEvent.seatNumber}`,
+            busEvent.bookingReference && `Booking Reference: ${busEvent.bookingReference}`
+          ].filter(Boolean).join(' • ')
         };
       }
     }
@@ -793,19 +860,11 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               opacity={0.7}
               dashArray={route.type === 'train' ? '10, 10' : undefined}
             >
-              <Tooltip permanent direction="center" offset={[0, -10]} className="bg-white px-2 py-1 rounded shadow text-xs font-medium">
-                {route.type === 'driving' ? (
-                  `${formatDuration(route.duration / 60)} • ${formatDistance(route.distance)}`
-                ) : route.type === 'train' ? (
-                  route.departureTime && route.arrivalTime ? 
-                    `Train: ${new Date(route.departureTime).toLocaleTimeString()} - ${new Date(route.arrivalTime).toLocaleTimeString()}` :
-                    'Train Route'
-                ) : (
-                  route.departureTime && route.arrivalTime ?
-                    `Flight: ${new Date(route.departureTime).toLocaleTimeString()} - ${new Date(route.arrivalTime).toLocaleTimeString()}` :
-                    'Flight Route'
-                )}
-              </Tooltip>
+              {route.type === 'driving' && (
+                <Tooltip permanent direction="center" offset={[0, -10]} className="bg-white px-2 py-1 rounded shadow text-xs font-medium">
+                  {formatDuration(route.duration / 60)}
+                </Tooltip>
+              )}
             </Polyline>
           );
         })}
@@ -832,6 +891,9 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                   <div className="text-sm text-gray-600">{eventDetails.details}</div>
                 )}
                 <div className="text-sm text-gray-600">{eventDetails.date}</div>
+                {eventDetails.additionalInfo && (
+                  <div className="text-sm text-gray-600 mt-1">{eventDetails.additionalInfo}</div>
+                )}
                 <div className={`text-sm mt-1 font-medium ${
                   isConfirmed ? 'text-blue-600' : 'text-green-600'
                 }`}>
