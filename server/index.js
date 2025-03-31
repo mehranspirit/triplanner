@@ -30,8 +30,16 @@ const getEventName = (event) => {
       return `Arrival at ${event.airport || 'airport'}`;
     case 'departure':
       return `Departure from ${event.airport || 'airport'}`;
+    case 'flight':
+      return 'Flight';
+    case 'train':
+      return 'Train';
+    case 'rental_car':
+      return 'Rental Car';
+    case 'bus':
+      return 'Bus';
     default:
-      return 'Event';
+      return event.type.charAt(0).toUpperCase() + event.type.slice(1);
   }
 };
 
@@ -590,9 +598,8 @@ app.put('/api/trips/:id', auth, async (req, res) => {
           tripId: trip._id,
           eventId: deletedEvent.id,
           actionType: 'event_delete',
-          description: `Deleted the ${eventName} event from "${trip.name}"`,
+          description: `Deleted the ${eventName} from "${trip.name}"`,
           details: {
-            eventType: deletedEvent.type,
             eventName: eventName,
             date: deletedEvent.date
           }
@@ -635,80 +642,6 @@ app.put('/api/trips/:id', auth, async (req, res) => {
             fieldChanges.thumbnail = { old: oldEvent.thumbnailUrl, new: newEvent.thumbnailUrl };
           }
           
-          // Type-specific field comparisons
-          if (newEvent.type === 'arrival' || newEvent.type === 'departure') {
-            if ((newEvent.airport || '') !== (oldEvent.airport || '')) {
-              changedFields.push('airport');
-              fieldChanges.airport = { old: oldEvent.airport || '', new: newEvent.airport || '' };
-            }
-            if ((newEvent.airline || '') !== (oldEvent.airline || '')) {
-              changedFields.push('airline');
-              fieldChanges.airline = { old: oldEvent.airline || '', new: newEvent.airline || '' };
-            }
-            if ((newEvent.flightNumber || '') !== (oldEvent.flightNumber || '')) {
-              changedFields.push('flight number');
-              fieldChanges.flightNumber = { old: oldEvent.flightNumber || '', new: newEvent.flightNumber || '' };
-            }
-            if ((newEvent.terminal || '') !== (oldEvent.terminal || '')) {
-              changedFields.push('terminal');
-              fieldChanges.terminal = { old: oldEvent.terminal || '', new: newEvent.terminal || '' };
-            }
-            if ((newEvent.gate || '') !== (oldEvent.gate || '')) {
-              changedFields.push('gate');
-              fieldChanges.gate = { old: oldEvent.gate || '', new: newEvent.gate || '' };
-            }
-            if ((newEvent.time || '') !== (oldEvent.time || '')) {
-              changedFields.push('time');
-              fieldChanges.time = { old: oldEvent.time || '', new: newEvent.time || '' };
-            }
-            if ((newEvent.bookingReference || '') !== (oldEvent.bookingReference || '')) {
-              changedFields.push('booking reference');
-              fieldChanges.bookingReference = { old: oldEvent.bookingReference || '', new: newEvent.bookingReference || '' };
-            }
-          } else if (newEvent.type === 'stay') {
-            if (newEvent.accommodationName !== oldEvent.accommodationName) {
-              changedFields.push('accommodation name');
-              fieldChanges.accommodationName = { old: oldEvent.accommodationName, new: newEvent.accommodationName };
-            }
-            if (newEvent.address !== oldEvent.address) {
-              changedFields.push('address');
-              fieldChanges.address = { old: oldEvent.address, new: newEvent.address };
-            }
-            if (newEvent.checkIn !== oldEvent.checkIn) {
-              changedFields.push('check-in date');
-              fieldChanges.checkIn = { old: oldEvent.checkIn, new: newEvent.checkIn };
-            }
-            if (newEvent.checkOut !== oldEvent.checkOut) {
-              changedFields.push('check-out date');
-              fieldChanges.checkOut = { old: oldEvent.checkOut, new: newEvent.checkOut };
-            }
-            if (newEvent.reservationNumber !== oldEvent.reservationNumber) {
-              changedFields.push('reservation number');
-              fieldChanges.reservationNumber = { old: oldEvent.reservationNumber, new: newEvent.reservationNumber };
-            }
-            if (newEvent.contactInfo !== oldEvent.contactInfo) {
-              changedFields.push('contact info');
-              fieldChanges.contactInfo = { old: oldEvent.contactInfo, new: newEvent.contactInfo };
-            }
-          } else if (newEvent.type === 'destination') {
-            if (newEvent.placeName !== oldEvent.placeName) {
-              changedFields.push('place name');
-              fieldChanges.placeName = { old: oldEvent.placeName, new: newEvent.placeName };
-            }
-            if (newEvent.address !== oldEvent.address) {
-              changedFields.push('address');
-              fieldChanges.address = { old: oldEvent.address, new: newEvent.address };
-            }
-            if (newEvent.description !== oldEvent.description) {
-              changedFields.push('description');
-              fieldChanges.description = { old: oldEvent.description, new: newEvent.description };
-            }
-            if (newEvent.openingHours !== oldEvent.openingHours) {
-              changedFields.push('opening hours');
-              fieldChanges.openingHours = { old: oldEvent.openingHours, new: newEvent.openingHours };
-            }
-          }
-          
           // Only log activity if fields actually changed
           if (changedFields.length > 0) {
             // Filter out any field changes where old and new are both empty/undefined/null
@@ -729,14 +662,12 @@ app.put('/api/trips/:id', auth, async (req, res) => {
             // Only log if there are actual changes
             if (Object.keys(actualChanges).length > 0) {
               logActivity({
-            userId: req.user._id,
+                userId: req.user._id,
                 tripId: trip._id,
                 eventId: newEvent.id,
                 actionType: 'event_update',
-                description: `Updated the ${eventName} event in "${trip.name}"`,
-            details: {
-                  eventType: newEvent.type,
-                  eventName: eventName,
+                description: `Updated the ${eventName} in "${trip.name}"`,
+                details: {
                   changedFields: Object.keys(actualChanges),
                   fieldChanges: actualChanges,
                   date: newEvent.date
@@ -765,14 +696,12 @@ app.put('/api/trips/:id', auth, async (req, res) => {
         
         // Log new event creation
         logActivity({
-        userId: req.user._id,
+          userId: req.user._id,
           tripId: trip._id,
           eventId: newEvent.id,
           actionType: 'event_create',
-          description: `Added a new ${eventName} event to "${trip.name}"`,
-        details: {
-            eventType: newEvent.type,
-            eventName: eventName,
+          description: `Added a new ${eventName} to "${trip.name}"`,
+          details: {
             date: newEvent.date,
             ...(newEvent.type === 'arrival' || newEvent.type === 'departure' ? {
               airport: newEvent.airport || '',
@@ -1516,7 +1445,6 @@ app.post('/api/trips/:id/events/:eventId/vote', auth, async (req, res) => {
       actionType: voteType === 'like' ? 'event_like' : 'event_dislike',
       description: `${voteType === 'like' ? 'Liked' : 'Disliked'} the event "${eventName}" in "${trip.name}"`,
       details: { 
-        eventType: event.type,
         eventName: eventName,
         voteType
       }
@@ -1591,7 +1519,6 @@ app.delete('/api/trips/:id/events/:eventId/vote', auth, async (req, res) => {
       actionType: 'event_vote_remove',
       description: `Removed vote from the event "${eventName}" in "${trip.name}"`,
       details: { 
-        eventType: event.type,
         eventName: eventName
       }
     });

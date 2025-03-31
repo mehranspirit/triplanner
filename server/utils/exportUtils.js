@@ -387,6 +387,16 @@ function formatEventDetails(event) {
       if (event.licensePlate) details += `<p><strong>License Plate:</strong> ${event.licensePlate}</p>`;
       if (event.bookingReference) details += `<p><strong>Booking Reference:</strong> ${event.bookingReference}</p>`;
       break;
+
+    case 'bus':
+      details += `<p>${event.busOperator || 'Bus'} ${event.busNumber || ''}</p>`;
+      if (event.departureStation) details += `<p><strong>From:</strong> ${event.departureStation}</p>`;
+      if (event.arrivalStation) details += `<p><strong>To:</strong> ${event.arrivalStation}</p>`;
+      if (event.departureTime) details += `<p><strong>Departure:</strong> ${event.departureTime}</p>`;
+      if (event.arrivalTime) details += `<p><strong>Arrival:</strong> ${event.arrivalTime}</p>`;
+      if (event.seatNumber) details += `<p><strong>Seat:</strong> ${event.seatNumber}</p>`;
+      if (event.bookingReference) details += `<p><strong>Booking Reference:</strong> ${event.bookingReference}</p>`;
+      break;
       
     default:
       details += `<p>${event.name || 'Event'}</p>`;

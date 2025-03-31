@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import type { Map as LeafletMap } from 'leaflet';
-import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent } from '../types';
+import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent } from '../types';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -545,6 +545,15 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               }
               return null;
             }
+            case 'bus': {
+              const busEvent = (event as unknown) as BusEvent;
+              departureLocation = await fetchTripLocation(busEvent.departureStation || '');
+              arrivalLocation = await fetchTripLocation(busEvent.arrivalStation || '');
+              if (departureLocation && arrivalLocation) {
+                return [departureLocation, arrivalLocation];
+              }
+              return null;
+            }
           }
 
           if (!searchQuery) return null;
@@ -728,6 +737,14 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: `${carEvent.carCompany || 'Rental Car'}`,
           details: `${carEvent.pickupLocation || ''} to ${carEvent.dropoffLocation || ''}`,
+          date: formatDate(event.date)
+        };
+      }
+      case 'bus': {
+        const busEvent = event as BusEvent;
+        return {
+          title: `${busEvent.busOperator || 'Bus'} ${busEvent.busNumber || ''}`,
+          details: `${busEvent.departureStation || ''} to ${busEvent.arrivalStation || ''}`,
           date: formatDate(event.date)
         };
       }

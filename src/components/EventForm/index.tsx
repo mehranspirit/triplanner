@@ -1,11 +1,12 @@
 import React, { RefObject } from 'react';
-import { Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent } from '../../types';
+import { Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent } from '../../types';
 import ArrivalFields from './EventTypeFields/ArrivalFields';
 import StayFields from './EventTypeFields/StayFields';
 import DestinationFields from './EventTypeFields/DestinationFields';
 import FlightFields from './EventTypeFields/FlightFields';
 import TrainFields from './EventTypeFields/TrainFields';
 import RentalCarFields from './EventTypeFields/RentalCarFields';
+import BusFields from './EventTypeFields/BusFields';
 
 interface EventFormProps {
   eventType: EventType;
@@ -30,8 +31,12 @@ const EventForm: React.FC<EventFormProps> = ({
   showAirportSuggestions,
   airportInputRef
 }) => {
-  const handleChange = <T extends Event>(field: keyof T, value: any) => {
-    onEventDataChange({ ...eventData, [field]: value } as Partial<Event>);
+  const handleChange = <T extends Event>(fieldOrData: keyof T | Partial<T>, value?: any) => {
+    if (typeof fieldOrData === 'string') {
+      onEventDataChange({ ...eventData, [fieldOrData]: value } as Partial<Event>);
+    } else if (typeof fieldOrData === 'object') {
+      onEventDataChange({ ...eventData, ...fieldOrData } as Partial<Event>);
+    }
   };
 
   const commonFields = (
@@ -49,13 +54,13 @@ const EventForm: React.FC<EventFormProps> = ({
         </div>
       )}
       <div className="mb-4">
-        <label className="block text-gray-700 mb-2">Date</label>
+        <label className="block text-gray-700 mb-2">Date{eventType === 'bus' ? ' (optional)' : ''}</label>
         <input
           type="date"
           value={eventData.date?.split('T')[0] || ''}
           onChange={(e) => handleChange('date', e.target.value)}
           className="input"
-          required
+          required={['arrival', 'departure', 'stay', 'destination'].includes(eventType) && eventType !== 'bus'}
         />
       </div>
       <div className="mb-4">
@@ -160,6 +165,13 @@ const EventForm: React.FC<EventFormProps> = ({
         return (
           <RentalCarFields
             eventData={eventData as Partial<RentalCarEvent>}
+            onChange={handleChange}
+          />
+        );
+      case 'bus':
+        return (
+          <BusFields
+            eventData={eventData as Partial<BusEvent>}
             onChange={handleChange}
           />
         );

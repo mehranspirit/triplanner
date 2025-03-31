@@ -5,7 +5,7 @@ import { api } from '../services/api';
 import Avatar from './Avatar';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
-import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent } from '../types';
+import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent } from '../types';
 
 interface Activity {
   _id: string;
@@ -345,73 +345,20 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
       
       return (
         <span className="ml-1 text-gray-500">
-          <span className="text-gray-400">•</span> {actionText} <strong>{eventName}</strong> {eventType && `(${eventType})`}
+          <span className="text-gray-400">•</span> {actionText} <strong>{eventName}</strong>
         </span>
       );
     }
 
     // For regular event actions
     const eventType = activity.details?.eventType || activity.event?.type || 'Event';
-    const eventTitle = getEventTitle(activity);
     
-    // Don't show redundant information that's already in the description
-    if (activity.description.includes(eventTitle)) {
-      // If the title is already in the description, just show the date if available
-      return activity.details?.date ? (
-        <span className="ml-1 text-gray-500">
-          <span className="text-gray-400">•</span> {formatDate(activity.details.date, true)}
-        </span>
-      ) : null;
-    }
-
-    if (activity.actionType === 'event_update') {
-      const changedFields = activity.details?.changedFields || [];
-      const fieldChanges = activity.details?.fieldChanges || {};
-      
-      if (changedFields.length === 0) {
-        return null;
-      }
-      
-      return (
-        <span className="ml-1 text-gray-500">
-          <span className="text-gray-400">•</span> {eventTitle} 
-          {activity.details?.date && ` (${formatDate(activity.details.date, true)})`}
-          <span className="text-gray-400 ml-1">
-            • {changedFields.map((field: string) => {
-              const change = fieldChanges[field];
-              // Convert empty values to a readable format
-              const oldValue = !change?.old || change.old === '' ? 'empty' : change.old;
-              const newValue = !change?.new || change.new === '' ? 'empty' : change.new;
-              // Only show the change if values are different
-              return oldValue === newValue ? field : `${field}: ${oldValue} → ${newValue}`;
-            }).join(', ')}
-          </span>
-          {/* Show creator info if available and different from the activity user */}
-          {activity.details?.event?.createdBy && 
-            activity.details.event.createdBy._id !== activity.user._id && (
-            <span className="text-gray-400 ml-1">
-              • Created by {activity.details.event.createdBy.name}
-            </span>
-          )}
-        </span>
-      );
-    }
-
-    // For create and delete, show the title and date
-    return (
+    // Only show the date if available
+    return activity.details?.date ? (
       <span className="ml-1 text-gray-500">
-        <span className="text-gray-400">•</span> {eventTitle}
-        {activity.details?.date && ` (${formatDate(activity.details.date, true)})`}
-        {/* For delete events, show creator if available */}
-        {activity.actionType === 'event_delete' && 
-         activity.details?.createdBy && 
-         activity.details.createdBy._id !== activity.user._id && (
-          <span className="text-gray-400 ml-1">
-            • Created by {activity.details.createdBy.name}
-          </span>
-        )}
+        <span className="text-gray-400">•</span> {formatDate(activity.details.date, true)}
       </span>
-    );
+    ) : null;
   };
   
   // Helper function to get event title based on event type
@@ -471,9 +418,21 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
               return `${carParts.join(' ')} - ${details.pickupLocation} to ${details.dropoffLocation}`;
             }
             return carParts.join(' ') || 'Rental Car';
+          case 'bus':
+            const busParts = [];
+            if (details.busOperator) busParts.push(details.busOperator);
+            if (details.busNumber) busParts.push(details.busNumber);
+            if (details.departureStation && details.arrivalStation) {
+              return `${busParts.join(' ')} - ${details.departureStation} to ${details.arrivalStation}`;
+            }
+            return busParts.join(' ') || 'Bus';
           default:
             return details.title || 'Untitled event';
         }
+      }
+      // For updates and deletions, use the eventName from details
+      if (activity.details?.eventName) {
+        return activity.details.eventName;
       }
       return activity.details?.title || 'Untitled event';
     }
@@ -539,6 +498,18 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ tripId }) => {
           return `${parts.join(' ')} - ${carEvent.pickupLocation} to ${carEvent.dropoffLocation}`;
         }
         return parts.join(' ') || 'Rental Car';
+      }
+      case 'bus': {
+        const busEvent = activity.event && typeof activity.event === 'object' && 'type' in activity.event && activity.event.type === 'bus'
+          ? (activity.event as unknown as BusEvent)
+          : null;
+        const parts = [];
+        if (busEvent?.busOperator) parts.push(busEvent.busOperator);
+        if (busEvent?.busNumber) parts.push(busEvent.busNumber);
+        if (busEvent?.departureStation && busEvent?.arrivalStation) {
+          return `${parts.join(' ')} - ${busEvent.departureStation} to ${busEvent.arrivalStation}`;
+        }
+        return parts.join(' ') || 'Bus';
       }
       default:
         return activity.details?.title || 'Untitled event';

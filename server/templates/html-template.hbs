@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{trip.name}} - Trip Itinerary</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     /* Modern, clean typography */
     body {
@@ -121,6 +122,9 @@
       color: white;
       background-color: #555;
     }
+    .event-type-tag i {
+      margin-right: 4px;
+    }
     .event-type-tag-arrival {
       background-color: #10b981;
     }
@@ -233,6 +237,12 @@
         font-weight: normal;
       }
     }
+    .event-type-tag svg {
+      width: 14px;
+      height: 14px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -264,7 +274,28 @@
       <div class="day-events">
         {{#each events}}
           <div class="event-card event-type-{{type}}">
-            <div class="event-tag event-tag-{{type}}">{{type}}</div>
+            <div class="event-tag event-tag-{{type}}">
+              {{#if (eq type "arrival")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.5 16.5c0 .83-.67 1.5-1.5 1.5H4c-.83 0-1.5-.67-1.5-1.5V7.5C2.5 6.67 3.17 6 4 6h16c.83 0 1.5.67 1.5 1.5v9z"/></svg>
+              {{else if (eq type "departure")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.5 7.5c0 .83-.67 1.5-1.5 1.5H4c-.83 0-1.5-.67-1.5-1.5V16.5C2.5 17.33 3.17 18 4 18h16c.83 0 1.5-.67 1.5-1.5V7.5z"/></svg>
+              {{else if (eq type "stay")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+              {{else if (eq type "destination")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              {{else if (eq type "flight")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.5 16.5c0 .83-.67 1.5-1.5 1.5H4c-.83 0-1.5-.67-1.5-1.5V7.5C2.5 6.67 3.17 6 4 6h16c.83 0 1.5.67 1.5 1.5v9z"/></svg>
+              {{else if (eq type "train")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2l2-2h4l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-7H6V6h5v4zm5.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-7h-5V6h5v4z"/></svg>
+              {{else if (eq type "rental_car")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>
+              {{else if (eq type "bus")}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/></svg>
+              {{else}}
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5zm2 4h10v2H7v-2zm0 4h7v2H7v-2z"/></svg>
+              {{/if}}
+              {{type}}
+            </div>
             <div class="event-header">
               <h3>{{name}}</h3>
               {{#if (or (eq type "arrival") (eq type "departure"))}}
@@ -285,6 +316,10 @@
     </div>
   </div>
 
-  <button class="print-button" onclick="window.print()">🖨️</button>
+  <button class="print-button" onclick="window.print()">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+      <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+    </svg>
+  </button>
 </body>
 </html> 

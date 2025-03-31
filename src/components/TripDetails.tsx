@@ -14,7 +14,8 @@ import {
   User,
   FlightEvent,
   TrainEvent,
-  RentalCarEvent
+  RentalCarEvent,
+  BusEvent
 } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
@@ -33,8 +34,9 @@ const DEFAULT_THUMBNAILS = {
   stay: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=300',
   destination: 'https://images.pexels.com/photos/1483053/pexels-photo-1483053.jpeg?auto=compress&cs=tinysrgb&w=300',
   flight: 'https://images.pexels.com/photos/358319/pexels-photo-358319.jpeg?auto=compress&cs=tinysrgb&w=300',
-  train: 'https://images.pexels.com/photos/723240/pexels-photo-723240.jpeg?auto=compress&cs=tinysrgb&w=300',
-  rental_car: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=300'
+  train: 'https://images.pexels.com/photos/302428/pexels-photo-302428.jpeg?auto=compress&cs=tinysrgb&w=300',
+  rental_car: 'https://images.pexels.com/photos/30292047/pexels-photo-30292047.jpeg?auto=compress&cs=tinysrgb&w=300',
+  bus: 'https://images.pexels.com/photos/3608967/pexels-photo-3608967.jpeg?auto=compress&cs=tinysrgb&w=300'
 };
 
 // Predefined thumbnails as fallback
@@ -73,6 +75,9 @@ const getEventThumbnail = async (event: Event): Promise<string> => {
       break;
     case 'rental_car':
       searchTerm = (event as RentalCarEvent).pickupLocation || (event as RentalCarEvent).dropoffLocation || 'car rental';
+      break;
+    case 'bus':
+      searchTerm = (event as BusEvent).departureStation || (event as BusEvent).arrivalStation || 'bus station';
       break;
   }
 
@@ -201,7 +206,7 @@ const TripDetails: React.FC = () => {
   const [eventStatusFilter, setEventStatusFilter] = useState<'confirmed' | 'exploring'>('confirmed');
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
-  const [eventData, setEventData] = useState({
+  const [eventData, setEventData] = useState<EventFormData>({
     type: 'arrival',
     date: '',
     time: '',
@@ -213,6 +218,7 @@ const TripDetails: React.FC = () => {
     bookingReference: '',
     accommodationName: '',
     address: '',
+    checkIn: '',
     checkOut: '',
     reservationNumber: '',
     contactInfo: '',
@@ -223,27 +229,26 @@ const TripDetails: React.FC = () => {
     status: 'confirmed',
     thumbnailUrl: '',
     source: 'manual',
-    location: undefined as { lat: number; lng: number; address?: string } | undefined,
-    // Flight fields
+    location: undefined,
     departureAirport: '',
     arrivalAirport: '',
     departureTime: '',
     arrivalTime: '',
-    // Train fields
-    trainOperator: '',
     trainNumber: '',
+    trainOperator: '',
     departureStation: '',
     arrivalStation: '',
     carriageNumber: '',
     seatNumber: '',
-    // Rental Car fields
     carCompany: '',
     carType: '',
     pickupLocation: '',
     dropoffLocation: '',
     pickupTime: '',
     dropoffTime: '',
-    licensePlate: ''
+    licensePlate: '',
+    busOperator: '',
+    busNumber: ''
   });
   const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -256,6 +261,7 @@ const TripDetails: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [formFeedback, setFormFeedback] = useState({ type: '', message: '' });
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAirports = async (query: string) => {
     if (query.length < 2) {
@@ -631,6 +637,8 @@ const TripDetails: React.FC = () => {
           return '🚂';
         case 'rental_car':
           return '🚗';
+        case 'bus':
+          return '🚌';
         default:
           return '📅';
       }
@@ -656,6 +664,10 @@ const TripDetails: React.FC = () => {
         case 'rental_car': {
           const e = event as RentalCarEvent;
           return `${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`;
+        }
+        case 'bus': {
+          const e = event as BusEvent;
+          return `${e.departureStation || ''} to ${e.arrivalStation || ''}`;
         }
         default:
           return 'Event';
@@ -840,6 +852,18 @@ const TripDetails: React.FC = () => {
                             </div>
                           `;
                         }
+                        case 'bus': {
+                          const e = event as BusEvent;
+                          return `
+                            <div class="event-details">
+                              ${e.busOperator && `<div>Operator: ${e.busOperator}</div>`}
+                              ${e.busNumber && `<div>Bus: ${e.busNumber}</div>`}
+                              ${e.departureTime && `<div>Departure: ${e.departureTime}</div>`}
+                              ${e.arrivalTime && `<div>Arrival: ${e.arrivalTime}</div>`}
+                              ${e.seatNumber && <p>Seat: {e.seatNumber}</p>}
+                            </div>
+                          `;
+                        }
                         default:
                           return '';
                       }
@@ -945,15 +969,19 @@ const TripDetails: React.FC = () => {
 
   // Helper function to get names of users who liked/disliked an event
   const getVoterNames = (event: Event) => {
-    const voterIds = [...(event.likes || []), ...(event.dislikes || [])];
-    return voterIds.map(id => {
+    const getNameFromId = (id: string) => {
       if (id === user?._id) return 'You';
       if (id === trip?.owner._id) return 'Trip Owner';
       const collaborator = trip?.collaborators.find(c => 
         (typeof c === 'string' ? c : c.user._id) === id
       );
       return typeof collaborator === 'string' ? 'Unknown User' : collaborator?.user.name || 'Unknown User';
-    }).filter(Boolean);
+    };
+
+    const likeNames = (event.likes || []).map(getNameFromId).filter(Boolean);
+    const dislikeNames = (event.dislikes || []).map(getNameFromId).filter(Boolean);
+
+    return { likes: likeNames, dislikes: dislikeNames };
   };
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -996,6 +1024,7 @@ const TripDetails: React.FC = () => {
       bookingReference: '',
       accommodationName: '',
       address: '',
+      checkIn: '',
       checkOut: '',
       reservationNumber: '',
       contactInfo: '',
@@ -1007,26 +1036,25 @@ const TripDetails: React.FC = () => {
       thumbnailUrl: '',
       source: 'manual',
       location: undefined,
-      // Flight fields
       departureAirport: '',
       arrivalAirport: '',
       departureTime: '',
       arrivalTime: '',
-      // Train fields
-      trainOperator: '',
       trainNumber: '',
+      trainOperator: '',
       departureStation: '',
       arrivalStation: '',
       carriageNumber: '',
       seatNumber: '',
-      // Rental Car fields
       carCompany: '',
       carType: '',
       pickupLocation: '',
       dropoffLocation: '',
       pickupTime: '',
       dropoffTime: '',
-      licensePlate: ''
+      licensePlate: '',
+      busOperator: '',
+      busNumber: ''
     });
   };
 
@@ -1156,57 +1184,172 @@ const TripDetails: React.FC = () => {
 
   const handleEditEvent = (event: Event) => {
     setIsEditingEvent(event.id);
-    setEventType(event.type);
-    setEventData({
+    setEventType(event.type);  // Set the event type when editing
+    const baseData = {
       type: event.type,
       date: event.date,
-      time: (event as ArrivalDepartureEvent).time || '',
-      airport: (event as ArrivalDepartureEvent).airport || '',
-      flightNumber: (event as ArrivalDepartureEvent).flightNumber || '',
-      airline: (event as ArrivalDepartureEvent).airline || '',
-      terminal: (event as ArrivalDepartureEvent).terminal || '',
-      gate: (event as ArrivalDepartureEvent).gate || '',
-      bookingReference: (event as ArrivalDepartureEvent).bookingReference || '',
-      accommodationName: (event as StayEvent).accommodationName || '',
-      address: (event as StayEvent).address || '',
-      checkOut: (event as StayEvent).checkOut || '',
-      reservationNumber: (event as StayEvent).reservationNumber || '',
-      contactInfo: (event as StayEvent).contactInfo || '',
-      placeName: (event as DestinationEvent).placeName || '',
-      description: (event as DestinationEvent).description || '',
-      openingHours: (event as DestinationEvent).openingHours || '',
+      time: '',
+      airport: '',
+      flightNumber: '',
+      airline: '',
+      terminal: '',
+      gate: '',
+      bookingReference: '',
+      accommodationName: '',
+      address: '',
+      checkIn: '',
+      checkOut: '',
+      reservationNumber: '',
+      contactInfo: '',
+      placeName: '',
+      description: '',
+      openingHours: '',
       notes: event.notes || '',
-      status: event.status || 'confirmed',
-      thumbnailUrl: event.thumbnailUrl || '',
-      source: event.source || 'manual',
+      status: event.status,
+      thumbnailUrl: event.thumbnailUrl,
+      source: event.source,
       location: event.location,
-      // Flight fields
-      departureAirport: (event as FlightEvent).departureAirport || '',
-      arrivalAirport: (event as FlightEvent).arrivalAirport || '',
-      departureTime: (event as FlightEvent).departureTime || '',
-      arrivalTime: (event as FlightEvent).arrivalTime || '',
-      // Train fields
-      trainOperator: (event as TrainEvent).trainOperator || '',
-      trainNumber: (event as TrainEvent).trainNumber || '',
-      departureStation: (event as TrainEvent).departureStation || '',
-      arrivalStation: (event as TrainEvent).arrivalStation || '',
-      carriageNumber: (event as TrainEvent).carriageNumber || '',
-      seatNumber: (event as TrainEvent).seatNumber || '',
-      // Rental Car fields
-      carCompany: (event as RentalCarEvent).carCompany || '',
-      carType: (event as RentalCarEvent).carType || '',
-      pickupLocation: (event as RentalCarEvent).pickupLocation || '',
-      dropoffLocation: (event as RentalCarEvent).dropoffLocation || '',
-      pickupTime: (event as RentalCarEvent).pickupTime || '',
-      dropoffTime: (event as RentalCarEvent).dropoffTime || '',
-      licensePlate: (event as RentalCarEvent).licensePlate || ''
-    });
+      departureAirport: '',
+      arrivalAirport: '',
+      departureTime: '',
+      arrivalTime: '',
+      trainNumber: '',
+      trainOperator: '',
+      departureStation: '',
+      arrivalStation: '',
+      carriageNumber: '',
+      seatNumber: '',
+      carCompany: '',
+      carType: '',
+      pickupLocation: '',
+      dropoffLocation: '',
+      pickupTime: '',
+      dropoffTime: '',
+      licensePlate: '',
+      busOperator: '',
+      busNumber: ''
+    };
+
+    const typeSpecificData = event.type === 'arrival' || event.type === 'departure'
+      ? {
+          time: (event as ArrivalDepartureEvent).time || '',
+          airport: (event as ArrivalDepartureEvent).airport || '',
+          flightNumber: (event as ArrivalDepartureEvent).flightNumber || '',
+          airline: (event as ArrivalDepartureEvent).airline || '',
+          terminal: (event as ArrivalDepartureEvent).terminal || '',
+          gate: (event as ArrivalDepartureEvent).gate || '',
+          bookingReference: (event as ArrivalDepartureEvent).bookingReference || ''
+        }
+      : event.type === 'stay'
+      ? {
+          accommodationName: (event as StayEvent).accommodationName || '',
+          address: (event as StayEvent).address || '',
+          checkIn: (event as StayEvent).checkIn || '',
+          checkOut: (event as StayEvent).checkOut || '',
+          reservationNumber: (event as StayEvent).reservationNumber || '',
+          contactInfo: (event as StayEvent).contactInfo || ''
+        }
+      : event.type === 'destination'
+      ? {
+          placeName: (event as DestinationEvent).placeName || '',
+          address: (event as DestinationEvent).address || '',
+          description: (event as DestinationEvent).description || '',
+          openingHours: (event as DestinationEvent).openingHours || ''
+        }
+      : event.type === 'flight'
+      ? {
+          airline: (event as FlightEvent).airline || '',
+          flightNumber: (event as FlightEvent).flightNumber || '',
+          departureAirport: (event as FlightEvent).departureAirport || '',
+          arrivalAirport: (event as FlightEvent).arrivalAirport || '',
+          departureTime: (event as FlightEvent).departureTime || '',
+          arrivalTime: (event as FlightEvent).arrivalTime || '',
+          terminal: (event as FlightEvent).terminal || '',
+          gate: (event as FlightEvent).gate || '',
+          bookingReference: (event as FlightEvent).bookingReference || ''
+        }
+      : event.type === 'train'
+      ? {
+          trainNumber: (event as TrainEvent).trainNumber || '',
+          trainOperator: (event as TrainEvent).trainOperator || '',
+          departureStation: (event as TrainEvent).departureStation || '',
+          arrivalStation: (event as TrainEvent).arrivalStation || '',
+          departureTime: (event as TrainEvent).departureTime || '',
+          arrivalTime: (event as TrainEvent).arrivalTime || '',
+          carriageNumber: (event as TrainEvent).carriageNumber || '',
+          seatNumber: (event as TrainEvent).seatNumber || '',
+          bookingReference: (event as TrainEvent).bookingReference || ''
+        }
+      : event.type === 'rental_car'
+      ? {
+          carCompany: (event as RentalCarEvent).carCompany || '',
+          carType: (event as RentalCarEvent).carType || '',
+          pickupLocation: (event as RentalCarEvent).pickupLocation || '',
+          dropoffLocation: (event as RentalCarEvent).dropoffLocation || '',
+          pickupTime: (event as RentalCarEvent).pickupTime || '',
+          dropoffTime: (event as RentalCarEvent).dropoffTime || '',
+          licensePlate: (event as RentalCarEvent).licensePlate || '',
+          bookingReference: (event as RentalCarEvent).bookingReference || ''
+        }
+      : event.type === 'bus'
+      ? {
+          busOperator: (event as BusEvent).busOperator || '',
+          busNumber: (event as BusEvent).busNumber || '',
+          departureStation: (event as BusEvent).departureStation || '',
+          arrivalStation: (event as BusEvent).arrivalStation || '',
+          departureTime: (event as BusEvent).departureTime || '',
+          arrivalTime: (event as BusEvent).arrivalTime || '',
+          seatNumber: (event as BusEvent).seatNumber || '',
+          bookingReference: (event as BusEvent).bookingReference || ''
+        }
+      : {
+          time: '',
+          airport: '',
+          flightNumber: '',
+          airline: '',
+          terminal: '',
+          gate: '',
+          bookingReference: '',
+          accommodationName: '',
+          address: '',
+          checkIn: '',
+          checkOut: '',
+          reservationNumber: '',
+          contactInfo: '',
+          placeName: '',
+          description: '',
+          openingHours: '',
+          departureAirport: '',
+          arrivalAirport: '',
+          departureTime: '',
+          arrivalTime: '',
+          trainNumber: '',
+          trainOperator: '',
+          departureStation: '',
+          arrivalStation: '',
+          carriageNumber: '',
+          seatNumber: '',
+          carCompany: '',
+          carType: '',
+          pickupLocation: '',
+          dropoffLocation: '',
+          pickupTime: '',
+          dropoffTime: '',
+          licensePlate: '',
+          busOperator: '',
+          busNumber: ''
+        };
+
+    setEventData({ ...baseData, ...typeSpecificData });
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!trip || !user?._id) return;
+    if (!user) return;
+    
+    setIsSubmitting(true);
+    setFormFeedback({ type: '', message: '' });
 
     try {
       const now = new Date().toISOString();
@@ -1218,11 +1361,12 @@ const TripDetails: React.FC = () => {
         thumbnailUrl: eventData.thumbnailUrl,
         status: eventData.status || 'confirmed',
         source: eventData.source || 'manual',
+        location: eventData.location,
         createdBy: isEditingEvent ? (
           trip.events.find(e => e.id === isEditingEvent)?.createdBy || {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
+            _id: user._id,
+            name: user.name,
+            email: user.email,
             photoUrl: user.photoUrl
           }
         ) : {
@@ -1246,98 +1390,105 @@ const TripDetails: React.FC = () => {
         ) : [],
         dislikes: isEditingEvent ? (
           trip.events.find(e => e.id === isEditingEvent)?.dislikes || []
-        ) : [],
-        location: eventData.location
+        ) : []
       };
 
       let newEvent: Event;
-      console.log('Creating event with data:', eventData);
 
       if (eventData.type === 'arrival' || eventData.type === 'departure') {
         newEvent = {
           ...baseEvent,
+          time: eventData.time || '',
           airport: eventData.airport || '',
-          airline: eventData.airline,
-          flightNumber: eventData.flightNumber,
-          terminal: eventData.terminal,
-          gate: eventData.gate,
-          time: eventData.time || '12:00',
-          bookingReference: eventData.bookingReference
+          flightNumber: eventData.flightNumber || '',
+          airline: eventData.airline || '',
+          terminal: eventData.terminal || '',
+          gate: eventData.gate || '',
+          bookingReference: eventData.bookingReference || ''
         } as ArrivalDepartureEvent;
       } else if (eventData.type === 'stay') {
         newEvent = {
           ...baseEvent,
           accommodationName: eventData.accommodationName || '',
-          address: eventData.address,
-          checkIn: eventData.date,
-          checkOut: eventData.checkOut || eventData.date,
-          reservationNumber: eventData.reservationNumber,
-          contactInfo: eventData.contactInfo
+          address: eventData.address || '',
+          checkIn: eventData.checkIn || '',
+          checkOut: eventData.checkOut || '',
+          reservationNumber: eventData.reservationNumber || '',
+          contactInfo: eventData.contactInfo || ''
         } as StayEvent;
       } else if (eventData.type === 'destination') {
         newEvent = {
           ...baseEvent,
           placeName: eventData.placeName || '',
-          address: eventData.address,
-          description: eventData.description,
-          openingHours: eventData.openingHours
+          address: eventData.address || '',
+          description: eventData.description || '',
+          openingHours: eventData.openingHours || ''
         } as DestinationEvent;
       } else if (eventData.type === 'flight') {
         newEvent = {
           ...baseEvent,
-          airline: eventData.airline,
-          flightNumber: eventData.flightNumber,
-          departureAirport: eventData.departureAirport,
-          arrivalAirport: eventData.arrivalAirport,
-          departureTime: eventData.departureTime,
-          arrivalTime: eventData.arrivalTime,
-          terminal: eventData.terminal,
-          gate: eventData.gate,
-          bookingReference: eventData.bookingReference
+          airline: eventData.airline || '',
+          flightNumber: eventData.flightNumber || '',
+          departureAirport: eventData.departureAirport || '',
+          arrivalAirport: eventData.arrivalAirport || '',
+          departureTime: eventData.departureTime || '',
+          arrivalTime: eventData.arrivalTime || '',
+          terminal: eventData.terminal || '',
+          gate: eventData.gate || '',
+          bookingReference: eventData.bookingReference || ''
         } as FlightEvent;
       } else if (eventData.type === 'train') {
         newEvent = {
           ...baseEvent,
-          trainNumber: eventData.trainNumber,
-          trainOperator: eventData.trainOperator,
-          departureStation: eventData.departureStation,
-          arrivalStation: eventData.arrivalStation,
-          departureTime: eventData.departureTime,
-          arrivalTime: eventData.arrivalTime,
-          carriageNumber: eventData.carriageNumber,
-          seatNumber: eventData.seatNumber,
-          bookingReference: eventData.bookingReference
+          trainNumber: eventData.trainNumber || '',
+          trainOperator: eventData.trainOperator || '',
+          departureStation: eventData.departureStation || '',
+          arrivalStation: eventData.arrivalStation || '',
+          departureTime: eventData.departureTime || '',
+          arrivalTime: eventData.arrivalTime || '',
+          carriageNumber: eventData.carriageNumber || '',
+          seatNumber: eventData.seatNumber || '',
+          bookingReference: eventData.bookingReference || ''
         } as TrainEvent;
       } else if (eventData.type === 'rental_car') {
         newEvent = {
           ...baseEvent,
-          carCompany: eventData.carCompany,
-          carType: eventData.carType,
-          pickupLocation: eventData.pickupLocation,
-          dropoffLocation: eventData.dropoffLocation,
-          pickupTime: eventData.pickupTime,
-          dropoffTime: eventData.dropoffTime,
-          licensePlate: eventData.licensePlate,
-          bookingReference: eventData.bookingReference
+          carCompany: eventData.carCompany || '',
+          carType: eventData.carType || '',
+          pickupLocation: eventData.pickupLocation || '',
+          dropoffLocation: eventData.dropoffLocation || '',
+          pickupTime: eventData.pickupTime || '',
+          dropoffTime: eventData.dropoffTime || '',
+          licensePlate: eventData.licensePlate || '',
+          bookingReference: eventData.bookingReference || ''
         } as RentalCarEvent;
+      } else if (eventData.type === 'bus') {
+        newEvent = {
+          ...baseEvent,
+          busOperator: eventData.busOperator || '',
+          busNumber: eventData.busNumber || '',
+          departureStation: eventData.departureStation || '',
+          arrivalStation: eventData.arrivalStation || '',
+          departureTime: eventData.departureTime || '',
+          arrivalTime: eventData.arrivalTime || '',
+          seatNumber: eventData.seatNumber || '',
+          bookingReference: eventData.bookingReference || ''
+        } as BusEvent;
       } else {
         newEvent = {
           ...baseEvent,
           placeName: eventData.placeName || '',
-          address: eventData.address,
-          description: eventData.description,
-          openingHours: eventData.openingHours
+          address: eventData.address || '',
+          description: eventData.description || '',
+          openingHours: eventData.openingHours || ''
         } as DestinationEvent;
       }
 
-      console.log('Final event data:', newEvent);
-
-    if (isEditingEvent) {
+      if (isEditingEvent) {
         // Update existing event
         const updatedEvents = trip.events.map(e => 
           e.id === isEditingEvent ? newEvent : e
         );
-        console.log('Updating trip with events:', updatedEvents);
         
         const updatedTrip = {
           ...trip,
@@ -1347,31 +1498,28 @@ const TripDetails: React.FC = () => {
         await updateTrip(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event updated successfully!' });
-    } else {
+      } else {
         // Add new event
         const updatedTrip = {
           ...trip,
           events: [...trip.events, newEvent]
         };
         
-        console.log('Adding new event to trip:', updatedTrip);
         await updateTrip(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event added successfully!' });
       }
-      
-      // Reset form and close modal
+
+      setIsModalOpen(false);
       resetEventForm();
-    setIsModalOpen(false);
-    setIsEditingEvent(null);
     } catch (error) {
-      console.error('Error saving event:', error);
-      setFormFeedback({ 
-        type: 'error', 
-        message: error instanceof Error ? error.message : 'Failed to save event' 
+      console.error('Error submitting event:', error);
+      setFormFeedback({
+        type: 'error',
+        message: 'Failed to save event. Please try again.'
       });
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -1423,7 +1571,7 @@ const TripDetails: React.FC = () => {
               setEventData({ ...eventData, date: e.target.value })
             }
             className="input"
-            required
+            required={eventType as EventType !== 'bus'}
           />
         </div>
         {(eventType === 'arrival' || eventType === 'departure') && (
@@ -1436,7 +1584,6 @@ const TripDetails: React.FC = () => {
                 setEventData({ ...eventData, time: e.target.value })
               }
               className="input"
-              required
               placeholder="Enter time (HH:mm)"
             />
           </div>
@@ -1530,7 +1677,6 @@ const TripDetails: React.FC = () => {
                   fetchAirports(e.target.value);
                 }}
                 className="input"
-                required
                 placeholder="Start typing airport name..."
               />
               {showAirportSuggestions && airportSuggestions.length > 0 && (
@@ -1614,7 +1760,7 @@ const TripDetails: React.FC = () => {
                   setEventData({ ...eventData, accommodationName: e.target.value })
                 }
                 className="input"
-                required
+                placeholder="Enter accommodation name"
               />
             </div>
             <div className="mb-4">
@@ -1717,7 +1863,7 @@ const TripDetails: React.FC = () => {
                   setEventData({ ...eventData, placeName: e.target.value })
                 }
                 className="input"
-                required
+                placeholder="Enter place name"
               />
             </div>
             <div className="mb-4">
@@ -2058,6 +2204,98 @@ const TripDetails: React.FC = () => {
             </div>
           </>
         );
+      case 'bus':
+        return (
+          <>
+            {commonFields}
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Bus Operator (optional)</label>
+              <input
+                type="text"
+                value={eventData.busOperator}
+                onChange={(e) =>
+                  setEventData({ ...eventData, busOperator: e.target.value })
+                }
+                className="input"
+                placeholder="Enter bus operator"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Bus Number (optional)</label>
+              <input
+                type="text"
+                value={eventData.busNumber}
+                onChange={(e) =>
+                  setEventData({ ...eventData, busNumber: e.target.value })
+                }
+                className="input"
+                placeholder="Enter bus number"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Departure Station</label>
+              <input
+                type="text"
+                value={eventData.departureStation}
+                onChange={(e) =>
+                  setEventData({ ...eventData, departureStation: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter departure station"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Arrival Station</label>
+              <input
+                type="text"
+                value={eventData.arrivalStation}
+                onChange={(e) =>
+                  setEventData({ ...eventData, arrivalStation: e.target.value })
+                }
+                className="input"
+                required
+                placeholder="Enter arrival station"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Departure Time</label>
+              <input
+                type="time"
+                value={eventData.departureTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, departureTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Arrival Time</label>
+              <input
+                type="time"
+                value={eventData.arrivalTime}
+                onChange={(e) =>
+                  setEventData({ ...eventData, arrivalTime: e.target.value })
+                }
+                className="input"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Seat Number (optional)</label>
+              <input
+                type="text"
+                value={eventData.seatNumber}
+                onChange={(e) =>
+                  setEventData({ ...eventData, seatNumber: e.target.value })
+                }
+                className="input"
+                placeholder="Enter seat number"
+              />
+            </div>
+          </>
+        );
       default:
         return null;
     }
@@ -2207,6 +2445,8 @@ const TripDetails: React.FC = () => {
           return '🚂';
         case 'rental_car':
           return '🚗';
+        case 'bus':
+          return '🚌';
         default:
           return '📅';
       }
@@ -2233,6 +2473,10 @@ const TripDetails: React.FC = () => {
         case 'rental_car': {
           const carEvent = event as RentalCarEvent;
           return `${carEvent.carCompany || 'Rental Car'} - ${carEvent.pickupLocation || ''} to ${carEvent.dropoffLocation || ''}`;
+        }
+        case 'bus': {
+          const busEvent = event as BusEvent;
+          return `${busEvent.busOperator || 'Bus'} ${busEvent.busNumber || ''} - ${busEvent.departureStation || ''} to ${busEvent.arrivalStation || ''}`;
         }
         default:
           return 'Event';
@@ -2314,6 +2558,18 @@ const TripDetails: React.FC = () => {
               {carEvent.dropoffTime && <p>Dropoff Time: {carEvent.dropoffTime}</p>}
               {carEvent.licensePlate && <p>License Plate: {carEvent.licensePlate}</p>}
               {carEvent.bookingReference && <p>Booking Ref: {carEvent.bookingReference}</p>}
+            </div>
+          );
+        }
+        case 'bus': {
+          const busEvent = event as BusEvent;
+          return (
+            <div className="text-sm text-gray-600">
+              {busEvent.busOperator && <p>Operator: {busEvent.busOperator}</p>}
+              {busEvent.busNumber && <p>Bus: {busEvent.busNumber}</p>}
+              {busEvent.departureTime && <p>Departure: {busEvent.departureTime}</p>}
+              {busEvent.arrivalTime && <p>Arrival: {busEvent.arrivalTime}</p>}
+              {busEvent.seatNumber && <p>Seat: {busEvent.seatNumber}</p>}
             </div>
           );
         }
@@ -2513,6 +2769,37 @@ const TripDetails: React.FC = () => {
             </div>
           );
         }
+        case 'bus': {
+          const busEvent = event as BusEvent;
+          return (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {busEvent.busOperator || 'Bus'} {busEvent.busNumber || ''}
+              </p>
+              <p className="text-xs text-gray-500">
+                {busEvent.departureStation || ''} to {busEvent.arrivalStation || ''}
+              </p>
+              {busEvent.departureTime && (
+                <p className="text-xs text-gray-500">
+                  Departure: {busEvent.departureTime}
+                </p>
+              )}
+              {busEvent.arrivalTime && (
+                <p className="text-xs text-gray-500">
+                  Arrival: {busEvent.arrivalTime}
+                </p>
+              )}
+              {busEvent.seatNumber && (
+                <p className="text-xs text-gray-500">
+                  Seat: {busEvent.seatNumber}
+                </p>
+              )}
+              {event.status === 'exploring' && renderExploringContent()}
+              {event.notes && renderNotes()}
+              {renderCreatorInfo(event)}
+            </div>
+          );
+        }
         
         default:
           return null;
@@ -2520,56 +2807,59 @@ const TripDetails: React.FC = () => {
     };
 
     const renderExploringContent = () => (
-      <div className="mt-2 pt-2 border-t border-gray-100">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center space-x-2">
-            <button 
+      <div className="mt-2">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center">
+            <button
               onClick={(e) => {
                 e.stopPropagation();
-                const currentVote = getUserVoteStatus(event);
-                if (currentVote === 'liked') {
-                  handleVote(event.id, 'remove');
-                } else {
-                  handleVote(event.id, 'like');
-                }
+                handleVote(event.id, getUserVoteStatus(event) === 'liked' ? 'remove' : 'like');
               }}
-              className={`flex items-center px-2 py-1 rounded ${
-                getUserVoteStatus(event) === 'liked' 
-                  ? 'bg-green-50 text-green-600' 
-                  : 'bg-gray-100 text-gray-600'
-              } hover:opacity-80 transition-colors`}
-              title={`Likes: ${getVoterNames(event)}`}
+              className={`flex items-center space-x-1 px-2 py-1 rounded ${
+                getUserVoteStatus(event) === 'liked'
+                  ? 'bg-green-100 text-green-800'
+                  : 'hover:bg-gray-100 text-gray-600'
+              }`}
             >
-              <span className="mr-1">👍</span>
-              <span className="text-xs font-medium">
-                {event.likes?.length || 0}
-              </span>
+              <span className="text-lg">👍</span>
+              <span>{event.likes?.length || 0}</span>
             </button>
-            
-            <button 
+          </div>
+          <div className="flex items-center">
+            <button
               onClick={(e) => {
                 e.stopPropagation();
-                const currentVote = getUserVoteStatus(event);
-                if (currentVote === 'disliked') {
-                  handleVote(event.id, 'remove');
-                } else {
-                  handleVote(event.id, 'dislike');
-                }
+                handleVote(event.id, getUserVoteStatus(event) === 'disliked' ? 'remove' : 'dislike');
               }}
-              className={`flex items-center px-2 py-1 rounded ${
-                getUserVoteStatus(event) === 'disliked' 
-                  ? 'bg-red-50 text-red-600' 
-                  : 'bg-gray-100 text-gray-600'
-              } hover:opacity-80 transition-colors`}
-              title={`Dislikes: ${getVoterNames(event)}`}
+              className={`flex items-center space-x-1 px-2 py-1 rounded ${
+                getUserVoteStatus(event) === 'disliked'
+                  ? 'bg-red-100 text-red-800'
+                  : 'hover:bg-gray-100 text-gray-600'
+              }`}
             >
-              <span className="mr-1">👎</span>
-              <span className="text-xs font-medium">
-                {event.dislikes?.length || 0}
-              </span>
+              <span className="text-lg">👎</span>
+              <span>{event.dislikes?.length || 0}</span>
             </button>
           </div>
         </div>
+        {((event.likes && event.likes.length > 0) || (event.dislikes && event.dislikes.length > 0)) && (
+          <div className="mt-2 text-sm text-gray-500">
+            <div className="flex flex-col space-y-1">
+              {event.likes && event.likes.length > 0 && (
+                <div className="flex items-center">
+                  <span className="font-medium">Liked by:</span>
+                  <span className="ml-1">{getVoterNames(event).likes.join(', ')}</span>
+                </div>
+              )}
+              {event.dislikes && event.dislikes.length > 0 && (
+                <div className="flex items-center">
+                  <span className="font-medium">Disliked by:</span>
+                  <span className="ml-1">{getVoterNames(event).dislikes.join(', ')}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
 
@@ -2672,6 +2962,28 @@ const TripDetails: React.FC = () => {
       } : undefined
     }));
   };
+
+  const eventTypeToIcon = {
+    arrival: '✈️',
+    departure: '✈️',
+    stay: '🏨',
+    destination: '📍',
+    flight: '✈️',
+    train: '🚂',
+    rental_car: '🚗',
+    bus: '🚌'
+  } as const;
+
+  const eventTypeToLabel = {
+    arrival: 'Arrival',
+    departure: 'Departure',
+    stay: 'Stay',
+    destination: 'Destination',
+    flight: 'Flight',
+    train: 'Train',
+    rental_car: 'Rental Car',
+    bus: 'Bus'
+  } as const;
 
   return (
     <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 space-y-6">
@@ -3004,6 +3316,8 @@ const TripDetails: React.FC = () => {
                                             return <span className="text-2xl">🚂</span>;
                                           case 'rental_car':
                                             return <span className="text-2xl">🚗</span>;
+                                          case 'bus':
+                                            return <span className="text-2xl">🚌</span>;
                                           default:
                                             return <span className="text-2xl">📅</span>;
                                         }
@@ -3086,6 +3400,10 @@ const TripDetails: React.FC = () => {
                                           case 'rental_car': {
                                             const e = event as RentalCarEvent;
                                             return `${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`;
+                                          }
+                                          case 'bus': {
+                                            const e = event as BusEvent;
+                                            return `${e.departureStation || ''} to ${e.arrivalStation || ''}`;
                                           }
                                           default:
                                             return 'Event';
@@ -3224,64 +3542,79 @@ const TripDetails: React.FC = () => {
                                               </div>
                                           );
                                         }
+                                        case 'bus': {
+                                          const e = event as BusEvent;
+                                          return (
+                                            <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                              {e.busOperator && <p>Operator: {e.busOperator}</p>}
+                                              {e.busNumber && <p>Bus: {e.busNumber}</p>}
+                                              {e.departureTime && <p>Departure: {e.departureTime}</p>}
+                                              {e.arrivalTime && <p>Arrival: {e.arrivalTime}</p>}
+                                              {e.seatNumber && <p>Seat: {e.seatNumber}</p>}
+                                            </div>
+                                          );
+                                        }
                                         default:
                                           return null;
                                       }
                                     })()}
 
                                       {event.status === 'exploring' && (
-                                        <div className="mt-2 pt-2 border-t border-gray-100">
-                                          <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center space-x-2">
-                                              <button 
+                                        <div className="mt-2">
+                                          <div className="flex items-center space-x-4">
+                                            <div className="flex items-center">
+                                              <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  const currentVote = getUserVoteStatus(event);
-                                                  if (currentVote === 'liked') {
-                                                  handleVote(event.id, 'remove');
-                                                  } else {
-                                                  handleVote(event.id, 'like');
-                                                  }
+                                                  handleVote(event.id, getUserVoteStatus(event) === 'liked' ? 'remove' : 'like');
                                                 }}
-                                                className={`flex items-center px-2 py-1 rounded ${
-                                                  getUserVoteStatus(event) === 'liked' 
-                                                    ? 'bg-green-50 text-green-600' 
-                                                    : 'bg-gray-100 text-gray-600'
-                                                } hover:opacity-80 transition-colors`}
-                                              title={`Likes: ${getVoterNames(event)}`}
+                                                className={`flex items-center space-x-1 px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'liked'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'hover:bg-gray-100 text-gray-600'
+                                                }`}
                                               >
-                                                <span className="mr-1">👍</span>
-                                                <span className="text-xs font-medium">
-                                                  {event.likes?.length || 0}
-                                                </span>
-                                              </button>
-                                              
-                                              <button 
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const currentVote = getUserVoteStatus(event);
-                                                  if (currentVote === 'disliked') {
-                                                  handleVote(event.id, 'remove');
-                                                  } else {
-                                                  handleVote(event.id, 'dislike');
-                                                  }
-                                                }}
-                                                className={`flex items-center px-2 py-1 rounded ${
-                                                  getUserVoteStatus(event) === 'disliked' 
-                                                    ? 'bg-red-50 text-red-600' 
-                                                    : 'bg-gray-100 text-gray-600'
-                                                } hover:opacity-80 transition-colors`}
-                                              title={`Dislikes: ${getVoterNames(event)}`}
-                                              >
-                                                <span className="mr-1">👎</span>
-                                                <span className="text-xs font-medium">
-                                                  {event.dislikes?.length || 0}
-                                                </span>
+                                                <span className="text-lg">👍</span>
+                                                <span>{event.likes?.length || 0}</span>
                                               </button>
                                             </div>
+                                            <div className="flex items-center">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleVote(event.id, getUserVoteStatus(event) === 'disliked' ? 'remove' : 'dislike');
+                                                }}
+                                                className={`flex items-center space-x-1 px-2 py-1 rounded ${
+                                                  getUserVoteStatus(event) === 'disliked'
+                                                    ? 'bg-red-100 text-red-800'
+                                                    : 'hover:bg-gray-100 text-gray-600'
+                                                }`}
+                                              >
+                                                <span className="text-lg">👎</span>
+                                                <span>{event.dislikes?.length || 0}</span>
+                                              </button>
+                                            </div>
+                                          </div>
+                                          {((event.likes && event.likes.length > 0) || (event.dislikes && event.dislikes.length > 0)) && (
+                                            <div className="mt-2 text-sm text-gray-500">
+                                              <div className="flex flex-col space-y-1">
+                                                {event.likes && event.likes.length > 0 && (
+                                                  <div className="flex items-center">
+                                                    <span className="font-medium">Liked by:</span>
+                                                    <span className="ml-1">{getVoterNames(event).likes.join(', ')}</span>
+                                                  </div>
+                                                )}
+                                                {event.dislikes && event.dislikes.length > 0 && (
+                                                  <div className="flex items-center">
+                                                    <span className="font-medium">Disliked by:</span>
+                                                    <span className="ml-1">{getVoterNames(event).dislikes.join(', ')}</span>
+                                                  </div>
+                                                )}
                                               </div>
                                             </div>
                                           )}
+                                        </div>
+                                      )}
 
                                       {event.notes && (
                                         <p className="text-xs text-gray-500 mt-1 line-clamp-2">
@@ -3371,6 +3704,7 @@ const TripDetails: React.FC = () => {
                   <option value="flight">Flight</option>
                   <option value="train">Train</option>
                   <option value="rental_car">Rental Car</option>
+                  <option value="bus">Bus</option>
                 </select>
               </div>
 

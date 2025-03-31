@@ -1,4 +1,4 @@
-import { EventType, Event, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent } from '../../types';
+import { EventType, Event, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent } from '../../types';
 
 export interface EventTypeConfig {
   type: EventType;
@@ -130,6 +130,22 @@ const eventTypes: Record<EventType, EventTypeConfig> = {
       const rentalCarEvent = event as RentalCarEvent;
       return !!(
         rentalCarEvent.date
+      );
+    }
+  },
+  bus: {
+    type: 'bus',
+    label: 'Bus',
+    icon: '🚌',
+    defaultThumbnail: '/images/bus.jpg',
+    fields: {
+      required: ['date'],
+      optional: ['busNumber', 'busOperator', 'departureStation', 'arrivalStation', 'departureTime', 'arrivalTime', 'seatNumber', 'bookingReference', 'notes', 'source']
+    },
+    validate: (event: Event) => {
+      const busEvent = event as BusEvent;
+      return !!(
+        busEvent.date
       );
     }
   }
