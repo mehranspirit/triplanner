@@ -61,9 +61,8 @@ const Avatar: React.FC<AvatarProps> = ({ photoUrl, name = 'User', size = 'md', c
         });
       }
 
-      // Pre-load the image
+      // For Safari, we'll try loading the image without crossOrigin first
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
         console.log(`Avatar - Image preloaded successfully ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
           url: fullUrl,
@@ -75,14 +74,31 @@ const Avatar: React.FC<AvatarProps> = ({ photoUrl, name = 'User', size = 'md', c
         setImageUrl(fullUrl);
         setShowFallback(false);
       };
-      img.onerror = (error) => {
-        console.error(`Avatar - Image preload failed ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
-          url: fullUrl,
-          error,
-          isLikelyEventCardAvatar,
-          timestamp: new Date().toISOString()
-        });
-        setShowFallback(true);
+      img.onerror = () => {
+        // If direct loading fails, try with crossOrigin
+        const imgWithCors = new Image();
+        imgWithCors.crossOrigin = 'anonymous';
+        imgWithCors.onload = () => {
+          console.log(`Avatar - Image preloaded successfully ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
+            url: fullUrl,
+            width: imgWithCors.width,
+            height: imgWithCors.height,
+            isLikelyEventCardAvatar,
+            timestamp: new Date().toISOString()
+          });
+          setImageUrl(fullUrl);
+          setShowFallback(false);
+        };
+        imgWithCors.onerror = (error) => {
+          console.error(`Avatar - Image preload failed ${isLikelyEventCardAvatar ? '[EVENT CARD]' : ''}:`, {
+            url: fullUrl,
+            error,
+            isLikelyEventCardAvatar,
+            timestamp: new Date().toISOString()
+          });
+          setShowFallback(true);
+        };
+        imgWithCors.src = fullUrl;
       };
       img.src = fullUrl;
     } else {
