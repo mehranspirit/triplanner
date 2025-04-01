@@ -256,8 +256,6 @@ const TripDetails: React.FC = () => {
   const [showAirportSuggestions, setShowAirportSuggestions] = useState(false);
   const airportInputRef = useRef<HTMLInputElement>(null);
   const [eventThumbnails, setEventThumbnails] = useState<{ [key: string]: string }>({});
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formFeedback, setFormFeedback] = useState({ type: '', message: '' });
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
@@ -418,11 +416,11 @@ const TripDetails: React.FC = () => {
     loadEventThumbnails();
   }, [trip]);
 
-  // Add click outside handler for export dropdown
+  // Add click outside handler for status menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setShowExportMenu(false);
+      if (statusMenuRef.current && !statusMenuRef.current.contains(event.target as Node)) {
+        setStatusMenuOpen(null);
       }
     };
 
@@ -613,7 +611,6 @@ const TripDetails: React.FC = () => {
     try {
       if (!trip?._id) return;
       await api.exportTripAsPDF(trip._id);
-      setShowExportMenu(false);
     } catch (error) {
       setError('Failed to export trip as PDF');
     }
@@ -903,13 +900,9 @@ const TripDetails: React.FC = () => {
 
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${trip.name.toLowerCase().replace(/\s+/g, '-')}-itinerary.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    window.open(url, '_blank');
+    // Clean up the URL object after a delay to ensure the new tab has loaded
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleStatusChange = async (eventId: string, newStatus: 'confirmed' | 'exploring') => {
@@ -3023,34 +3016,16 @@ const TripDetails: React.FC = () => {
               </button>
             )}
             
-            {/* Export dropdown */}
-            <div className="relative" ref={exportMenuRef}>
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
-                title="Export Trip"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 001.414 0L9 10.586V3a1 1 0 102 0v7.586l1.293-1.293a1 1 0 101.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-              
-              {showExportMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-xl z-[100]">
-                  <div className="py-1">
-                    <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
-                      Only confirmed events will be exported
-                    </div>
-                    <button
-                      onClick={handleExportHTML}
-                      className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
-                    >
-                      Printable Itinerary
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Export button */}
+            <button
+              onClick={handleExportHTML}
+              className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
+              title="Export Itinerary"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 001.414 0L9 10.586V3a1 1 0 102 0v7.586l1.293-1.293a1 1 0 101.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
             
             {/* Collaborators button */}
               <button
