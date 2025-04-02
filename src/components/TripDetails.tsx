@@ -15,7 +15,8 @@ import {
   FlightEvent,
   TrainEvent,
   RentalCarEvent,
-  BusEvent
+  BusEvent,
+  AISuggestionHistory
 } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 import '../styles/TripDetails.css';
@@ -24,6 +25,14 @@ import ShareModal from './ShareModal';
 import TripMap from './TripMap';
 import Avatar from './Avatar';
 import EventForm from './EventForm';
+import { AISuggestionsModal } from './AISuggestionsModal';
+import { AISuggestionsDisplay } from './AISuggestionsDisplay';
+import { generateAISuggestions } from '../services/aiService';
+import { SparklesIcon } from '@heroicons/react/24/solid';
+import { TrashIcon } from '@heroicons/react/24/solid';
+import { UserGroupIcon } from '@heroicons/react/24/solid';
+import { ShareIcon } from '@heroicons/react/24/solid';
+import { ArrowDownTrayIcon } from '@heroicons/react/24/solid';
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
@@ -260,6 +269,18 @@ const TripDetails: React.FC = () => {
   const [formFeedback, setFormFeedback] = useState({ type: '', message: '' });
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAISuggestionsModalOpen, setIsAISuggestionsModalOpen] = useState(false);
+  const [aiSuggestions, setAISuggestions] = useState<string | null>(null);
+  const [aiSuggestionsHistory, setAISuggestionsHistory] = useState<AISuggestionHistory[]>([]);
+
+  // Add type guard function at the top of the component
+  const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
+    return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
+  };
+
+  const getCollaboratorRole = (collaborator: string | { user: User; role: 'viewer' | 'editor' }): 'viewer' | 'editor' => {
+    return isCollaboratorObject(collaborator) ? collaborator.role : 'viewer';
+  };
 
   const fetchAirports = async (query: string) => {
     if (query.length < 2) {
@@ -502,105 +523,42 @@ const TripDetails: React.FC = () => {
     const mappedTrip: Trip = {
       _id: trip._id,
       name: trip.name,
-      events: trip.events.map(event => {
-        // Helper function to get user info from ID
-        const getUserFromId = (userId: string): User | undefined => {
-          // Check if it's the current user
-          if (user && user._id === userId) {
-            return {
-              _id: user._id,
-              name: user.name,
-              email: user.email,
-              photoUrl: user.photoUrl
-            };
-          }
-          
-          // Check if it's the trip owner
-          if (trip.owner._id === userId) {
-            return {
-              _id: trip.owner._id,
-              name: trip.owner.name,
-              email: trip.owner.email,
-              photoUrl: trip.owner.photoUrl
-            };
-          }
-          
-          // Check collaborators
-          const collaborator = trip.collaborators.find(c => {
-            if (typeof c === 'string') {
-              return c === userId;
+      events: trip.events.map(event => ({
+        ...event,
+        createdBy: typeof event.createdBy === 'object'
+          ? event.createdBy as User
+          : {
+              _id: event.createdBy,
+              name: '',
+              email: '',
+              photoUrl: null
+            },
+        updatedBy: typeof event.updatedBy === 'object'
+          ? event.updatedBy as User
+          : {
+              _id: event.updatedBy,
+              name: '',
+              email: '',
+              photoUrl: null
             }
-            return c.user._id === userId;
-          });
-          
-          if (collaborator && typeof collaborator !== 'string') {
-            return {
-              _id: collaborator.user._id,
-              name: collaborator.user.name,
-              email: collaborator.user.email,
-              photoUrl: collaborator.user.photoUrl
-            };
-          }
-          
-          return undefined;
-        };
-
-        const mappedEvent: Event = {
-          ...event,
-          createdBy: typeof event.createdBy === 'object' && event.createdBy !== null
-            ? {
-                _id: event.createdBy._id,
-                name: event.createdBy.name,
-                email: event.createdBy.email,
-                photoUrl: event.createdBy.photoUrl
-              }
-            : getUserFromId(event.createdBy as string) || {
-                _id: event.createdBy as string,
-                name: 'Unknown',
-                email: '',
-                photoUrl: null
-              },
-          updatedBy: typeof event.updatedBy === 'object' && event.updatedBy !== null
-            ? {
-                _id: event.updatedBy._id,
-                name: event.updatedBy.name,
-                email: event.updatedBy.email,
-                photoUrl: event.updatedBy.photoUrl
-              }
-            : getUserFromId(event.updatedBy as string) || {
-                _id: event.updatedBy as string,
-                name: 'Unknown',
-                email: '',
-                photoUrl: null
-              }
-        };
-        return mappedEvent;
-      }),
+      })),
       owner: {
-        ...trip.owner,
+        _id: trip.owner._id,
+        name: trip.owner.name,
+        email: trip.owner.email,
         photoUrl: trip.owner.photoUrl
       },
-      collaborators: trip.collaborators.map(collaborator => {
-        if (typeof collaborator === 'string') {
-          return {
-            user: { _id: collaborator, name: '', email: '', photoUrl: null },
-            role: 'viewer' as const
-          };
-        }
-        return {
-          ...collaborator,
-          user: {
-            ...collaborator.user,
-            photoUrl: collaborator.user.photoUrl
-          }
-        };
-      }),
+      collaborators: trip.collaborators.map(c => 
+        isCollaboratorObject(c) ? c : { user: { _id: c, name: '', email: '' }, role: 'viewer' as const }
+      ),
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt,
       isPublic: trip.isPublic,
-      description: trip.description,
-      thumbnailUrl: trip.thumbnailUrl,
-      shareableLink: trip.shareableLink
+      shareableLink: trip.shareableLink,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      status: trip.status,
+      tags: trip.tags
     };
     
     return mappedTrip;
@@ -2205,6 +2163,78 @@ const TripDetails: React.FC = () => {
     return undefined;
   };
 
+  const handleAISuggestionsSubmit = async (places: string[], activities: string[]) => {
+    if (!trip || !user) return;
+
+    try {
+      const suggestions = await generateAISuggestions({
+        places,
+        activities,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+      });
+
+      // Save to history
+      const historyItem: Omit<AISuggestionHistory, '_id'> = {
+        userId: user._id,
+        tripId: trip._id,
+        places,
+        activities,
+        suggestions,
+        createdAt: new Date().toISOString(),
+      };
+
+      try {
+        const savedHistory = await api.saveAISuggestion(historyItem);
+        setAISuggestionsHistory(prev => [savedHistory, ...prev]);
+        setAISuggestions(suggestions);
+        setIsAISuggestionsModalOpen(false);
+      } catch (error) {
+        console.error('Error saving AI suggestion:', error);
+        // Still show the suggestions even if saving fails
+        setAISuggestions(suggestions);
+        setIsAISuggestionsModalOpen(false);
+      }
+    } catch (error) {
+      console.error('Error generating AI suggestions:', error);
+      setError('Failed to generate suggestions. Please try again later.');
+    }
+  };
+
+  const handleSelectHistoryItem = (suggestion: AISuggestionHistory) => {
+    // Clean up markdown formatting while preserving structure
+    const cleanSuggestions = suggestion.suggestions
+      .replace(/^#+\s*/gm, '') // Remove leading #s
+      .replace(/\*\*/g, '') // Remove **
+      .replace(/\*/g, '') // Remove single *
+      .replace(/^---\s*/gm, '') // Remove horizontal rules
+      .replace(/^\s+/gm, '') // Remove leading whitespace
+      .replace(/\n{3,}/g, '\n\n') // Replace multiple newlines with double newlines
+      .trim();
+    
+    setAISuggestions(cleanSuggestions);
+    setIsAISuggestionsModalOpen(false);
+  };
+
+  // Load history when component mounts
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!trip?._id || !user?._id) return;
+      
+      try {
+        console.log('Loading AI suggestions history for:', { tripId: trip._id, userId: user._id });
+        const history = await api.getAISuggestions(trip._id, user._id);
+        console.log('Loaded AI suggestions history:', history);
+        setAISuggestionsHistory(history);
+      } catch (error) {
+        console.error('Error loading AI suggestions history:', error);
+        setError('Failed to load suggestion history. Please try again later.');
+      }
+    };
+
+    loadHistory();
+  }, [trip?._id, user?._id]);
+
   if (loading) {
     return (
       <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 flex items-center justify-center h-screen">
@@ -2241,8 +2271,10 @@ const TripDetails: React.FC = () => {
   }
 
   const isOwner = user?._id === trip.owner._id;
-  const collaborator = trip.collaborators.find(c => c.user._id === user?._id);
-  const canEdit = isOwner || collaborator?.role === 'editor';
+  const collaborator = trip.collaborators.find(c => 
+    isCollaboratorObject(c) && c.user._id === user?._id
+  );
+  const canEdit = isOwner || (collaborator && getCollaboratorRole(collaborator) === 'editor');
 
   console.log('User and ownership debug:', {
     userId: user?._id,
@@ -2847,36 +2879,14 @@ const TripDetails: React.FC = () => {
       _id: trip._id,
       name: trip.name,
       description: trip.description || '',
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      status: trip.status || 'planning',
+      tags: trip.tags || [],
       thumbnailUrl: trip.thumbnailUrl,
       owner: trip.owner,
-      collaborators: trip.collaborators.map(collaborator => {
-        if (typeof collaborator === 'string') {
-          return {
-            user: { _id: collaborator, name: '', email: '' },
-            role: 'viewer' as const
-          };
-        }
-        return collaborator;
-      }),
-      events: trip.events.map(event => ({
-        ...event,
-        createdBy: typeof event.createdBy === 'object'
-          ? event.createdBy as User
-          : {
-              _id: event.createdBy,
-              name: '',
-              email: '',
-              photoUrl: null
-            },
-        updatedBy: typeof event.updatedBy === 'object'
-          ? event.updatedBy as User
-          : {
-              _id: event.updatedBy,
-              name: '',
-              email: '',
-              photoUrl: null
-            }
-      })),
+      collaborators: trip.collaborators,
+      events: trip.events,
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt,
       isPublic: trip.isPublic,
@@ -2990,6 +3000,24 @@ const TripDetails: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const renderCollaboratorInfo = (collaborator: string | { user: User; role: 'viewer' | 'editor' }) => {
+    if (!isCollaboratorObject(collaborator)) return null;
+    
+    return (
+      <div key={collaborator.user._id} className="relative group">
+        <Avatar
+          photoUrl={collaborator.user.photoUrl || null}
+          name={collaborator.user.name}
+          size="md"
+          className="ring-2 ring-white"
+        />
+        <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+          {collaborator.user.name} • {collaborator.role}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 space-y-6">
       <div className="relative">
@@ -3004,6 +3032,15 @@ const TripDetails: React.FC = () => {
           
           {/* Action Buttons - Above title on mobile, to the right on larger screens */}
           <div className="absolute top-4 right-4 sm:right-6 flex sm:flex-row flex-wrap justify-end gap-2 z-20 bg-black/30 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none rounded-full p-1.5 sm:p-0">
+            {/* AI Suggestions button */}
+            <button
+              onClick={() => setIsAISuggestionsModalOpen(true)}
+              className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
+              title="Get AI Travel Suggestions"
+            >
+              <SparklesIcon className="h-5 w-5" />
+            </button>
+
             {canEdit && (
               <button
                 onClick={() => setIsEditingTrip(true)}
@@ -3028,15 +3065,15 @@ const TripDetails: React.FC = () => {
             </button>
             
             {/* Collaborators button */}
-              <button
-                onClick={() => setIsCollaboratorModalOpen(true)}
+            <button
+              onClick={() => setIsCollaboratorModalOpen(true)}
               className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
               title="Collaborators"
-              >
+            >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
               </svg>
-              </button>
+            </button>
             
             {/* Leave/Delete Trip button */}
             {isOwner ? (
@@ -3060,7 +3097,7 @@ const TripDetails: React.FC = () => {
                 </svg>
               </button>
             )}
-        </div>
+          </div>
           
           {/* Trip Title - Responsive positioning */}
           <div className="absolute top-[calc(4rem+8px)] sm:top-4 left-4 sm:left-6 z-20 max-w-[calc(100%-32px)] sm:max-w-[calc(100%-120px)]">
@@ -3107,25 +3144,11 @@ const TripDetails: React.FC = () => {
             )}
             {/* Collaborator Avatars */}
             {trip.collaborators
-              .filter(collaborator => collaborator.user._id !== user?._id)
-              .map((collaborator) => {
-                // Force the role to be a string
-                const roleDisplay = String(collaborator.role || 'Viewer');
-                
-                return (
-                  <div key={collaborator.user._id} className="relative group">
-                    <Avatar
-                      photoUrl={collaborator.user.photoUrl || null}
-                      name={collaborator.user.name}
-                      size="md"
-                      className="ring-2 ring-white"
-                    />
-                    <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      {collaborator.user.name} • {roleDisplay}
-          </div>
-        </div>
-                );
-              })}
+              .filter(collaborator => 
+                isCollaboratorObject(collaborator) && 
+                collaborator.user._id !== user?._id
+              )
+              .map(renderCollaboratorInfo)}
             </div>
           
           {/* Shared trip info - Keep for non-owners */}
@@ -3137,9 +3160,15 @@ const TripDetails: React.FC = () => {
               </span>
                 <div className="flex flex-col items-end gap-2">
                   <span className="text-sm font-medium text-white">
-                    {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' 
-                      ? 'You can edit this trip' 
-                      : 'You can view this trip'}
+                    {(() => {
+                      const userCollaborator = trip.collaborators.find(c => 
+                        isCollaboratorObject(c) && 
+                        c.user._id === user._id
+                      );
+                      return userCollaborator && getCollaboratorRole(userCollaborator) === 'editor'
+                        ? 'You can edit this trip' 
+                        : 'You can view this trip';
+                    })()}
                   </span>
                   <div className="flex gap-2">
                     {trip.collaborators.length > 0 && (
@@ -3914,6 +3943,29 @@ const TripDetails: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add AI Suggestions Modal */}
+      {trip && (
+        <AISuggestionsModal
+          isOpen={isAISuggestionsModalOpen}
+          onClose={() => setIsAISuggestionsModalOpen(false)}
+          tripDates={{
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+          }}
+          onSubmit={handleAISuggestionsSubmit}
+          history={aiSuggestionsHistory}
+          onSelectHistoryItem={handleSelectHistoryItem}
+        />
+      )}
+
+      {/* Add AI Suggestions Display */}
+      {aiSuggestions && (
+        <AISuggestionsDisplay
+          suggestions={aiSuggestions}
+          onClose={() => setAISuggestions(null)}
+        />
       )}
     </div>
   );

@@ -61,19 +61,81 @@ export interface Trip {
   _id: string;
   name: string;
   description?: string;
-  thumbnailUrl?: string;
-  startDate?: string;
-  endDate?: string;
-  owner: User;
-  collaborators: Array<{
-    user: User;
-    role: 'viewer' | 'editor';
-  }>;
+  startDate: string;
+  endDate: string;
   events: Event[];
+  owner: User;
+  collaborators: (string | { user: User; role: 'viewer' | 'editor' })[];
   createdAt: string;
   updatedAt: string;
+  thumbnailUrl?: string;
   isPublic: boolean;
-  shareableLink?: string;
+  status: 'planning' | 'active' | 'completed';
+  tags: string[];
+  location?: {
+    lat: number;
+    lng: number;
+    name: string;
+  };
+  budget?: {
+    total: number;
+    currency: string;
+  };
+  notes?: string;
+  weather?: {
+    forecast: any[];
+    lastUpdated: string;
+  };
+  activities?: {
+    name: string;
+    type: string;
+    location: string;
+    date: string;
+    duration: string;
+    notes?: string;
+  }[];
+  documents?: {
+    name: string;
+    url: string;
+    type: string;
+    uploadedAt: string;
+  }[];
+  checklist?: {
+    item: string;
+    completed: boolean;
+    dueDate?: string;
+  }[];
+  expenses?: {
+    description: string;
+    amount: number;
+    currency: string;
+    date: string;
+    category: string;
+  }[];
+  photos?: {
+    url: string;
+    caption?: string;
+    date: string;
+    location?: string;
+  }[];
+  itinerary?: {
+    day: number;
+    activities: {
+      time: string;
+      description: string;
+      location?: string;
+      notes?: string;
+    }[];
+  }[];
+  settings?: {
+    defaultCurrency: string;
+    timezone: string;
+    notifications: boolean;
+    sharing: {
+      public: boolean;
+      collaborators: string[];
+    };
+  };
 }
 
 export interface AuthUser extends User {

@@ -1,7 +1,14 @@
 /// <reference types="vite/client" />
-import { Trip, Event } from '../types';
+import { Event } from '../types';
+import { Trip, AISuggestionHistory, User } from '../types/eventTypes';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
+
+const isCollaboratorObject = (c: Collaborator): c is { user: User; role: 'editor' | 'viewer' } => {
+  return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
+};
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
@@ -10,15 +17,6 @@ const getHeaders = () => {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 };
-
-interface User {
-  _id: string;
-  email: string;
-  name: string;
-  createdAt: string;
-  isAdmin?: boolean;
-  photoUrl?: string | null;
-}
 
 interface API {
   getUsers: () => Promise<User[]>;
@@ -43,6 +41,8 @@ interface API {
   exportTripAsHTML: (tripId: string) => Promise<void>;
   voteEvent: (tripId: string, eventId: string, voteType: 'like' | 'dislike') => Promise<Trip>;
   removeVote: (tripId: string, eventId: string) => Promise<Trip>;
+  getAISuggestions: (tripId: string, userId: string) => Promise<AISuggestionHistory[]>;
+  saveAISuggestion: (suggestion: Omit<AISuggestionHistory, '_id'>) => Promise<AISuggestionHistory>;
 }
 
 export const api: API = {
@@ -129,7 +129,9 @@ export const api: API = {
         shareableLink: trip.shareableLink,
         createdAt: trip.createdAt,
         updatedAt: trip.updatedAt,
-        isPublic: trip.isPublic
+        isPublic: trip.isPublic,
+        status: trip.status || 'planning',
+        tags: trip.tags || []
       };
 
       return transformedTrip;
@@ -195,7 +197,9 @@ export const api: API = {
       shareableLink: trip.shareableLink,
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt,
-      isPublic: trip.isPublic
+      isPublic: trip.isPublic,
+      status: trip.status || 'planning',
+      tags: trip.tags || []
     };
     
     console.log('Transformed collaborators:', JSON.stringify(transformedTrip.collaborators, null, 2));
@@ -277,7 +281,9 @@ export const api: API = {
       shareableLink: createdTrip.shareableLink,
       createdAt: createdTrip.createdAt,
       updatedAt: createdTrip.updatedAt,
-      isPublic: createdTrip.isPublic
+      isPublic: createdTrip.isPublic,
+      status: createdTrip.status || 'planning',
+      tags: createdTrip.tags || []
     };
     
     console.log('Final transformed trip:', JSON.stringify(transformedTrip, null, 2));
@@ -337,9 +343,9 @@ export const api: API = {
       
       // First, get the current trip to find the collaborator's email
       const trip = await api.getTrip(tripId);
-      const collaborator = trip.collaborators.find(c => c.user._id === userId);
+      const collaborator = trip.collaborators.find(c => isCollaboratorObject(c) && c.user._id === userId);
       
-      if (!collaborator) {
+      if (!collaborator || !isCollaboratorObject(collaborator)) {
         throw new Error('Collaborator not found');
       }
       
@@ -520,11 +526,8 @@ export const api: API = {
       const blob = await response.blob();
       
       // Create a URL for the blob
-      const url = window.URL.createObjectURL(blob);
-      
-      // Create a link element
       const a = document.createElement('a');
-      a.href = url;
+      a.href = window.URL.createObjectURL(blob);
       a.download = `trip_${tripId}_itinerary.pdf`;
       
       // Append to the document
@@ -534,7 +537,7 @@ export const api: API = {
       a.click();
       
       // Clean up
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     } catch (error) {
       console.error('Error exporting trip as PDF:', error);
@@ -634,6 +637,84 @@ export const api: API = {
     }
     
     return await response.json();
+  },
+
+  getAISuggestions: async (tripId: string, userId: string): Promise<AISuggestionHistory[]> => {
+    try {
+      console.log('Fetching AI suggestions for:', { tripId, userId });
+      const response = await fetch(`${API_URL}/api/trips/${tripId}/ai-suggestions/${userId}`, {
+        headers: getHeaders(),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('Failed to fetch AI suggestions:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData?.message || `Failed to fetch AI suggestions: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Fetched AI suggestions:', data);
+      
+      // Transform the response to match AISuggestionHistory type
+      return data.map((item: any) => ({
+        _id: item._id,
+        userId: item.userId,
+        tripId: item.tripId,
+        places: item.places,
+        activities: item.activities,
+        suggestions: item.suggestions,
+        createdAt: item.createdAt
+      }));
+    } catch (error) {
+      console.error('Error fetching AI suggestions:', error);
+      throw error;
+    }
+  },
+
+  saveAISuggestion: async (suggestion: Omit<AISuggestionHistory, '_id'>): Promise<AISuggestionHistory> => {
+    try {
+      console.log('Saving AI suggestion to:', `${API_URL}/api/trips/${suggestion.tripId}/ai-suggestions`);
+      console.log('Suggestion data:', suggestion);
+      
+      const response = await fetch(`${API_URL}/api/trips/${suggestion.tripId}/ai-suggestions`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(suggestion),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('Failed to save AI suggestion:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData?.message || `Failed to save AI suggestion: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Saved AI suggestion response:', data);
+      
+      // Ensure the response matches the AISuggestionHistory type
+      const transformedSuggestion: AISuggestionHistory = {
+        _id: data._id,
+        userId: data.userId,
+        tripId: data.tripId,
+        places: data.places,
+        activities: data.activities,
+        suggestions: data.suggestions,
+        createdAt: data.createdAt
+      };
+      
+      return transformedSuggestion;
+    } catch (error) {
+      console.error('Error saving AI suggestion:', error);
+      throw error;
+    }
   },
 };
 
