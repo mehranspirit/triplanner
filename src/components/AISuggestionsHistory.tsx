@@ -1,12 +1,14 @@
 import React from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
-import { AISuggestionHistory } from '@/types/eventTypes';
+import { XMarkIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { AISuggestionHistory, User } from '@/types/eventTypes';
 
 interface AISuggestionsHistoryProps {
   isOpen: boolean;
   onClose: () => void;
   history: AISuggestionHistory[];
   onSelectSuggestion: (suggestion: AISuggestionHistory) => void;
+  onDeleteSuggestion: (suggestionId: string) => Promise<void>;
+  getCreatorInfo: (userId: string) => User | undefined;
 }
 
 export const AISuggestionsHistory: React.FC<AISuggestionsHistoryProps> = ({
@@ -14,6 +16,8 @@ export const AISuggestionsHistory: React.FC<AISuggestionsHistoryProps> = ({
   onClose,
   history,
   onSelectSuggestion,
+  onDeleteSuggestion,
+  getCreatorInfo,
 }) => {
   if (!isOpen) return null;
 
@@ -43,37 +47,58 @@ export const AISuggestionsHistory: React.FC<AISuggestionsHistoryProps> = ({
                 Previous AI Suggestions
               </h3>
               
-              <div className="space-y-4">
-                {history.map((item) => (
-                  <div
-                    key={item._id}
-                    className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => onSelectSuggestion(item)}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm text-gray-500">
-                          {new Date(item.createdAt).toLocaleDateString()}
-                        </p>
-                        <p className="font-medium text-gray-900">
-                          Places: {item.places.join(', ')}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Activities: {item.activities.join(', ')}
-                        </p>
+              <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+                {history.map((item) => {
+                  const creator = getCreatorInfo(item.userId);
+                  return (
+                    <div
+                      key={item._id}
+                      className="border rounded-lg p-4 hover:bg-gray-50"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 cursor-pointer" onClick={() => onSelectSuggestion(item)}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className="text-sm text-gray-500">
+                              {new Date(item.createdAt).toLocaleDateString()}
+                            </p>
+                            {creator && (
+                              <span className="text-sm text-gray-600">
+                                by {creator.name}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-medium text-gray-900">
+                            Places: {item.places.join(', ')}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Activities: {item.activities.join(', ')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          <button
+                            className="text-indigo-600 hover:text-indigo-500"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectSuggestion(item);
+                            }}
+                          >
+                            View
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-500"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteSuggestion(item._id);
+                            }}
+                            title="Delete suggestion"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        className="text-indigo-600 hover:text-indigo-500"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectSuggestion(item);
-                        }}
-                      >
-                        View
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {history.length === 0 && (
                   <p className="text-gray-500 text-center py-4">

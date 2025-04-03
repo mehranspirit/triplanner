@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { Trip } from '../types';
+import { Trip, User } from '../types';
 import { api } from '../services/api';
 import Avatar from './Avatar';
+
+const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
+  return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
+};
 
 interface CollaboratorModalProps {
   trip: Trip;
@@ -89,21 +93,25 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
         tripId: trip._id,
         userId,
         newRole,
-        currentCollaborators: trip.collaborators.map(c => ({
-          userId: c.user._id,
-          name: c.user.name,
-          role: c.role
-        }))
+        currentCollaborators: trip.collaborators
+          .filter(isCollaboratorObject)
+          .map(c => ({
+            userId: c.user._id,
+            name: c.user.name,
+            role: c.role
+          }))
       });
       
       // Create an optimistic update to maintain the order of collaborators
       const updatedTrip = {
         ...trip,
-        collaborators: trip.collaborators.map(c => 
-          c.user._id === userId 
-            ? { ...c, role: newRole } 
-            : c
-        )
+        collaborators: trip.collaborators
+          .filter(isCollaboratorObject)
+          .map(c => 
+            c.user._id === userId 
+              ? { ...c, role: newRole } 
+              : c
+          )
       };
       
       // Update the UI immediately to prevent visual reordering
@@ -120,7 +128,10 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
         const serverTrip = await api.getTrip(trip._id);
         
         // Log the updated collaborator data
-        const updatedCollaborator = serverTrip.collaborators.find(c => c.user._id === userId);
+        const updatedCollaborator = serverTrip.collaborators
+          .filter(isCollaboratorObject)
+          .find(c => c.user._id === userId);
+        
         console.log('Updated collaborator data:', {
           userId,
           name: updatedCollaborator?.user.name,
@@ -133,9 +144,9 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
           ...serverTrip,
           collaborators: updatedTrip.collaborators.map(localCollab => {
             // Find the matching collaborator from the server data
-            const serverCollab = serverTrip.collaborators.find(
-              sc => sc.user._id === localCollab.user._id
-            );
+            const serverCollab = serverTrip.collaborators
+              .filter(isCollaboratorObject)
+              .find(sc => sc.user._id === localCollab.user._id);
             // Use server data but maintain the order from local data
             return serverCollab || localCollab;
           })
@@ -209,7 +220,9 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
           <h4 className="font-medium mb-2">Current Collaborators</h4>
           <div className="max-h-60 overflow-y-auto pr-1">
             <ul className="space-y-2">
-              {trip.collaborators.map((collaborator) => (
+              {trip.collaborators
+                .filter(isCollaboratorObject)
+                .map((collaborator) => (
                 <li key={collaborator.user._id} className="flex items-center justify-between py-2">
                   <div className="flex items-center space-x-3">
                     <Avatar

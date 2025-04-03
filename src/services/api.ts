@@ -43,6 +43,7 @@ interface API {
   removeVote: (tripId: string, eventId: string) => Promise<Trip>;
   getAISuggestions: (tripId: string, userId: string) => Promise<AISuggestionHistory[]>;
   saveAISuggestion: (suggestion: Omit<AISuggestionHistory, '_id'>) => Promise<AISuggestionHistory>;
+  deleteAISuggestion: (suggestionId: string) => Promise<void>;
 }
 
 export const api: API = {
@@ -713,6 +714,29 @@ export const api: API = {
       return transformedSuggestion;
     } catch (error) {
       console.error('Error saving AI suggestion:', error);
+      throw error;
+    }
+  },
+
+  deleteAISuggestion: async (suggestionId: string): Promise<void> => {
+    try {
+      console.log('Deleting AI suggestion:', suggestionId);
+      const response = await fetch(`${API_URL}/api/trips/ai-suggestions/${suggestionId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error('Failed to delete AI suggestion:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData?.message || `Failed to delete AI suggestion: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Error deleting AI suggestion:', error);
       throw error;
     }
   },

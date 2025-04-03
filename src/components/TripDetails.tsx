@@ -201,7 +201,7 @@ const TripDetails: React.FC = () => {
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLeaveWarningOpen, setIsLeaveWarningOpen] = useState(false);
   const [isDeleteWarningOpen, setIsDeleteWarningOpen] = useState(false);
@@ -271,7 +271,8 @@ const TripDetails: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAISuggestionsModalOpen, setIsAISuggestionsModalOpen] = useState(false);
   const [aiSuggestions, setAISuggestions] = useState<string | null>(null);
-  const [aiSuggestionsHistory, setAISuggestionsHistory] = useState<AISuggestionHistory[]>([]);
+  const [suggestionsHistory, setSuggestionsHistory] = useState<AISuggestionHistory[]>([]);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // Add type guard function at the top of the component
   const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
@@ -333,66 +334,48 @@ const TripDetails: React.FC = () => {
     };
   }, []);
 
+  const loadHistory = async (tripId: string) => {
+    if (!user?._id) {
+      console.log('Missing user ID:', { userId: user?._id });
+      return;
+    }
+
+    try {
+      console.log('Loading AI suggestions history for:', { tripId, userId: user._id });
+      const history = await api.getAISuggestions(tripId, user._id);
+      console.log('Loaded AI suggestions history:', history);
+      setSuggestionsHistory(history);
+    } catch (error) {
+      console.error('Error loading AI suggestions history:', error);
+      setError('Failed to load AI suggestions history');
+    }
+  };
+
+  const fetchTrip = async () => {
+    if (!id || !user?._id) return;
+    
+    try {
+      setLoading(true);
+      const fetchedTrip = await api.getTrip(id);
+      setTrip(fetchedTrip);
+      
+      // Load AI suggestions history after fetching trip data
+      if (fetchedTrip?._id) {
+        await loadHistory(fetchedTrip._id);
+      }
+    } catch (error) {
+      console.error('Error fetching trip:', error);
+      setError('Failed to load trip details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchTrip = async () => {
-      if (!id || id === 'undefined') {
-        console.error('Trip ID is missing or invalid:', id);
-        setError('Trip ID is missing or invalid');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        console.log('Fetching trip with ID:', id);
-        const fetchedTrip = await api.getTrip(id);
-        if (!fetchedTrip) {
-          console.error('Trip not found for ID:', id);
-          setError('Trip not found');
-          return;
-        }
-        console.log('Successfully fetched trip:', fetchedTrip);
-        
-        // Debug log for event creators
-        if (fetchedTrip.events && fetchedTrip.events.length > 0) {
-          console.log('EVENT CREATOR CHECK - Raw events from server:', fetchedTrip.events.map(event => ({
-            eventId: event.id,
-            eventType: event.type,
-            createdBy: event.createdBy,
-            createdByType: typeof event.createdBy,
-            createdById: typeof event.createdBy === 'object' ? event.createdBy._id : event.createdBy,
-            creatorPhotoUrl: typeof event.createdBy === 'object' ? event.createdBy.photoUrl : null,
-            creatorName: typeof event.createdBy === 'object' ? event.createdBy.name : null
-          })));
-          
-          // Log the first event's creator details in depth
-          const firstEvent = fetchedTrip.events[0];
-          console.log('EVENT CREATOR CHECK - First event creator details:', {
-            eventId: firstEvent.id,
-            eventType: firstEvent.type,
-            createdBy: firstEvent.createdBy,
-            createdByType: typeof firstEvent.createdBy,
-            createdById: typeof firstEvent.createdBy === 'object' ? firstEvent.createdBy._id : firstEvent.createdBy,
-            creatorPhotoUrl: typeof firstEvent.createdBy === 'object' ? firstEvent.createdBy.photoUrl : null,
-            creatorName: typeof firstEvent.createdBy === 'object' ? firstEvent.createdBy.name : null,
-            fullCreatorObject: firstEvent.createdBy
-          });
-        }
-        
-        // Update only the local state
-        setTrip(fetchedTrip);
-        setEditedTrip(fetchedTrip);
-        
-        setError('');
-      } catch (err) {
-        console.error('Error fetching trip:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch trip');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTrip();
-  }, [id]);
+    if (id && user?._id) {
+      fetchTrip();
+    }
+  }, [id, user?._id]);
 
   useEffect(() => {
     const loadThumbnail = async () => {
@@ -2186,7 +2169,7 @@ const TripDetails: React.FC = () => {
 
       try {
         const savedHistory = await api.saveAISuggestion(historyItem);
-        setAISuggestionsHistory(prev => [savedHistory, ...prev]);
+        setSuggestionsHistory(prev => [savedHistory, ...prev]);
         setAISuggestions(suggestions);
         setIsAISuggestionsModalOpen(false);
       } catch (error) {
@@ -2202,38 +2185,25 @@ const TripDetails: React.FC = () => {
   };
 
   const handleSelectHistoryItem = (suggestion: AISuggestionHistory) => {
-    // Clean up markdown formatting while preserving structure
-    const cleanSuggestions = suggestion.suggestions
-      .replace(/^#+\s*/gm, '') // Remove leading #s
-      .replace(/\*\*/g, '') // Remove **
-      .replace(/\*/g, '') // Remove single *
-      .replace(/^---\s*/gm, '') // Remove horizontal rules
-      .replace(/^\s+/gm, '') // Remove leading whitespace
-      .replace(/\n{3,}/g, '\n\n') // Replace multiple newlines with double newlines
-      .trim();
-    
-    setAISuggestions(cleanSuggestions);
+    setAISuggestions(suggestion.suggestions);
     setIsAISuggestionsModalOpen(false);
   };
 
-  // Load history when component mounts
-  useEffect(() => {
-    const loadHistory = async () => {
-      if (!trip?._id || !user?._id) return;
-      
-      try {
-        console.log('Loading AI suggestions history for:', { tripId: trip._id, userId: user._id });
-        const history = await api.getAISuggestions(trip._id, user._id);
-        console.log('Loaded AI suggestions history:', history);
-        setAISuggestionsHistory(history);
-      } catch (error) {
-        console.error('Error loading AI suggestions history:', error);
-        setError('Failed to load suggestion history. Please try again later.');
-      }
-    };
+  const handleDeleteHistoryItem = async (suggestionId: string) => {
+    if (!trip?._id) {
+      console.error('Cannot delete suggestion - missing trip ID');
+      return;
+    }
 
-    loadHistory();
-  }, [trip?._id, user?._id]);
+    try {
+      await api.deleteAISuggestion(suggestionId);
+      setSuccess('Suggestion deleted successfully');
+      await loadHistory(trip._id);
+    } catch (error) {
+      console.error('Error deleting suggestion:', error);
+      setError('Failed to delete suggestion');
+    }
+  };
 
   if (loading) {
     return (
@@ -3955,8 +3925,10 @@ const TripDetails: React.FC = () => {
             endDate: trip.endDate,
           }}
           onSubmit={handleAISuggestionsSubmit}
-          history={aiSuggestionsHistory}
+          history={suggestionsHistory}
           onSelectHistoryItem={handleSelectHistoryItem}
+          onDeleteHistoryItem={handleDeleteHistoryItem}
+          getCreatorInfo={getCreatorInfo}
         />
       )}
 

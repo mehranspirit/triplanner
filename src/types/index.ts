@@ -69,6 +69,7 @@ export interface Trip {
   createdAt: string;
   updatedAt: string;
   thumbnailUrl?: string;
+  shareableLink?: string;
   isPublic: boolean;
   status: 'planning' | 'active' | 'completed';
   tags: string[];

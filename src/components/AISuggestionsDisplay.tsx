@@ -61,10 +61,15 @@ export const AISuggestionsDisplay: React.FC<AISuggestionsDisplayProps> = ({
                   if (line.startsWith('#')) {
                     const level = line.match(/^#+/)?.[0].length || 1;
                     const text = line.replace(/^#+\s*/, '');
+                    // Handle bold text within headers
+                    const formattedText = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
                     return React.createElement(
                       `h${level}`,
-                      { key: index, className: `text-${level === 1 ? 'xl' : level === 2 ? 'lg' : 'md'} font-bold mt-4 mb-2` },
-                      text
+                      { 
+                        key: index, 
+                        className: `text-${level === 1 ? 'xl' : level === 2 ? 'lg' : 'md'} font-bold mt-4 mb-2`,
+                        dangerouslySetInnerHTML: { __html: formattedText }
+                      }
                     );
                   }
                   // Handle horizontal rules
@@ -72,11 +77,40 @@ export const AISuggestionsDisplay: React.FC<AISuggestionsDisplayProps> = ({
                     return <hr key={index} className="my-4 border-gray-200" />;
                   }
                   // Handle bullet points
-                  if (line.trim().startsWith('-')) {
+                  if (line.trim().startsWith('-') || line.trim().startsWith('*')) {
+                    const text = line.replace(/^[-*]\s*/, '');
+                    // Handle bold text within bullet points
+                    const formattedText = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
                     return (
-                      <li key={index} className="ml-4 list-disc">
-                        {line.replace(/^-\s*/, '')}
-                      </li>
+                      <li key={index} className="ml-4 list-disc" dangerouslySetInnerHTML={{ __html: formattedText }} />
+                    );
+                  }
+                  // Handle code blocks
+                  if (line.includes('```')) {
+                    return (
+                      <pre key={index} className="bg-gray-100 p-2 rounded">
+                        <code>{line.replace(/```/g, '')}</code>
+                      </pre>
+                    );
+                  }
+                  // Handle inline code
+                  if (line.includes('`')) {
+                    return (
+                      <p key={index} className="whitespace-pre-wrap mb-2">
+                        {line.split('`').map((part, i) => 
+                          i % 2 === 0 ? part : <code key={i} className="bg-gray-100 px-1 rounded">{part}</code>
+                        )}
+                      </p>
+                    );
+                  }
+                  // Handle bold text in regular paragraphs
+                  if (line.includes('**')) {
+                    return (
+                      <p key={index} className="whitespace-pre-wrap mb-2" 
+                         dangerouslySetInnerHTML={{ 
+                           __html: line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                         }} 
+                      />
                     );
                   }
                   // Regular paragraphs

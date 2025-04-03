@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Dialog } from '@headlessui/react';
 import { XMarkIcon, ClockIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
-import { AISuggestionHistory } from '@/types/eventTypes';
+import { AISuggestionHistory, User } from '@/types/eventTypes';
 import { AISuggestionsHistory } from './AISuggestionsHistory';
 
 interface AISuggestionsModalProps {
@@ -14,6 +14,8 @@ interface AISuggestionsModalProps {
   onSubmit: (places: string[], activities: string[]) => Promise<void>;
   history: AISuggestionHistory[];
   onSelectHistoryItem: (suggestion: AISuggestionHistory) => void;
+  onDeleteHistoryItem: (suggestionId: string) => Promise<void>;
+  getCreatorInfo: (userId: string) => User | undefined;
 }
 
 export const AISuggestionsModal: React.FC<AISuggestionsModalProps> = ({
@@ -23,6 +25,8 @@ export const AISuggestionsModal: React.FC<AISuggestionsModalProps> = ({
   onSubmit,
   history,
   onSelectHistoryItem,
+  onDeleteHistoryItem,
+  getCreatorInfo,
 }) => {
   const [places, setPlaces] = useState<string[]>(['']);
   const [activities, setActivities] = useState<string[]>(['']);
@@ -35,6 +39,10 @@ export const AISuggestionsModal: React.FC<AISuggestionsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setShowHistory(false);
+      // Reset form fields to default state
+      setPlaces(['']);
+      setActivities(['']);
+      setError(null);
     }
   }, [isOpen]);
 
@@ -246,6 +254,8 @@ export const AISuggestionsModal: React.FC<AISuggestionsModalProps> = ({
               onSelectHistoryItem(suggestion);
               setShowHistory(false);
             }}
+            onDeleteSuggestion={onDeleteHistoryItem}
+            getCreatorInfo={getCreatorInfo}
           />
         </Dialog.Panel>
       </div>
