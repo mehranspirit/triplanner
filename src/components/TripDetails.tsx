@@ -1593,17 +1593,6 @@ const TripDetails: React.FC = () => {
                 placeholder="Enter contact information"
               />
             </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Notes (optional)</label>
-              <textarea
-                value={eventData.notes}
-                onChange={(e) =>
-                  setEventData({ ...eventData, notes: e.target.value })
-                }
-                className="input"
-                placeholder="Enter any notes"
-              />
-            </div>
           </>
         );
       case 'destination':
