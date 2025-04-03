@@ -3,16 +3,13 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import Avatar from './Avatar';
+import { User as BaseUser } from '../types/eventTypes';
 
 const ADMIN_EMAIL = 'mehran.rajaian@gmail.com';
 
-interface User {
-  _id: string;
-  email: string;
-  name: string;
+interface User extends BaseUser {
   createdAt: string;
   isAdmin?: boolean;
-  photoUrl?: string | null;
 }
 
 export const UserList = () => {
@@ -32,7 +29,11 @@ export const UserList = () => {
     const fetchUsers = async () => {
       try {
         const fetchedUsers = await api.getUsers();
-        setUsers(fetchedUsers);
+        setUsers(fetchedUsers.map(u => ({
+          ...u,
+          createdAt: new Date().toISOString(),
+          isAdmin: false,
+        } as User)));
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch users');
@@ -84,7 +85,7 @@ export const UserList = () => {
       setError(null);
       setSuccess(null);
       
-      const updatedUser = await api.changeUserRole(userId, newIsAdmin);
+      const updatedUser = await api.changeUserRole(userId, newIsAdmin) as User;
       
       setUsers(users.map(user => 
         user._id === userId 

@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
-import { Trip, StayEvent } from '../types';
+import { Trip, StayEvent, User } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import Avatar from '../components/Avatar';
+
+const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
+  return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
+};
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
@@ -230,7 +234,9 @@ export default function TripList() {
         },
         collaborators: [],
         shareableLink: undefined,
-        isPublic: false
+        isPublic: false,
+        status: 'planning',
+        tags: []
       };
 
       const createdTrip = await api.createTrip(newTripData);
@@ -373,7 +379,10 @@ export default function TripList() {
                       Shared
                     </span>
                     <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      {trip.collaborators.find(c => c.user._id === user._id)?.role === 'editor' ? 'You can edit' : 'View only'}
+                      {(() => {
+                        const collaborator = trip.collaborators.find(c => isCollaboratorObject(c) && c.user._id === user?._id);
+                        return collaborator && isCollaboratorObject(collaborator) && collaborator.role === 'editor' ? 'You can edit' : 'View only';
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -396,6 +405,7 @@ export default function TripList() {
                 )}
                 {/* Collaborator Avatars */}
                 {trip.collaborators
+                  .filter(isCollaboratorObject)
                   .filter(collaborator => collaborator.user._id !== user?._id)
                   .slice(0, 3)
                   .map((collaborator) => (
@@ -411,9 +421,9 @@ export default function TripList() {
                     </div>
                   </div>
                 ))}
-                {trip.collaborators.filter(c => c.user._id !== user?._id).length > 3 && (
+                {trip.collaborators.filter(isCollaboratorObject).filter(c => c.user._id !== user?._id).length > 3 && (
                   <div className="relative flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full ring-2 ring-white">
-                    <span className="text-xs text-gray-600">+{trip.collaborators.filter(c => c.user._id !== user?._id).length - 3}</span>
+                    <span className="text-xs text-gray-600">+{trip.collaborators.filter(isCollaboratorObject).filter(c => c.user._id !== user?._id).length - 3}</span>
                   </div>
                 )}
               </div>
