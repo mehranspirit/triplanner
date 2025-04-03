@@ -45,6 +45,26 @@ const StayFields: React.FC<StayFieldsProps> = ({ eventData, onChange }) => {
         />
       </div>
       <div className="mb-4">
+        <label className="block text-gray-700 mb-2">Status</label>
+        <select
+          value={eventData.status || 'confirmed'}
+          onChange={(e) => onChange<StayEvent>('status', e.target.value)}
+          className="input"
+        >
+          <option value="confirmed">Confirmed</option>
+          <option value="exploring">Exploring</option>
+        </select>
+      </div>
+      {eventData.status === 'exploring' && (
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <span className="font-medium">Exploring events</span> can be voted on by all trip members.
+            You and other collaborators will be able to like or dislike this event
+            after it's added to help decide which options to confirm.
+          </p>
+        </div>
+      )}
+      <div className="mb-4">
         <label className="block text-gray-700 mb-2">Address (optional)</label>
         <input
           type="text"

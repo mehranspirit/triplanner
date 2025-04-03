@@ -1550,6 +1550,7 @@ const TripDetails: React.FC = () => {
       case 'stay':
         return (
           <>
+            {commonFields}
             {['stay', 'destination'].includes(eventType) && (
             <div className="mb-4">
                 <label className="block text-gray-700 mb-2">Thumbnail URL (optional)</label>
