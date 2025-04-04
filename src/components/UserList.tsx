@@ -31,7 +31,6 @@ export const UserList = () => {
         const fetchedUsers = await api.getUsers();
         setUsers(fetchedUsers.map(u => ({
           ...u,
-          createdAt: new Date().toISOString(),
           isAdmin: false,
         } as User)));
         setError(null);
