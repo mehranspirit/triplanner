@@ -6,6 +6,7 @@ const Trip = require('./models/Trip');
 const authRoutes = require('./routes/auth');
 const activitiesRoutes = require('./routes/activities');
 const aiSuggestionsRoutes = require('./routes/aiSuggestions');
+const expenseRoutes = require('./routes/expenses');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
@@ -178,6 +179,9 @@ app.use('/api/activities', activitiesRoutes);
 
 // Mount AI suggestions routes
 app.use('/api', aiSuggestionsRoutes);
+
+// Mount expense routes
+app.use('/api', expenseRoutes);
 
 // Add role change endpoint directly in index.js
 app.patch('/api/users/:userId/role', auth, async (req, res) => {

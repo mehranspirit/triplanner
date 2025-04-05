@@ -1,7 +1,8 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { TripProvider } from './context/TripContext';
+import { ExpenseProvider } from './context/ExpenseContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AdminRoute from './components/auth/AdminRoute';
 import Header from './components/Header';
@@ -17,6 +18,7 @@ import Calendar from './components/Calendar';
 import { Link, NavLink } from 'react-router-dom';
 import ActivityLogPage from './pages/ActivityLogPage';
 import AuthCallback from './components/auth/AuthCallback';
+import ExpensesPage from './pages/ExpensesPage';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -26,6 +28,15 @@ const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children
         {children}
       </main>
     </div>
+  );
+};
+
+const ExpensesPageWrapper: React.FC = () => {
+  const { tripId } = useParams<{ tripId: string }>();
+  return (
+    <ExpenseProvider tripId={tripId!}>
+      <ExpensesPage />
+    </ExpenseProvider>
   );
 };
 
@@ -109,6 +120,16 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AuthenticatedLayout>
                     <ActivityLogPage />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/trips/:tripId/expenses"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <ExpensesPageWrapper />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }

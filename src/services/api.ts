@@ -1,21 +1,14 @@
 /// <reference types="vite/client" />
 import { Event } from '../types';
 import { Trip, AISuggestionHistory, User } from '../types/eventTypes';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_URL } from '../config/index';
+import { getHeaders } from '../utils/api.ts';
+import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
 
 type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
 
 const isCollaboratorObject = (c: Collaborator): c is { user: User; role: 'editor' | 'viewer' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
-};
-
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
 };
 
 interface API {
@@ -44,6 +37,15 @@ interface API {
   getAISuggestions: (tripId: string, userId: string) => Promise<AISuggestionHistory[]>;
   saveAISuggestion: (suggestion: Omit<AISuggestionHistory, '_id'>) => Promise<AISuggestionHistory>;
   deleteAISuggestion: (suggestionId: string) => Promise<void>;
+  getExpenses: (tripId: string) => Promise<Expense[]>;
+  addExpense: (tripId: string, expense: Omit<Expense, '_id'>) => Promise<Expense>;
+  updateExpense: (tripId: string, expenseId: string, updates: Partial<Expense>) => Promise<Expense>;
+  deleteExpense: (tripId: string, expenseId: string) => Promise<void>;
+  settleExpense: (tripId: string, expenseId: string, participantId: string) => Promise<void>;
+  getSettlements: (tripId: string) => Promise<Settlement[]>;
+  addSettlement: (tripId: string, settlement: Omit<Settlement, '_id'>) => Promise<Settlement>;
+  updateSettlement: (tripId: string, settlementId: string, updates: Partial<Settlement>) => Promise<Settlement>;
+  getExpenseSummary: (tripId: string) => Promise<ExpenseSummary>;
 }
 
 export const api: API = {
@@ -739,6 +741,89 @@ export const api: API = {
       console.error('Error deleting AI suggestion:', error);
       throw error;
     }
+  },
+
+  // Expense Management
+  getExpenses: async (tripId: string): Promise<Expense[]> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch expenses');
+    return response.json();
+  },
+
+  addExpense: async (tripId: string, expense: Omit<Expense, '_id'>): Promise<Expense> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(expense),
+    });
+    if (!response.ok) throw new Error('Failed to add expense');
+    return response.json();
+  },
+
+  updateExpense: async (tripId: string, expenseId: string, updates: Partial<Expense>): Promise<Expense> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses/${expenseId}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(updates),
+    });
+    if (!response.ok) throw new Error('Failed to update expense');
+    return response.json();
+  },
+
+  deleteExpense: async (tripId: string, expenseId: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses/${expenseId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete expense');
+  },
+
+  settleExpense: async (tripId: string, expenseId: string, participantId: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses/${expenseId}/settle`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ participantId }),
+    });
+    if (!response.ok) throw new Error('Failed to settle expense');
+  },
+
+  // Settlement Management
+  getSettlements: async (tripId: string): Promise<Settlement[]> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/settlements`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch settlements');
+    return response.json();
+  },
+
+  addSettlement: async (tripId: string, settlement: Omit<Settlement, '_id'>): Promise<Settlement> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/settlements`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(settlement),
+    });
+    if (!response.ok) throw new Error('Failed to add settlement');
+    return response.json();
+  },
+
+  updateSettlement: async (tripId: string, settlementId: string, updates: Partial<Settlement>): Promise<Settlement> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/settlements/${settlementId}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(updates),
+    });
+    if (!response.ok) throw new Error('Failed to update settlement');
+    return response.json();
+  },
+
+  getExpenseSummary: async (tripId: string): Promise<ExpenseSummary> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses/summary`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch expense summary');
+    return response.json();
   },
 };
 
