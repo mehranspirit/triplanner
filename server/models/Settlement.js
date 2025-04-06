@@ -28,8 +28,8 @@ const settlementSchema = new mongoose.Schema({
   },
   method: {
     type: String,
-    enum: ['cash', 'bank_transfer', 'other'],
-    required: true
+    enum: ['cash', 'bank_transfer', 'venmo', 'other'],
+    required: false
   },
   status: {
     type: String,

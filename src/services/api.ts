@@ -45,6 +45,7 @@ interface API {
   getSettlements: (tripId: string) => Promise<Settlement[]>;
   addSettlement: (tripId: string, settlement: Omit<Settlement, '_id'>) => Promise<Settlement>;
   updateSettlement: (tripId: string, settlementId: string, updates: Partial<Settlement>) => Promise<Settlement>;
+  deleteSettlement: (tripId: string, settlementId: string) => Promise<void>;
   getExpenseSummary: (tripId: string) => Promise<ExpenseSummary>;
 }
 
@@ -816,6 +817,14 @@ export const api: API = {
     });
     if (!response.ok) throw new Error('Failed to update settlement');
     return response.json();
+  },
+
+  deleteSettlement: async (tripId: string, settlementId: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/settlements/${settlementId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete settlement');
   },
 
   getExpenseSummary: async (tripId: string): Promise<ExpenseSummary> => {

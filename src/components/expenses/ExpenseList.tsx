@@ -5,6 +5,18 @@ import { User } from '../../types/eventTypes';
 import { formatCurrency } from '../../utils/format';
 import Avatar from '../Avatar';
 
+// Define expense categories
+const EXPENSE_CATEGORIES = {
+  'Transportation': ['Flights', 'Trains', 'Buses', 'Taxis/Rideshares', 'Car Rental', 'Fuel', 'Parking'],
+  'Accommodation': ['Hotels', 'Hostels', 'Airbnb', 'Camping', 'Other Lodging'],
+  'Food & Drinks': ['Restaurants', 'Cafes', 'Groceries', 'Street Food', 'Bars', 'Snacks'],
+  'Activities & Entertainment': ['Museums', 'Tours', 'Attractions', 'Shows', 'Sports', 'Recreation'],
+  'Shopping': ['Souvenirs', 'Clothes', 'Electronics', 'Gifts', 'Other Items'],
+  'Utilities & Services': ['Internet', 'Phone', 'Laundry', 'Cleaning', 'Other Services'],
+  'Health & Medical': ['Medicine', 'Insurance', 'Medical Services', 'First Aid'],
+  'Other': ['Tips', 'Fees', 'Emergency', 'Miscellaneous']
+};
+
 interface ExpenseListProps {
   tripId: string;
   participants: User[];
@@ -24,6 +36,15 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
     }
   };
 
+  const getMainCategory = (subCategory: string): string => {
+    for (const [mainCat, subCats] of Object.entries(EXPENSE_CATEGORIES)) {
+      if (subCats.includes(subCategory)) {
+        return mainCat;
+      }
+    }
+    return 'Other';
+  };
+
   return (
     <div className="space-y-4">
       {expenses.map((expense) => (
@@ -34,7 +55,7 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
                 <h3 className="text-lg font-semibold">{expense.title}</h3>
                 {expense.category && (
                   <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                    {expense.category}
+                    {getMainCategory(expense.category)}
                   </span>
                 )}
               </div>

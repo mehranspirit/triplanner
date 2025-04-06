@@ -38,11 +38,19 @@ export interface Expense {
 export interface Settlement {
   _id: string;
   tripId: string;
-  fromUserId: string;
-  toUserId: string;
+  fromUserId: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  toUserId: {
+    _id: string;
+    name: string;
+    email: string;
+  };
   amount: number;
   currency: string;
-  method: 'cash' | 'bank_transfer' | 'other';
+  method?: 'cash' | 'bank_transfer' | 'venmo' | 'other';
   status: 'pending' | 'completed';
   date: string;
   notes?: string;

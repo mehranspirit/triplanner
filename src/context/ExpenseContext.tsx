@@ -5,7 +5,7 @@ import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
 interface ExpenseContextType {
   expenses: Expense[];
   settlements: Settlement[];
-  summary: ExpenseSummary;
+  expenseSummary: ExpenseSummary | null;
   loading: boolean;
   error: string | null;
   
@@ -24,12 +24,7 @@ const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: string }> = ({ children, tripId }) => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
-  const [summary, setSummary] = useState<ExpenseSummary>({
-    totalAmount: 0,
-    perPersonBalances: {},
-    unsettledAmount: 0,
-    currency: 'USD'
-  });
+  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +47,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 
       setExpenses(expensesData);
       setSettlements(settlementsData);
-      setSummary(summaryData);
+      setExpenseSummary(summaryData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch expense data');
     } finally {
@@ -127,7 +122,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
     <ExpenseContext.Provider value={{
       expenses,
       settlements,
-      summary,
+      expenseSummary,
       loading,
       error,
       addExpense,

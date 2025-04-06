@@ -26,11 +26,12 @@ const EXPENSE_CATEGORIES = {
 };
 
 export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, participants }) => {
-  const { summary, expenses, loading, error } = useExpense();
+  const { expenseSummary, expenses, loading, error } = useExpense();
   const [showChart, setShowChart] = useState(true);
 
   if (loading) return <div>Loading summary...</div>;
   if (error) return <div className="text-red-500">Error: {error}</div>;
+  if (!expenseSummary) return <div>No expense data available</div>;
 
   // Create a map of user IDs to user objects for easy lookup
   const userMap = new Map(participants.map(user => [user._id, user]));
@@ -66,14 +67,14 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
           <div className="flex justify-between items-center">
             <span className="text-gray-600">Total Expenses</span>
             <span className="text-xl font-bold">
-              {formatCurrency(summary.totalAmount, summary.currency)}
+              {formatCurrency(expenseSummary.totalAmount, expenseSummary.currency)}
             </span>
           </div>
 
           <div className="flex justify-between items-center">
             <span className="text-gray-600">Unsettled Amount</span>
             <span className="text-xl font-bold text-red-500">
-              {formatCurrency(summary.unsettledAmount, summary.currency)}
+              {formatCurrency(expenseSummary.unsettledAmount, expenseSummary.currency)}
             </span>
           </div>
         </div>
@@ -113,7 +114,7 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
-                    label={({ name, value }) => `${name}\n${formatCurrency(Math.round(value), summary.currency)}`}
+                    label={({ name, value }) => `${name}\n${formatCurrency(Math.round(value), expenseSummary.currency)}`}
                     style={{ fontSize: '12px', fontWeight: '500' }}
                   >
                     {pieData.map((entry, index) => (
@@ -121,7 +122,7 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => formatCurrency(value, summary.currency)}
+                    formatter={(value: number) => formatCurrency(value, expenseSummary.currency)}
                     labelStyle={{ color: '#374151' }}
                   />
                 </PieChart>
@@ -134,7 +135,7 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
         <div>
           <h3 className="text-lg font-medium mb-4">Per Person Balances</h3>
           <div className="space-y-2">
-            {Object.entries(summary.perPersonBalances).map(([userId, balance]) => {
+            {Object.entries(expenseSummary.perPersonBalances).map(([userId, balance]) => {
               const user = userMap.get(userId);
               if (!user) return null;
               
@@ -150,7 +151,7 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
                     <span className="text-gray-600">{user.name}</span>
                   </div>
                   <span className={balance >= 0 ? 'text-green-500' : 'text-red-500'}>
-                    {formatCurrency(balance, summary.currency)}
+                    {formatCurrency(balance, expenseSummary.currency)}
                   </span>
                 </div>
               );
