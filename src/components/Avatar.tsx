@@ -141,14 +141,14 @@ const Avatar: React.FC<AvatarProps> = ({ photoUrl, name = 'User', size = 'md', c
     <div className={`${baseClasses} ${sizeClasses[size]} ${className} ${textClasses}`}>
       {showFallback ? (
         <span>{getInitials(name)}</span>
-      ) : (
+      ) : imageUrl ? (
         <img
-          src={imageUrl || ''}
+          src={imageUrl}
           alt={name}
           className="w-full h-full object-cover"
           onError={() => setShowFallback(true)}
         />
-      )}
+      ) : null}
     </div>
   );
 };

@@ -1090,7 +1090,7 @@ const TripDetails: React.FC = () => {
     try {
       const now = new Date().toISOString();
       const baseEvent = {
-        id: isEditingEvent || uuidv4(),
+        id: isEditingEvent !== null ? isEditingEvent : uuidv4(),
         type: eventData.type as EventType,
         date: eventData.date,
         notes: eventData.notes,
@@ -1288,7 +1288,22 @@ const TripDetails: React.FC = () => {
       thumbnailUrl: eventData.thumbnailUrl,
       status: eventData.status,
       source: eventData.source,
-      // ... existing event properties ...
+      createdBy: {
+        _id: user?._id || '',
+        name: user?.name || '',
+        email: user?.email || '',
+        photoUrl: user?.photoUrl || ''
+      },
+      updatedBy: {
+        _id: user?._id || '',
+        name: user?.name || '',
+        email: user?.email || '',
+        photoUrl: user?.photoUrl || ''
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      likes: [],
+      dislikes: []
     };
 
     // If no thumbnail URL is provided, fetch one based on the place name
@@ -1296,7 +1311,14 @@ const TripDetails: React.FC = () => {
       newEvent.thumbnailUrl = await getEventThumbnail(newEvent as Event);
     }
 
-    // ... rest of the handleAddEvent function ...
+    try {
+      await addEvent(trip._id, newEvent as Event);
+      setIsModalOpen(false);
+      resetEventForm();
+    } catch (error) {
+      console.error('Error adding event:', error);
+      setError('Failed to add event');
+    }
   };
 
   const renderEventForm = () => {
@@ -3015,7 +3037,7 @@ const TripDetails: React.FC = () => {
 
             {canEdit && (
               <button
-                onClick={() => setIsEditingTrip(true)}
+                onClick={handleTripEdit}
                 className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
                 title="Edit Trip"
               >
