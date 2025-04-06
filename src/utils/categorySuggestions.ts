@@ -17,9 +17,9 @@ export const EXPENSE_KEYWORDS = {
     'Other Lodging': ['lodge', 'motel', 'accommodation', 'guesthouse']
   },
   'Food & Drinks': {
-    'Restaurants': ['restaurant', 'dining', 'dinner', 'lunch', 'bistro', 'cafe', 'eatery'],
+    'Restaurants': ['restaurant', 'dining', 'dinner', 'lunch', 'bistro', 'cafe', 'eatery', 'uber eats', 'door dash'],
     'Cafes': ['coffee', 'cafe', 'starbucks', 'espresso', 'bakery'],
-    'Groceries': ['grocery', 'supermarket', 'market', 'food store', 'produce'],
+    'Groceries': ['grocery', 'groceries', 'costco', 'safeway', 'walmart','supermarket', 'market', 'food store', 'produce'],
     'Street Food': ['street food', 'food truck', 'vendor', 'stall', 'hawker'],
     'Bars': ['bar', 'pub', 'beer', 'drinks', 'cocktail', 'wine'],
     'Snacks': ['snack', 'candy', 'chips', 'dessert', 'ice cream']
