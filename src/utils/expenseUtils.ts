@@ -34,7 +34,7 @@ export const createParticipantWithSplitDetails = (
 ) => {
   const participantShare = participantShares[participant._id] || 0;
   let share = 0;
-  let splitDetails: SplitDetails = {};
+  const splitDetails: SplitDetails = {};
 
   if (splitMethod === 'equal') {
     share = amount / selectedParticipants.length;
