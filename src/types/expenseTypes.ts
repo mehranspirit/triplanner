@@ -2,10 +2,27 @@ import { User } from './eventTypes';
 
 export type SplitMethod = 'equal' | 'custom' | 'percentage' | 'shares';
 
+export interface SplitDetails {
+  equal?: {
+    splitCount: number;  // Total number of participants
+  };
+  percentage?: {
+    value: number;  // Original percentage (0-100)
+  };
+  shares?: {
+    value: number;  // Original share count
+    totalShares: number;  // Total shares in the split
+  };
+  custom?: {
+    amount: number;  // Original custom amount
+  };
+}
+
 export interface ExpenseParticipant {
   userId: string;
   name: string;
-  share: number;  // Amount or percentage
+  share: number;  // Final monetary amount
+  splitDetails: SplitDetails;  // Original split information
   settled: boolean;
   photoUrl?: string | null;
 }

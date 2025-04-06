@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useExpense } from '../../context/ExpenseContext';
-import { Expense, SplitMethod, SplitDetails } from '../../types/expenseTypes';
+import { Expense, SplitMethod } from '../../types/expenseTypes';
 import { User } from '../../types/eventTypes';
 import Avatar from '../Avatar';
 import { suggestCategory, CategorySuggestion } from '../../utils/categorySuggestions';
-import { createParticipantWithSplitDetails } from '../../utils/expenseUtils';
+import { createParticipantWithSplitDetails, mapUserIdToId } from '../../utils/expenseUtils';
 
 // Define expense categories
 const EXPENSE_CATEGORIES: { [key: string]: string[] } = {
@@ -18,36 +18,138 @@ const EXPENSE_CATEGORIES: { [key: string]: string[] } = {
   'Other': ['Tips', 'Fees', 'Emergency', 'Miscellaneous']
 };
 
-interface AddExpenseProps {
+interface EditExpenseProps {
   tripId: string;
   participants: User[];
   currentUser: User;
-  onExpenseAdded?: () => void;
+  expense: Expense;
+  onExpenseUpdated: () => void;
+  onCancel: () => void;
 }
 
-export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, currentUser, onExpenseAdded }) => {
-  const { addExpense } = useExpense();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('USD');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [splitMethod, setSplitMethod] = useState<SplitMethod>('equal');
-  const [participantShares, setParticipantShares] = useState<{ [key: string]: number }>({});
-  const [selectedPayer, setSelectedPayer] = useState(currentUser._id);
-  const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
-    participants.map(p => p._id)
-  );
-  const [selectedCategory, setSelectedCategory] = useState('');
+export const EditExpense: React.FC<EditExpenseProps> = ({
+  tripId,
+  participants,
+  currentUser,
+  expense,
+  onExpenseUpdated,
+  onCancel
+}) => {
+  const { updateExpense } = useExpense();
+  const [title, setTitle] = useState(expense.title);
+  const [description, setDescription] = useState(expense.description);
+  const [amount, setAmount] = useState(expense.amount.toString());
+  const [currency, setCurrency] = useState(expense.currency);
+  const [date, setDate] = useState(expense.date);
+  const [selectedPayer, setSelectedPayer] = useState(expense.paidBy._id);
+  const [splitMethod, setSplitMethod] = useState<SplitMethod>(expense.splitMethod);
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>(() => {
+    // Initialize with the expense participants' IDs
+    return expense.participants.map(p => p.userId);
+  });
+  const [selectedCategory, setSelectedCategory] = useState(expense.category || '');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [categorySuggestion, setCategorySuggestion] = useState<CategorySuggestion | null>(null);
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [splitWarning, setSplitWarning] = useState<string | null>(null);
+  const [participantShares, setParticipantShares] = useState<{ [key: string]: number }>(() => {
+    // Initialize with the expense participants' shares
+    return expense.participants.reduce((acc, p) => {
+      let shareValue = 0;
+      if (expense.splitMethod === 'equal') {
+        shareValue = expense.amount / expense.participants.length;
+      } else if (expense.splitMethod === 'percentage') {
+        shareValue = p.splitDetails.percentage?.value || 0;
+      } else if (expense.splitMethod === 'shares') {
+        shareValue = p.splitDetails.shares?.value || 0;
+      } else if (expense.splitMethod === 'custom') {
+        shareValue = p.splitDetails.custom?.amount || 0;
+      }
+      return { ...acc, [p.userId]: shareValue };
+    }, {});
+  });
+
+  // Update form when expense changes
+  useEffect(() => {
+    setTitle(expense.title);
+    setDescription(expense.description);
+    setAmount(expense.amount.toString());
+    setCurrency(expense.currency);
+    setDate(expense.date);
+    setSelectedPayer(expense.paidBy._id);
+    setSplitMethod(expense.splitMethod);
+    setSelectedParticipants(expense.participants.map(p => p.userId));
+    
+    // Update participant shares
+    setParticipantShares(
+      expense.participants.reduce((acc, p) => {
+        let shareValue = 0;
+        if (expense.splitMethod === 'equal') {
+          shareValue = expense.amount / expense.participants.length;
+        } else if (expense.splitMethod === 'percentage') {
+          shareValue = p.splitDetails.percentage?.value || 0;
+        } else if (expense.splitMethod === 'shares') {
+          shareValue = p.splitDetails.shares?.value || 0;
+        } else if (expense.splitMethod === 'custom') {
+          shareValue = p.splitDetails.custom?.amount || 0;
+        }
+        return { ...acc, [p.userId]: shareValue };
+      }, {})
+    );
+  }, [expense]);
+
+  // Handle category suggestions
+  useEffect(() => {
+    const suggestion = suggestCategory(title, description);
+    if (suggestion && !selectedCategory) {
+      setCategorySuggestion(suggestion);
+      setShowSuggestion(!!suggestion);
+    }
+  }, [title, description, selectedCategory]);
+
+  // Set initial category and subcategory
+  useEffect(() => {
+    if (expense.category) {
+      const mainCategory = Object.entries(EXPENSE_CATEGORIES).find(([_, subcategories]) =>
+        subcategories.includes(expense.category!)
+      );
+      if (mainCategory) {
+        setSelectedCategory(mainCategory[0]);
+        setSelectedSubcategory(expense.category);
+      }
+    }
+  }, [expense.category]);
+
+  // Update shares when split method changes
+  useEffect(() => {
+    if (splitMethod === 'equal') {
+      setParticipantShares({});
+    } else if (splitMethod === 'percentage') {
+      const equalPercentage = Math.round((100 / selectedParticipants.length) * 10) / 10;
+      const shares: { [key: string]: number } = selectedParticipants.reduce(
+        (acc, id) => ({ ...acc, [id]: equalPercentage }), 
+        {}
+      );
+      const lastId = selectedParticipants[selectedParticipants.length - 1];
+      const total = (Object.values(shares) as number[]).reduce((sum: number, share: number) => sum + share, 0);
+      shares[lastId] = Math.round((100 - (total - equalPercentage)) * 10) / 10;
+      setParticipantShares(shares);
+    } else if (splitMethod === 'shares') {
+      setParticipantShares(
+        selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: 1 }), {})
+      );
+    } else {
+      const equalAmount = parseFloat(amount) / selectedParticipants.length;
+      setParticipantShares(
+        selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: equalAmount }), {})
+      );
+    }
+  }, [splitMethod, selectedParticipants, amount]);
 
   const validateSplits = () => {
     if (splitMethod === 'equal') return true;
 
-    const total = Object.values(participantShares).reduce((sum, share) => sum + (share || 0), 0);
+    const total = (Object.values(participantShares) as number[]).reduce((sum: number, share: number) => sum + (share || 0), 0);
     
     if (splitMethod === 'percentage') {
       return Math.abs(total - 100) <= 0.1;
@@ -63,7 +165,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const getSplitWarning = () => {
     if (splitMethod === 'equal') return null;
 
-    const total = Object.values(participantShares).reduce((sum, share) => sum + (share || 0), 0);
+    const total = (Object.values(participantShares) as number[]).reduce((sum: number, share: number) => sum + (share || 0), 0);
     
     if (splitMethod === 'percentage') {
       const diff = Math.abs(total - 100);
@@ -86,161 +188,69 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateSplits()) {
-      const warning = getSplitWarning();
-      if (warning) {
-        alert(warning);
-        return;
-      }
-    }
-
-    const payer = participants.find(p => p._id === selectedPayer);
-    if (!payer) {
-      alert('Selected payer not found');
+      setSplitWarning('Please ensure the splits are valid');
       return;
     }
 
-    const expenseAmount = parseFloat(amount);
-    const expense: Omit<Expense, '_id'> = {
-      tripId,
-      title,
-      description,
-      amount: expenseAmount,
-      currency,
-      date,
-      paidBy: {
-        _id: payer._id,
-        name: payer.name,
-        email: payer.email,
-        photoUrl: payer.photoUrl
-      },
-      splitMethod,
-      category: selectedSubcategory || selectedCategory,
-      participants: participants
-        .filter(p => selectedParticipants.includes(p._id))
-        .map(participant => createParticipantWithSplitDetails(
-          participant,
-          splitMethod,
-          expenseAmount,
-          selectedParticipants,
-          participantShares
-        )),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
     try {
-      await addExpense(tripId, expense);
-      console.log('Expense added successfully');
-      
-      // Reset form
-      setTitle('');
-      setDescription('');
-      setAmount('');
-      setDate(new Date().toISOString().split('T')[0]);
-      setSplitMethod('equal');
-      setParticipantShares({});
-      setSelectedPayer(currentUser._id);
-      setSelectedParticipants(participants.map(p => p._id));
-      setSelectedCategory('');
-      setSelectedSubcategory('');
-      
-      if (onExpenseAdded) {
-        onExpenseAdded();
-      }
+      const updatedExpense = {
+        ...expense,
+        title,
+        description,
+        amount: parseFloat(amount),
+        currency,
+        date,
+        paidBy: {
+          _id: selectedPayer,
+          name: participants.find(p => p._id === selectedPayer)?.name || '',
+          email: participants.find(p => p._id === selectedPayer)?.email || '',
+          photoUrl: participants.find(p => p._id === selectedPayer)?.photoUrl || null
+        },
+        splitMethod,
+        participants: selectedParticipants.map(userId => {
+          const participant = participants.find(p => p._id === userId);
+          if (!participant) return null;
+          return createParticipantWithSplitDetails(
+            participant,
+            splitMethod,
+            parseFloat(amount),
+            selectedParticipants,
+            mapUserIdToId(participantShares, participants)
+          );
+        }).filter((p): p is NonNullable<typeof p> => p !== null),
+        category: selectedCategory
+      };
+
+      await updateExpense(tripId, expense._id, updatedExpense);
+      onExpenseUpdated();
     } catch (error) {
-      console.error('Failed to add expense:', error);
-      alert('Failed to add expense. Please try again.');
+      console.error('Error updating expense:', error);
+      setSplitWarning('Failed to update expense. Please try again.');
     }
   };
 
-  const handleShareChange = (userId: string, value: string) => {
-    const newValue = parseFloat(value) || 0;
+  const handleShareChange = (participantId: string, value: string) => {
+    const numValue = parseFloat(value) || 0;
     setParticipantShares(prev => ({
       ...prev,
-      [userId]: newValue
+      [participantId]: numValue
     }));
-
-    // Update warning message
-    const newShares = { ...participantShares, [userId]: newValue };
-    const total = Object.values(newShares).reduce((sum, share) => sum + (share || 0), 0);
-    
-    if (splitMethod === 'percentage') {
-      const diff = Math.abs(total - 100);
-      if (diff > 0.1) {
-        setSplitWarning(`Total percentage (${total.toFixed(1)}%) must equal 100%`);
-      } else {
-        setSplitWarning(null);
-      }
-    } else if (splitMethod === 'custom') {
-      const diff = Math.abs(total - parseFloat(amount));
-      if (diff > 0.01) {
-        setSplitWarning(`Total amount (${total.toFixed(2)} ${currency}) must equal expense amount (${amount} ${currency})`);
-      } else {
-        setSplitWarning(null);
-      }
-    } else if (splitMethod === 'shares') {
-      if (total <= 0) {
-        setSplitWarning('Total shares must be greater than 0');
-      } else {
-        setSplitWarning(null);
-      }
-    }
   };
 
-  const handleParticipantToggle = (userId: string) => {
+  const handleParticipantToggle = (participantId: string) => {
     setSelectedParticipants(prev => {
-      if (prev.includes(userId)) {
-        return prev.filter(id => id !== userId);
+      if (prev.includes(participantId)) {
+        return prev.filter(id => id !== participantId);
       } else {
-        return [...prev, userId];
+        return [...prev, participantId];
       }
     });
-  };
-
-  const handleSplitMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newSplitMethod = e.target.value as SplitMethod;
-    setSplitMethod(newSplitMethod);
-    setSplitWarning(null); // Clear warning when changing split method
-    
-    // Reset shares when changing split method
-    const numParticipants = selectedParticipants.length;
-    if (newSplitMethod === 'equal') {
-      setParticipantShares({});
-    } else if (newSplitMethod === 'percentage') {
-      // Round to 1 decimal place for percentages
-      const equalPercentage = Math.round((100 / numParticipants) * 10) / 10;
-      const shares: { [key: string]: number } = selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: equalPercentage }), {});
-      // Adjust the last participant to ensure total is exactly 100%
-      const lastId = selectedParticipants[selectedParticipants.length - 1];
-      const total = Object.values(shares).reduce((sum: number, share: number) => sum + share, 0);
-      shares[lastId] = Math.round((100 - (total - equalPercentage)) * 10) / 10;
-      setParticipantShares(shares);
-    } else if (newSplitMethod === 'shares') {
-      setParticipantShares(
-        selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: 1 }), {})
-      );
-    } else {
-      const equalAmount = parseFloat(amount) / numParticipants;
-      setParticipantShares(
-        selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: equalAmount }), {})
-      );
-    }
-  };
-
-  // Add console logging to track payer selection
-  const handlePayerChange = (payerId: string) => {
-    console.log('Changing payer to:', payerId);
-    console.log('Selected from participants:', participants.find(p => p._id === payerId));
-    setSelectedPayer(payerId);
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
     setTitle(newTitle);
-    
-    // Get suggestion when title changes
     const suggestion = suggestCategory(newTitle, description);
     setCategorySuggestion(suggestion);
     setShowSuggestion(!!suggestion);
@@ -249,8 +259,6 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newDescription = e.target.value;
     setDescription(newDescription);
-    
-    // Update suggestion when description changes
     const suggestion = suggestCategory(title, newDescription);
     setCategorySuggestion(suggestion);
     setShowSuggestion(!!suggestion);
@@ -262,6 +270,11 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       setSelectedSubcategory(categorySuggestion.subCategory);
       setShowSuggestion(false);
     }
+  };
+
+  const handleSplitMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSplitMethod(e.target.value as SplitMethod);
+    setSplitWarning(null);
   };
 
   return (
@@ -383,7 +396,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
               value={selectedCategory}
               onChange={(e) => {
                 setSelectedCategory(e.target.value);
-                setSelectedSubcategory(''); // Reset subcategory when main category changes
+                setSelectedSubcategory('');
               }}
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
             >
@@ -425,7 +438,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
                   name="payer"
                   value={participant._id}
                   checked={selectedPayer === participant._id}
-                  onChange={() => handlePayerChange(participant._id)}
+                  onChange={() => setSelectedPayer(participant._id)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                 />
                 <div className="flex items-center space-x-2">
@@ -442,31 +455,41 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
           </div>
         </div>
 
-        {/* Participants Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Split between</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {participants.map((participant) => (
-              <label
+        {/* Participant Selection */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Participants</h3>
+          <div className="grid grid-cols-2 gap-4">
+            {participants.map(participant => (
+              <div
                 key={participant._id}
-                className="flex items-center space-x-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"
+                className={`flex items-center space-x-3 p-3 rounded-lg border ${
+                  selectedParticipants.includes(participant._id)
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200'
+                }`}
               >
                 <input
                   type="checkbox"
                   checked={selectedParticipants.includes(participant._id)}
                   onChange={() => handleParticipantToggle(participant._id)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 rounded border-gray-300"
                 />
-                <div className="flex items-center space-x-2">
-                  <Avatar
-                    photoUrl={participant.photoUrl || null}
-                    name={participant.name}
-                    size="sm"
-                    className="border border-gray-200"
+                <Avatar
+                  photoUrl={participant.photoUrl || null}
+                  name={participant.name}
+                  size="sm"
+                />
+                <span className="flex-1">{participant.name}</span>
+                {selectedParticipants.includes(participant._id) && (
+                  <input
+                    type="number"
+                    value={participantShares[participant._id] || ''}
+                    onChange={(e) => handleShareChange(participant._id, e.target.value)}
+                    className="w-20 px-2 py-1 border rounded"
+                    placeholder="Share"
                   />
-                  <span className="text-sm text-gray-700">{participant.name}</span>
-                </div>
-              </label>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -519,7 +542,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
         <div className="flex justify-end space-x-3">
           <button
             type="button"
-            onClick={onExpenseAdded}
+            onClick={onCancel}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Cancel
@@ -528,7 +551,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
             type="submit"
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            Add Expense
+            Save Changes
           </button>
         </div>
       </div>
