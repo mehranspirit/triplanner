@@ -261,7 +261,13 @@ const TripDetails: React.FC = () => {
   });
   const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [airportSuggestions, setAirportSuggestions] = useState<Array<{name: string, iata: string}>>([]);
+  const [airportSuggestions, setAirportSuggestions] = useState<Array<{
+    name: string;
+    iata: string;
+    city: string;
+    country: string;
+    icao: string;
+  }>>([]);
   const [showAirportSuggestions, setShowAirportSuggestions] = useState(false);
   const airportInputRef = useRef<HTMLInputElement>(null);
   const [eventThumbnails, setEventThumbnails] = useState<{ [key: string]: string }>({});
@@ -273,6 +279,35 @@ const TripDetails: React.FC = () => {
   const [aiSuggestions, setAISuggestions] = useState<string | null>(null);
   const [suggestionsHistory, setSuggestionsHistory] = useState<AISuggestionHistory[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
+  const [airportQuery, setAirportQuery] = useState('');
+  const [airlineQuery, setAirlineQuery] = useState('');
+  const [airlineSuggestions, setAirlineSuggestions] = useState<Array<{
+    name: string;
+    iata: string;
+    country: string;
+  }>>([]);
+  const [showAirlineSuggestions, setShowAirlineSuggestions] = useState(false);
+  const airlineInputRef = useRef<HTMLInputElement>(null);
+  const [departureAirportQuery, setDepartureAirportQuery] = useState('');
+  const [arrivalAirportQuery, setArrivalAirportQuery] = useState('');
+  const [showDepartureAirportSuggestions, setShowDepartureAirportSuggestions] = useState(false);
+  const [showArrivalAirportSuggestions, setShowArrivalAirportSuggestions] = useState(false);
+  const [departureAirportSuggestions, setDepartureAirportSuggestions] = useState<Array<{
+    name: string;
+    iata: string;
+    city: string;
+    country: string;
+    icao: string;
+  }>>([]);
+  const [arrivalAirportSuggestions, setArrivalAirportSuggestions] = useState<Array<{
+    name: string;
+    iata: string;
+    city: string;
+    country: string;
+    icao: string;
+  }>>([]);
+  const departureAirportInputRef = useRef<HTMLInputElement>(null);
+  const arrivalAirportInputRef = useRef<HTMLInputElement>(null);
 
   // Add type guard function at the top of the component
   const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
@@ -288,19 +323,41 @@ const TripDetails: React.FC = () => {
       setAirportSuggestions([]);
       return;
     }
+    
     try {
-      const response = await fetch(`https://api.api-ninjas.com/v1/airports?name=${query}`, {
+      // For free tier, try using IATA code search (if available)
+      // Adjust the parameter name according to the documentation if it's different.
+      const url = `https://api.api-ninjas.com/v1/airports?iata=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
         headers: {
           'X-Api-Key': import.meta.env.VITE_API_NINJAS_KEY
         }
       });
-      const data = await response.json();
-      const airports = data
+      
+      const json = await response.json();
+  
+      if (!response.ok) {
+        console.error("API error:", json);
+        setAirportSuggestions([]);
+        return;
+      }
+  
+      if (!Array.isArray(json)) {
+        console.error("Unexpected response structure:", json);
+        setAirportSuggestions([]);
+        return;
+      }
+  
+      const airports = json
         .filter((airport: any) => airport.iata && airport.name)
         .map((airport: any) => ({
-          name: `${airport.name} (${airport.iata})`,
-          iata: airport.iata
+          name: airport.name,
+          iata: airport.iata,
+          city: airport.city,
+          country: airport.country,
+          icao: airport.icao
         }));
+  
       setAirportSuggestions(airports);
       setShowAirportSuggestions(true);
     } catch (error) {
@@ -308,10 +365,145 @@ const TripDetails: React.FC = () => {
     }
   };
 
+  // Add debounced airport search effect
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (airportQuery.length >= 2) {
+        fetchAirports(airportQuery);
+      } else {
+        setAirportSuggestions([]);
+      }
+    }, 400); // debounce delay
+
+    return () => clearTimeout(delayDebounce);
+  }, [airportQuery]);
+
+  const fetchDepartureAirports = async (query: string) => {
+    if (query.length < 2) {
+      setDepartureAirportSuggestions([]);
+      return;
+    }
+    
+    try {
+      const url = `https://api.api-ninjas.com/v1/airports?iata=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: {
+          'X-Api-Key': import.meta.env.VITE_API_NINJAS_KEY
+        }
+      });
+      
+      const json = await response.json();
+  
+      if (!response.ok) {
+        console.error("API error:", json);
+        setDepartureAirportSuggestions([]);
+        return;
+      }
+  
+      if (!Array.isArray(json)) {
+        console.error("Unexpected response structure:", json);
+        setDepartureAirportSuggestions([]);
+        return;
+      }
+  
+      const airports = json
+        .filter((airport: any) => airport.iata && airport.name)
+        .map((airport: any) => ({
+          name: airport.name,
+          iata: airport.iata,
+          city: airport.city,
+          country: airport.country,
+          icao: airport.icao
+        }));
+  
+      setDepartureAirportSuggestions(airports);
+      setShowDepartureAirportSuggestions(true);
+    } catch (error) {
+      console.error('Error fetching airports:', error);
+    }
+  };
+
+  const fetchArrivalAirports = async (query: string) => {
+    if (query.length < 2) {
+      setArrivalAirportSuggestions([]);
+      return;
+    }
+    
+    try {
+      const url = `https://api.api-ninjas.com/v1/airports?iata=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: {
+          'X-Api-Key': import.meta.env.VITE_API_NINJAS_KEY
+        }
+      });
+      
+      const json = await response.json();
+  
+      if (!response.ok) {
+        console.error("API error:", json);
+        setArrivalAirportSuggestions([]);
+        return;
+      }
+  
+      if (!Array.isArray(json)) {
+        console.error("Unexpected response structure:", json);
+        setArrivalAirportSuggestions([]);
+        return;
+      }
+  
+      const airports = json
+        .filter((airport: any) => airport.iata && airport.name)
+        .map((airport: any) => ({
+          name: airport.name,
+          iata: airport.iata,
+          city: airport.city,
+          country: airport.country,
+          icao: airport.icao
+        }));
+  
+      setArrivalAirportSuggestions(airports);
+      setShowArrivalAirportSuggestions(true);
+    } catch (error) {
+      console.error('Error fetching airports:', error);
+    }
+  };
+
+  // Add debounced departure airport search effect
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (departureAirportQuery.length >= 2) {
+        fetchDepartureAirports(departureAirportQuery);
+      } else {
+        setDepartureAirportSuggestions([]);
+      }
+    }, 400); // debounce delay
+
+    return () => clearTimeout(delayDebounce);
+  }, [departureAirportQuery]);
+
+  // Add debounced arrival airport search effect
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (arrivalAirportQuery.length >= 2) {
+        fetchArrivalAirports(arrivalAirportQuery);
+      } else {
+        setArrivalAirportSuggestions([]);
+      }
+    }, 400); // debounce delay
+
+    return () => clearTimeout(delayDebounce);
+  }, [arrivalAirportQuery]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (airportInputRef.current && !airportInputRef.current.contains(event.target as Node)) {
         setShowAirportSuggestions(false);
+      }
+      if (departureAirportInputRef.current && !departureAirportInputRef.current.contains(event.target as Node)) {
+        setShowDepartureAirportSuggestions(false);
+      }
+      if (arrivalAirportInputRef.current && !arrivalAirportInputRef.current.contains(event.target as Node)) {
+        setShowArrivalAirportSuggestions(false);
       }
     };
 
@@ -1433,40 +1625,67 @@ const TripDetails: React.FC = () => {
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Airline (optional)</label>
-              <input
-                type="text"
-                value={eventData.airline}
-                onChange={(e) =>
-                  setEventData({ ...eventData, airline: e.target.value })
-                }
-                className="input"
-                placeholder="Enter airline name"
-              />
+              <div className="relative" ref={airlineInputRef}>
+                <input
+                  type="text"
+                  value={airlineQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setAirlineQuery(value);
+                    setEventData({ ...eventData, airline: value });
+                  }}
+                  className="input"
+                  placeholder="Enter airline name"
+                />
+                {showAirlineSuggestions && airlineSuggestions.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                    {airlineSuggestions.map((airline) => (
+                      <li
+                        key={airline.iata || airline.name}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          const airlineDisplay = `${airline.name}${airline.iata ? ` (${airline.iata})` : ''}${airline.country ? ` - ${airline.country}` : ''}`;
+                          setEventData({ ...eventData, airline: airlineDisplay });
+                          setAirlineQuery(airlineDisplay);
+                          setShowAirlineSuggestions(false);
+                        }}
+                      >
+                        <div className="font-medium">{airline.name}{airline.iata ? ` (${airline.iata})` : ''}</div>
+                        {airline.country && <div className="text-gray-600 text-xs">{airline.country}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="mb-4 relative" ref={airportInputRef}>
               <label className="block text-gray-700 mb-2">Airport</label>
               <input
                 type="text"
-                value={eventData.airport}
+                value={airportQuery}
                 onChange={(e) => {
-                  setEventData({ ...eventData, airport: e.target.value });
-                  fetchAirports(e.target.value);
+                  const value = e.target.value.toUpperCase(); // Convert to uppercase for IATA codes
+                  setAirportQuery(value);
+                  setEventData({ ...eventData, airport: value });
                 }}
                 className="input"
-                placeholder="Start typing airport name..."
+                placeholder="Enter airport IATA code (e.g., LAX, JFK)"
               />
               {showAirportSuggestions && airportSuggestions.length > 0 && (
                 <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
-                  {airportSuggestions.map((airport, index) => (
+                  {airportSuggestions.map((airport) => (
                     <li
-                      key={airport.iata}
+                      key={airport.icao}
                       className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                       onClick={() => {
-                        setEventData({ ...eventData, airport: airport.name });
+                        const airportDisplay = `${airport.name} (${airport.iata}) - ${airport.city}, ${airport.country}`;
+                        setEventData({ ...eventData, airport: airportDisplay });
+                        setAirportQuery(airportDisplay); // Update to show full airport info
                         setShowAirportSuggestions(false);
                       }}
                     >
-                      {airport.name}
+                      <div className="font-medium">{airport.name} ({airport.iata})</div>
+                      <div className="text-gray-600 text-xs">{airport.city}, {airport.country}</div>
                     </li>
                   ))}
                 </ul>
@@ -1676,15 +1895,38 @@ const TripDetails: React.FC = () => {
             {commonFields}
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Airline (optional)</label>
-              <input
-                type="text"
-                value={eventData.airline}
-                onChange={(e) =>
-                  setEventData({ ...eventData, airline: e.target.value })
-                }
-                className="input"
-                placeholder="Enter airline name"
-              />
+              <div className="relative" ref={airlineInputRef}>
+                <input
+                  type="text"
+                  value={airlineQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setAirlineQuery(value);
+                    setEventData({ ...eventData, airline: value });
+                  }}
+                  className="input"
+                  placeholder="Enter airline name"
+                />
+                {showAirlineSuggestions && airlineSuggestions.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                    {airlineSuggestions.map((airline) => (
+                      <li
+                        key={airline.iata || airline.name}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          const airlineDisplay = `${airline.name}${airline.iata ? ` (${airline.iata})` : ''}${airline.country ? ` - ${airline.country}` : ''}`;
+                          setEventData({ ...eventData, airline: airlineDisplay });
+                          setAirlineQuery(airlineDisplay);
+                          setShowAirlineSuggestions(false);
+                        }}
+                      >
+                        <div className="font-medium">{airline.name}{airline.iata ? ` (${airline.iata})` : ''}</div>
+                        {airline.country && <div className="text-gray-600 text-xs">{airline.country}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Flight Number (optional)</label>
@@ -1700,29 +1942,77 @@ const TripDetails: React.FC = () => {
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Departure Airport</label>
-              <input
-                type="text"
-                value={eventData.departureAirport}
-                onChange={(e) =>
-                  setEventData({ ...eventData, departureAirport: e.target.value })
-                }
-                className="input"
-                required
-                placeholder="Enter departure airport"
-              />
+              <div className="relative" ref={departureAirportInputRef}>
+                <input
+                  type="text"
+                  value={departureAirportQuery}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase(); // Convert to uppercase for IATA codes
+                    setDepartureAirportQuery(value);
+                    setEventData({ ...eventData, departureAirport: value });
+                    setShowDepartureAirportSuggestions(true);
+                  }}
+                  className="input"
+                  required
+                  placeholder="Enter departure airport IATA code (e.g., LAX, JFK)"
+                />
+                {showDepartureAirportSuggestions && departureAirportSuggestions.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                    {departureAirportSuggestions.map((airport) => (
+                      <li
+                        key={airport.icao}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          const airportDisplay = `${airport.name} (${airport.iata}) - ${airport.city}, ${airport.country}`;
+                          setEventData({ ...eventData, departureAirport: airportDisplay });
+                          setDepartureAirportQuery(airportDisplay);
+                          setShowDepartureAirportSuggestions(false);
+                        }}
+                      >
+                        <div className="font-medium">{airport.name} ({airport.iata})</div>
+                        <div className="text-gray-600 text-xs">{airport.city}, {airport.country}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Arrival Airport</label>
-              <input
-                type="text"
-                value={eventData.arrivalAirport}
-                onChange={(e) =>
-                  setEventData({ ...eventData, arrivalAirport: e.target.value })
-                }
-                className="input"
-                required
-                placeholder="Enter arrival airport"
-              />
+              <div className="relative" ref={arrivalAirportInputRef}>
+                <input
+                  type="text"
+                  value={arrivalAirportQuery}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase(); // Convert to uppercase for IATA codes
+                    setArrivalAirportQuery(value);
+                    setEventData({ ...eventData, arrivalAirport: value });
+                    setShowArrivalAirportSuggestions(true);
+                  }}
+                  className="input"
+                  required
+                  placeholder="Enter arrival airport IATA code (e.g., LAX, JFK)"
+                />
+                {showArrivalAirportSuggestions && arrivalAirportSuggestions.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                    {arrivalAirportSuggestions.map((airport) => (
+                      <li
+                        key={airport.icao}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          const airportDisplay = `${airport.name} (${airport.iata}) - ${airport.city}, ${airport.country}`;
+                          setEventData({ ...eventData, arrivalAirport: airportDisplay });
+                          setArrivalAirportQuery(airportDisplay);
+                          setShowArrivalAirportSuggestions(false);
+                        }}
+                      >
+                        <div className="font-medium">{airport.name} ({airport.iata})</div>
+                        <div className="text-gray-600 text-xs">{airport.city}, {airport.country}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Departure Time</label>
@@ -2216,6 +2506,75 @@ const TripDetails: React.FC = () => {
       setError('Failed to delete suggestion');
     }
   };
+
+  const fetchAirlines = async (query: string) => {
+    if (query.length < 2) {
+      setAirlineSuggestions([]);
+      return;
+    }
+    
+    try {
+      const url = `https://api.api-ninjas.com/v1/airlines?name=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: {
+          'X-Api-Key': import.meta.env.VITE_API_NINJAS_KEY
+        }
+      });
+      
+      const json = await response.json();
+  
+      if (!response.ok) {
+        console.error("API error:", json);
+        setAirlineSuggestions([]);
+        return;
+      }
+  
+      if (!Array.isArray(json)) {
+        console.error("Unexpected response structure:", json);
+        setAirlineSuggestions([]);
+        return;
+      }
+  
+      const airlines = json
+        .filter((airline: any) => airline.name)
+        .map((airline: any) => ({
+          name: airline.name,
+          iata: airline.iata || '',
+          country: airline.country || ''
+        }));
+  
+      setAirlineSuggestions(airlines);
+      setShowAirlineSuggestions(true);
+    } catch (error) {
+      console.error('Error fetching airlines:', error);
+    }
+  };
+
+  // Add debounced airline search effect
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (airlineQuery.length >= 2) {
+        fetchAirlines(airlineQuery);
+      } else {
+        setAirlineSuggestions([]);
+      }
+    }, 400); // debounce delay
+
+    return () => clearTimeout(delayDebounce);
+  }, [airlineQuery]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (airlineInputRef.current && !airlineInputRef.current.contains(event.target as Node)) {
+        setShowAirlineSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   if (loading) {
     return (
