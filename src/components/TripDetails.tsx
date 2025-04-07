@@ -3492,7 +3492,7 @@ const TripDetails: React.FC = () => {
                 />
                 <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                   {trip.owner.name} • Owner
-            </div>
+                </div>
               </div>
             )}
             {/* Collaborator Avatars */}
@@ -3502,41 +3502,7 @@ const TripDetails: React.FC = () => {
                 collaborator.user._id !== user?._id
               )
               .map(renderCollaboratorInfo)}
-            </div>
-          
-          {/* Shared trip info - Keep for non-owners */}
-          {user && trip.owner._id !== user._id && (
-            <div className="absolute top-[calc(8rem+8px)] sm:top-16 right-4 z-10">
-              <div className="flex flex-col items-end gap-2 bg-black/40 backdrop-blur-sm p-3 rounded-lg">
-                <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-white text-indigo-700 shadow-sm">
-                Shared
-              </span>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="text-sm font-medium text-white">
-                    {(() => {
-                      const userCollaborator = trip.collaborators.find(c => 
-                        isCollaboratorObject(c) && 
-                        c.user._id === user._id
-                      );
-                      return userCollaborator && getCollaboratorRole(userCollaborator) === 'editor'
-                        ? 'You can edit this trip' 
-                        : 'You can view this trip';
-                    })()}
-                  </span>
-                  <div className="flex gap-2">
-                    {trip.collaborators.length > 0 && (
-                      <Link
-                        to={`/trips/${trip._id}/activity-log`}
-                        className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded transition-colors duration-200 shadow-sm"
-                      >
-                        Activity Log
-                      </Link>
-            )}
           </div>
-        </div>
-              </div>
-            </div>
-          )}
       </div>
 
         {/* Events and Map section */}
