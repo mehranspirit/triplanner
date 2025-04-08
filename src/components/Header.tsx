@@ -64,6 +64,12 @@ const Header: React.FC = () => {
               >
                 Activity Log
               </Link>
+              <Link
+                to="/dream-trips"
+                className={getTabClassName('/dream-trips')}
+              >
+                Dream Trips
+              </Link>
               {isAdmin && (
                 <Link
                   to="/users"
@@ -173,6 +179,13 @@ const Header: React.FC = () => {
             onClick={() => setIsMenuOpen(false)}
           >
             Activity Log
+          </Link>
+          <Link
+            to="/dream-trips"
+            className={getMobileTabClassName('/dream-trips')}
+            onClick={() => setIsMenuOpen(false)}
+          >
+            Dream Trips
           </Link>
           {isAdmin && (
             <Link
