@@ -87,12 +87,12 @@ export const DreamTripCard: React.FC<DreamTripCardProps> = ({ trip, onUpdate }) 
       if (trip.thumbnailUrl) {
         setThumbnailUrl(trip.thumbnailUrl);
       } else {
-        const defaultThumbnail = await getDefaultThumbnail(trip.name);
+        const defaultThumbnail = await getDefaultThumbnail(trip.title);
         setThumbnailUrl(defaultThumbnail);
       }
     };
     loadThumbnail();
-  }, [trip.thumbnailUrl, trip.name]);
+  }, [trip.thumbnailUrl, trip.title]);
 
   const handleDelete = async () => {
     try {
@@ -115,7 +115,7 @@ export const DreamTripCard: React.FC<DreamTripCardProps> = ({ trip, onUpdate }) 
           <div className="h-48 w-full relative">
             <img
               src={thumbnailUrl || PREDEFINED_THUMBNAILS.default}
-              alt={trip.name}
+              alt={trip.title}
               className="h-full w-full object-cover"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
@@ -133,7 +133,7 @@ export const DreamTripCard: React.FC<DreamTripCardProps> = ({ trip, onUpdate }) 
           {/* Content Section */}
           <div className="px-4 py-5 sm:p-6 h-[120px]">
             <h3 className="text-2xl font-semibold text-gray-900 group-hover:text-purple-600 transition-colors duration-200">
-              {trip.name}
+              {trip.title}
             </h3>
             
             {/* Target Date */}
@@ -211,7 +211,7 @@ export const DreamTripCard: React.FC<DreamTripCardProps> = ({ trip, onUpdate }) 
           <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Delete Dream Trip</h3>
             <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to delete "{trip.name}"? This action cannot be undone.
+              Are you sure you want to delete "{trip.title}"? This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
               <button

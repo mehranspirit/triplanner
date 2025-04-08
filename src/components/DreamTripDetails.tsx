@@ -432,7 +432,7 @@ const DreamTripDetails: React.FC = () => {
             <div className="aspect-w-16 aspect-h-9 relative">
               <img
                 src={trip.thumbnailUrl}
-                alt={trip.name}
+                alt={trip.title}
                 className="object-cover w-full h-full"
               />
               {/* Action Buttons */}
@@ -469,7 +469,7 @@ const DreamTripDetails: React.FC = () => {
           )}
           <div className="p-6">
             <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-bold text-gray-900">{trip.name}</h1>
+              <h1 className="text-3xl font-bold text-gray-900">{trip.title}</h1>
               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -584,7 +584,7 @@ const DreamTripDetails: React.FC = () => {
           <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Delete Dream Trip</h3>
             <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to delete "{trip.name}"? This action cannot be undone.
+              Are you sure you want to delete "{trip.title}"? This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
               <button

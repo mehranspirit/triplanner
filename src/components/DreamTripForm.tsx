@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DreamTrip } from '../types/dreamTripTypes';
 import { dreamTripService } from '../services/dreamTripService';
+import { CreateDreamTripData } from '../types/dreamTripTypes';
 
 interface DreamTripFormProps {
   onClose: () => void;
@@ -8,14 +9,14 @@ interface DreamTripFormProps {
 }
 
 export const DreamTripForm: React.FC<DreamTripFormProps> = ({ onClose, onSuccess }) => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CreateDreamTripData>({
     title: '',
     description: '',
     targetDate: {
       year: new Date().getFullYear(),
       month: new Date().getMonth() + 1
     },
-    tags: [] as string[],
+    tags: [],
     thumbnailUrl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);

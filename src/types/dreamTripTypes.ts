@@ -64,7 +64,7 @@ export interface TripIdea {
 
 export interface DreamTrip {
   _id: string;
-  name: string;
+  title: string;
   description?: string;
   targetDate: {
     year: number;
@@ -99,8 +99,12 @@ export interface DreamTrip {
 export interface CreateDreamTripData {
   title: string;
   description: string;
-  startDate?: Date;
-  endDate?: Date;
+  targetDate: {
+    year: number;
+    month: number;
+  };
+  tags: string[];
+  thumbnailUrl?: string;
   collaborators?: string[];
   ideas?: TripIdea[];
 }

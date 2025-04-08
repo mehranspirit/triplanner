@@ -20,7 +20,7 @@ export const dreamTripService = {
     // Only fetch from Pexels if no custom thumbnail URL is provided
     let thumbnailUrl = data.thumbnailUrl;
     if (!thumbnailUrl) {
-      const pexelsImage = await pexelsService.searchImage(data.name);
+      const pexelsImage = await pexelsService.searchImage(data.title);
       thumbnailUrl = pexelsImage || undefined;
     }
     
@@ -50,11 +50,11 @@ export const dreamTripService = {
     return response.json();
   },
 
-  updateDreamTrip: async (id: string, data: Partial<CreateDreamTripData>): Promise<DreamTrip> => {
+  updateDreamTrip: async (id: string, data: Partial<DreamTrip>): Promise<DreamTrip> => {
     // Only fetch from Pexels if name is being updated and no custom thumbnail URL is provided
     let thumbnailUrl = data.thumbnailUrl;
-    if (data.name && !thumbnailUrl) {
-      const pexelsImage = await pexelsService.searchImage(data.name);
+    if (data.title && !thumbnailUrl) {
+      const pexelsImage = await pexelsService.searchImage(data.title);
       thumbnailUrl = pexelsImage || undefined;
     }
 

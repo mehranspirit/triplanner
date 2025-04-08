@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TripIdea as TripIdeaType } from '../types/dreamTripTypes';
 import { TripIdea } from './TripIdea';
 import { dreamTripService } from '../services/dreamTripService';
+import { DropResult } from 'react-beautiful-dnd';
 
 interface IdeaBoardProps {
   ideas: TripIdeaType[];
@@ -63,6 +64,40 @@ export const IdeaBoard: React.FC<IdeaBoardProps> = ({
       });
     } catch (error) {
       console.error('Failed to update idea priority:', error);
+    }
+  };
+
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+
+    const { source, destination, draggableId } = result;
+    const sourceIndex = source.index;
+    const destinationIndex = destination.index;
+
+    // Get the idea being moved
+    const idea = ideas.find(i => i._id === draggableId);
+    if (!idea) return;
+
+    // Calculate new priority based on destination
+    const newPriority = destination.droppableId === 'must-do' ? 3 :
+                        destination.droppableId === 'interested' ? 2 : 1;
+
+    // Update local state immediately
+    const updatedIdeas = Array.from(ideas);
+    const [removed] = updatedIdeas.splice(sourceIndex, 1);
+    updatedIdeas.splice(destinationIndex, 0, { ...removed, priority: newPriority });
+    onUpdateIdeas(updatedIdeas);
+
+    try {
+      // Update on server
+      await dreamTripService.updateIdea(tripId, draggableId, {
+        _id: draggableId,
+        priority: newPriority
+      });
+    } catch (error) {
+      console.error('Failed to update idea priority:', error);
+      // Revert on error
+      onUpdateIdeas(ideas);
     }
   };
 

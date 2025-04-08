@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const dreamTripSchema = new mongoose.Schema({
-  name: {
+  title: {
     type: String,
     required: true,
     trim: true
