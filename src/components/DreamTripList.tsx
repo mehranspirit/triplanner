@@ -20,7 +20,7 @@ export const DreamTripList: React.FC<DreamTripListProps> = ({ trips }) => {
               <div className="aspect-w-16 aspect-h-9">
                 <img
                   src={trip.thumbnailUrl}
-                  alt={trip.name}
+                  alt={trip.title}
                   className="object-cover w-full h-full"
                 />
               </div>
@@ -28,7 +28,7 @@ export const DreamTripList: React.FC<DreamTripListProps> = ({ trips }) => {
             
             <div className="p-4">
               <h3 className="text-lg font-medium text-gray-900 group-hover:text-indigo-600">
-                {trip.name}
+                {trip.title}
               </h3>
               
               {trip.description && (
