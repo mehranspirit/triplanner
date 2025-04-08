@@ -19,6 +19,8 @@ import { Link, NavLink } from 'react-router-dom';
 import ActivityLogPage from './pages/ActivityLogPage';
 import AuthCallback from './components/auth/AuthCallback';
 import ExpensesPage from './pages/ExpensesPage';
+import { DreamTripsPage } from './pages/DreamTripsPage';
+import DreamTripDetails from './components/DreamTripDetails';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -110,6 +112,26 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AuthenticatedLayout>
                     <ActivityLogPage />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dream-trips"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <DreamTripsPage />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/trips/dream/:id"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <DreamTripDetails />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }

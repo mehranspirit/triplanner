@@ -20,6 +20,7 @@ const { generatePDF, generateHTML } = require('./utils/exportUtils');
 const jwt = require('jsonwebtoken');
 const passport = require('./config/passport');
 const session = require('express-session');
+const dreamTripsRouter = require('./routes/dreamTrips');
 
 // Helper function to get a human-readable event name
 const getEventName = (event) => {
@@ -182,6 +183,9 @@ app.use('/api', aiSuggestionsRoutes);
 
 // Mount expense routes
 app.use('/api', expenseRoutes);
+
+// Register routes
+app.use('/api/trips/dream', dreamTripsRouter);
 
 // Add role change endpoint directly in index.js
 app.patch('/api/users/:userId/role', auth, async (req, res) => {
