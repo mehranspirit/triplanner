@@ -57,11 +57,11 @@ const App: React.FC = () => {
             
             {/* Protected routes */}
             <Route
-              path="/trips"
+              path="/trips/dream/:id"
               element={
                 <ProtectedRoute>
                   <AuthenticatedLayout>
-                    <TripList />
+                    <DreamTripDetails />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }
@@ -72,6 +72,16 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AuthenticatedLayout>
                     <TripDetails />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/trips"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <TripList />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }
@@ -122,16 +132,6 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AuthenticatedLayout>
                     <DreamTripsPage />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/trips/dream/:id"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <DreamTripDetails />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }

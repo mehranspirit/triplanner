@@ -238,7 +238,7 @@ const TripDetails: React.FC = () => {
     status: 'confirmed',
     thumbnailUrl: '',
     source: 'manual',
-    location: undefined,
+    location: { lat: 0, lng: 0 },
     departureAirport: '',
     arrivalAirport: '',
     departureTime: '',
@@ -544,17 +544,76 @@ const TripDetails: React.FC = () => {
   };
 
   const fetchTrip = async () => {
-    if (!id || !user?._id) return;
-    
+    if (!id) return;
+
     try {
       setLoading(true);
-      const fetchedTrip = await api.getTrip(id);
-      setTrip(fetchedTrip);
-      
-      // Load AI suggestions history after fetching trip data
-      if (fetchedTrip?._id) {
-        await loadHistory(fetchedTrip._id);
+      // Check if we're on a dream trip URL
+      if (window.location.pathname.includes('/trips/dream/')) {
+        navigate(`/trips/dream/${id}`);
+        return;
       }
+
+      const tripData = await api.getTrip(id);
+      setTrip(tripData);
+      setEventData({
+        type: 'stay',
+        date: '',
+        time: '',
+        airport: '',
+        flightNumber: '',
+        airline: '',
+        terminal: '',
+        gate: '',
+        bookingReference: '',
+        accommodationName: '',
+        address: '',
+        checkIn: '',
+        checkOut: '',
+        reservationNumber: '',
+        contactInfo: '',
+        placeName: '',
+        description: '',
+        openingHours: '',
+        notes: '',
+        status: 'exploring',
+        thumbnailUrl: '',
+        source: 'manual',
+        location: { lat: 0, lng: 0 },
+        departureAirport: '',
+        arrivalAirport: '',
+        departureTime: '',
+        arrivalTime: '',
+        trainNumber: '',
+        trainOperator: '',
+        departureStation: '',
+        arrivalStation: '',
+        carriageNumber: '',
+        seatNumber: '',
+        carCompany: '',
+        carType: '',
+        pickupLocation: '',
+        dropoffLocation: '',
+        pickupTime: '',
+        dropoffTime: '',
+        licensePlate: '',
+        busOperator: '',
+        busNumber: ''
+      });
+
+      // Load thumbnails
+      const thumbnail = await getDefaultThumbnail(tripData.name);
+      setTripThumbnail(thumbnail);
+
+      // Load event thumbnails
+      const thumbnails: { [key: string]: string } = {};
+      for (const event of tripData.events) {
+        thumbnails[event.id] = await getEventThumbnail(event);
+      }
+      setEventThumbnails(thumbnails);
+
+      // Load AI suggestions history
+      await loadHistory(id);
     } catch (error) {
       console.error('Error fetching trip:', error);
       setError('Failed to load trip details');
@@ -1185,7 +1244,7 @@ const TripDetails: React.FC = () => {
       status: 'confirmed',
       thumbnailUrl: '',
       source: 'manual',
-      location: undefined,
+      location: { lat: 0, lng: 0 },
       departureAirport: '',
       arrivalAirport: '',
       departureTime: '',
