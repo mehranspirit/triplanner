@@ -160,4 +160,15 @@ export const dreamTripService = {
     }
     return response.json();
   },
+
+  leaveTrip: async (tripId: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/api/trips/dream/${tripId}/leave`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to leave trip');
+    }
+  },
 }; 

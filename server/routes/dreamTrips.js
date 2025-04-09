@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const DreamTrip = require('../models/DreamTrip');
+const User = require('../models/User');
+const { logActivity } = require('../utils/activityLogger');
 
 // Get all dream trips for the authenticated user
 router.get('/', auth, async (req, res) => {
@@ -368,6 +370,305 @@ router.delete('/:id/ideas/:ideaId', auth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting idea:', error);
     res.status(400).json({ message: error.message });
+  }
+});
+
+// Add a collaborator to a dream trip
+router.post('/:id/collaborators', auth, async (req, res) => {
+  try {
+    const { email, role } = req.body;
+    const dreamTrip = await DreamTrip.findById(req.params.id);
+
+    if (!dreamTrip) {
+      return res.status(404).json({ message: 'Dream trip not found' });
+    }
+
+    // Check if the requester is the owner or an editor
+    const isOwner = dreamTrip.owner.toString() === req.user._id.toString();
+    const isEditor = dreamTrip.collaborators.some(
+      c => c.user.toString() === req.user._id.toString() && c.role === 'editor'
+    );
+
+    if (!isOwner && !isEditor) {
+      return res.status(403).json({ message: 'Only the owner or editors can add collaborators' });
+    }
+
+    // Find the user by email
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if user is already a collaborator
+    const isAlreadyCollaborator = dreamTrip.collaborators.some(
+      c => c.user.toString() === user._id.toString()
+    );
+    if (isAlreadyCollaborator) {
+      return res.status(400).json({ message: 'User is already a collaborator' });
+    }
+
+    // Add the collaborator
+    dreamTrip.collaborators.push({
+      user: user._id,
+      role: role || 'viewer',
+      addedAt: new Date()
+    });
+
+    await dreamTrip.save();
+
+    // Log the activity
+    await logActivity({
+      user: req.user._id,
+      action: 'add_collaborator',
+      entityType: 'dream_trip',
+      entityId: dreamTrip._id,
+      details: {
+        collaboratorEmail: email,
+        collaboratorName: user.name,
+        role: role || 'viewer'
+      }
+    });
+
+    // Populate and transform the response
+    const populatedTrip = await DreamTrip.findById(dreamTrip._id)
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl')
+      .lean()
+      .exec();
+
+    const transformedTrip = {
+      ...populatedTrip,
+      _id: populatedTrip._id.toString(),
+      owner: {
+        _id: populatedTrip.owner._id.toString(),
+        name: populatedTrip.owner.name,
+        email: populatedTrip.owner.email,
+        photoUrl: populatedTrip.owner.photoUrl || null
+      },
+      collaborators: populatedTrip.collaborators.map(c => ({
+        ...c,
+        user: {
+          _id: c.user._id.toString(),
+          name: c.user.name,
+          email: c.user.email,
+          photoUrl: c.user.photoUrl || null
+        }
+      }))
+    };
+
+    res.status(201).json(transformedTrip);
+  } catch (error) {
+    console.error('Error adding collaborator:', error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Delete a collaborator from a dream trip
+router.delete('/:id/collaborators/:userId', auth, async (req, res) => {
+  try {
+    const dreamTrip = await DreamTrip.findById(req.params.id);
+
+    if (!dreamTrip) {
+      return res.status(404).json({ message: 'Dream trip not found' });
+    }
+
+    // Check if the requester is the owner
+    if (dreamTrip.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Only the owner can remove collaborators' });
+    }
+
+    // Find the collaborator to remove
+    const collaboratorIndex = dreamTrip.collaborators.findIndex(
+      c => c.user.toString() === req.params.userId
+    );
+
+    if (collaboratorIndex === -1) {
+      return res.status(404).json({ message: 'Collaborator not found' });
+    }
+
+    // Get collaborator info for logging
+    const collaborator = dreamTrip.collaborators[collaboratorIndex];
+    const user = await User.findById(req.params.userId);
+
+    // Remove the collaborator
+    dreamTrip.collaborators.splice(collaboratorIndex, 1);
+    await dreamTrip.save();
+
+    // Log the activity
+    await logActivity({
+      user: req.user._id,
+      action: 'remove_collaborator',
+      entityType: 'dream_trip',
+      entityId: dreamTrip._id,
+      details: {
+        collaboratorEmail: user.email,
+        collaboratorName: user.name,
+        role: collaborator.role
+      }
+    });
+
+    // Populate and transform the response
+    const populatedTrip = await DreamTrip.findById(dreamTrip._id)
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl')
+      .lean()
+      .exec();
+
+    const transformedTrip = {
+      ...populatedTrip,
+      _id: populatedTrip._id.toString(),
+      owner: {
+        _id: populatedTrip.owner._id.toString(),
+        name: populatedTrip.owner.name,
+        email: populatedTrip.owner.email,
+        photoUrl: populatedTrip.owner.photoUrl || null
+      },
+      collaborators: populatedTrip.collaborators.map(c => ({
+        ...c,
+        user: {
+          _id: c.user._id.toString(),
+          name: c.user.name,
+          email: c.user.email,
+          photoUrl: c.user.photoUrl || null
+        }
+      }))
+    };
+
+    res.json(transformedTrip);
+  } catch (error) {
+    console.error('Error removing collaborator:', error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Update a collaborator's role (PUT method for client compatibility)
+router.put('/:id/collaborators/:userId', auth, async (req, res) => {
+  try {
+    const { role } = req.body;
+    const dreamTrip = await DreamTrip.findById(req.params.id);
+
+    if (!dreamTrip) {
+      return res.status(404).json({ message: 'Dream trip not found' });
+    }
+
+    // Check if the requester is the owner
+    if (dreamTrip.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Only the owner can update collaborator roles' });
+    }
+
+    // Find the collaborator to update
+    const collaboratorIndex = dreamTrip.collaborators.findIndex(
+      c => c.user.toString() === req.params.userId
+    );
+
+    if (collaboratorIndex === -1) {
+      return res.status(404).json({ message: 'Collaborator not found' });
+    }
+
+    // Get collaborator info for logging
+    const oldRole = dreamTrip.collaborators[collaboratorIndex].role;
+    const user = await User.findById(req.params.userId);
+
+    // Update the role
+    dreamTrip.collaborators[collaboratorIndex].role = role;
+    await dreamTrip.save();
+
+    // Log the activity
+    await logActivity({
+      user: req.user._id,
+      action: 'update_collaborator_role',
+      entityType: 'dream_trip',
+      entityId: dreamTrip._id,
+      details: {
+        collaboratorEmail: user.email,
+        collaboratorName: user.name,
+        oldRole,
+        newRole: role
+      }
+    });
+
+    // Populate and transform the response
+    const populatedTrip = await DreamTrip.findById(dreamTrip._id)
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl')
+      .lean()
+      .exec();
+
+    const transformedTrip = {
+      ...populatedTrip,
+      _id: populatedTrip._id.toString(),
+      owner: {
+        _id: populatedTrip.owner._id.toString(),
+        name: populatedTrip.owner.name,
+        email: populatedTrip.owner.email,
+        photoUrl: populatedTrip.owner.photoUrl || null
+      },
+      collaborators: populatedTrip.collaborators.map(c => ({
+        ...c,
+        user: {
+          _id: c.user._id.toString(),
+          name: c.user.name,
+          email: c.user.email,
+          photoUrl: c.user.photoUrl || null
+        }
+      }))
+    };
+
+    res.json(transformedTrip);
+  } catch (error) {
+    console.error('Error updating collaborator role:', error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Leave a dream trip (self-removal)
+router.post('/:id/leave', auth, async (req, res) => {
+  try {
+    const dreamTrip = await DreamTrip.findById(req.params.id);
+
+    if (!dreamTrip) {
+      return res.status(404).json({ message: 'Dream trip not found' });
+    }
+
+    // Check that the user is not the owner
+    if (dreamTrip.owner.toString() === req.user._id.toString()) {
+      return res.status(403).json({ message: 'The owner cannot leave their own trip' });
+    }
+
+    // Find the user's collaborator entry
+    const collaboratorIndex = dreamTrip.collaborators.findIndex(
+      c => c.user.toString() === req.user._id.toString()
+    );
+
+    if (collaboratorIndex === -1) {
+      return res.status(404).json({ message: 'You are not a collaborator on this trip' });
+    }
+
+    // Get collaborator info for logging
+    const collaborator = dreamTrip.collaborators[collaboratorIndex];
+    const user = await User.findById(req.user._id);
+
+    // Remove the user from collaborators
+    dreamTrip.collaborators.splice(collaboratorIndex, 1);
+    await dreamTrip.save();
+
+    // Log the activity
+    await logActivity({
+      user: req.user._id,
+      action: 'leave_trip',
+      entityType: 'dream_trip',
+      entityId: dreamTrip._id,
+      details: {
+        collaboratorEmail: user.email,
+        collaboratorName: user.name,
+        role: collaborator.role
+      }
+    });
+
+    res.json({ message: 'Successfully left the trip' });
+  } catch (error) {
+    console.error('Error leaving dream trip:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 

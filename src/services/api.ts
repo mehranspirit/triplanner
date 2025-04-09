@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 import { Event } from '../types';
 import { Trip, AISuggestionHistory, User } from '../types/eventTypes';
-import { API_URL } from '../config/index';
+import { API_URL } from '../config';
 import { getHeaders } from '../utils/api.ts';
 import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
+import { DreamTrip } from '../types/dreamTripTypes';
 
 type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
 
@@ -47,6 +48,10 @@ interface API {
   updateSettlement: (tripId: string, settlementId: string, updates: Partial<Settlement>) => Promise<Settlement>;
   deleteSettlement: (tripId: string, settlementId: string) => Promise<void>;
   getExpenseSummary: (tripId: string) => Promise<ExpenseSummary>;
+  getDreamTrip: (id: string) => Promise<DreamTrip>;
+  addDreamTripCollaborator: (tripId: string, email: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
+  removeDreamTripCollaborator: (tripId: string, userId: string) => Promise<DreamTrip>;
+  updateDreamTripCollaboratorRole: (tripId: string, userId: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
 }
 
 export const api: API = {
@@ -832,6 +837,60 @@ export const api: API = {
       headers: getHeaders(),
     });
     if (!response.ok) throw new Error('Failed to fetch expense summary');
+    return response.json();
+  },
+
+  // Dream Trip specific methods
+  getDreamTrip: async (id: string): Promise<DreamTrip> => {
+    if (!id) throw new Error('Dream Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/dream/${id}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch dream trip');
+    }
+    return response.json();
+  },
+
+  addDreamTripCollaborator: async (tripId: string, email: string, role: 'editor' | 'viewer'): Promise<DreamTrip> => {
+    if (!tripId || !email || !role) throw new Error('Trip ID, email, and role are required');
+    const response = await fetch(`${API_URL}/api/trips/dream/${tripId}/collaborators`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ email, role }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to add collaborator');
+    }
+    return response.json();
+  },
+
+  removeDreamTripCollaborator: async (tripId: string, userId: string): Promise<DreamTrip> => {
+    if (!tripId || !userId) throw new Error('Trip ID and user ID are required');
+    const response = await fetch(`${API_URL}/api/trips/dream/${tripId}/collaborators/${userId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to remove collaborator');
+    }
+    return response.json();
+  },
+
+  updateDreamTripCollaboratorRole: async (tripId: string, userId: string, role: 'editor' | 'viewer'): Promise<DreamTrip> => {
+    if (!tripId || !userId || !role) throw new Error('Trip ID, user ID, and role are required');
+    const response = await fetch(`${API_URL}/api/trips/dream/${tripId}/collaborators/${userId}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ role }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to update collaborator role');
+    }
     return response.json();
   },
 };

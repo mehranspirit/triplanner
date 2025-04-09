@@ -4,15 +4,24 @@ import { DreamTrip, TripIdea as TripIdeaType, CreateTripIdeaData, CategoryType, 
 import { dreamTripService } from '../services/dreamTripService';
 import { EditDreamTripForm } from './EditDreamTripForm';
 import { IdeaBoard } from './IdeaBoard';
+import { CollaboratorManagementModal } from './CollaboratorManagementModal';
+import { useAuth } from '../context/AuthContext';
+import { User } from '../types';
+
+const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
+  return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
+};
 
 const DreamTripDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [trip, setTrip] = useState<DreamTrip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const [showAddIdeaModal, setShowAddIdeaModal] = useState(false);
   const [showEditIdeaModal, setShowEditIdeaModal] = useState(false);
@@ -29,6 +38,7 @@ const DreamTripDetails: React.FC = () => {
     category: 'places',
     subCategory: 'city'
   });
+  const [showCollaboratorModal, setShowCollaboratorModal] = useState(false);
 
   const subCategories: SubCategoryType = {
     transportation: 'flight',
@@ -203,6 +213,16 @@ const DreamTripDetails: React.FC = () => {
       navigate('/trips/dream');
     } catch (err) {
       console.error('Error deleting dream trip:', err);
+    }
+  };
+
+  const handleLeaveTrip = async () => {
+    if (!trip) return;
+    try {
+      await dreamTripService.leaveTrip(trip._id);
+      navigate('/trips/dream');
+    } catch (err) {
+      console.error('Error leaving dream trip:', err);
     }
   };
 
@@ -429,14 +449,38 @@ const DreamTripDetails: React.FC = () => {
         {/* Header */}
         <div className="bg-white shadow rounded-lg overflow-hidden mb-6">
           {trip.thumbnailUrl && (
-            <div className="aspect-w-16 aspect-h-9 relative">
+            <div className="h-[300px] relative">
               <img
                 src={trip.thumbnailUrl}
                 alt={trip.title}
                 className="object-cover w-full h-full"
               />
+              {/* Trip Title and Info */}
+              <div className="absolute top-4 left-4 z-20 space-y-2">
+                <h1 className="text-3xl font-bold text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)]">{trip.title}</h1>
+                <div className="flex flex-col space-y-1">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-600 text-white shadow-sm w-fit">
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                    Dream Trip
+                  </span>
+                  <span className="text-lg text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                    Target: {new Date(trip.targetDate.year, trip.targetDate.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                  </span>
+                </div>
+              </div>
               {/* Action Buttons */}
               <div className="absolute top-4 right-4 flex gap-2 z-20">
+                <button
+                  onClick={() => setShowCollaboratorModal(true)}
+                  className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
+                  title="Manage Collaborators"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </button>
                 <button
                   onClick={() => setShowAISuggestions(true)}
                   className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
@@ -455,86 +499,87 @@ const DreamTripDetails: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </button>
-                <button
-                  onClick={() => setShowDeleteModal(true)}
-                  className="p-2 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
-                  title="Delete trip"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="p-6">
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-bold text-gray-900">{trip.title}</h1>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
-                Dream Trip
-              </span>
-            </div>
-
-            {trip.description && (
-              <p className="mt-4 text-gray-600">{trip.description}</p>
-            )}
-
-            <div className="mt-6 flex items-center text-sm text-gray-500">
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Target: {new Date(trip.targetDate.year, trip.targetDate.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
-            </div>
-
-            {trip.tags && trip.tags.length > 0 && (
-              <div className="mt-6 flex flex-wrap gap-2">
-                {trip.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
+                {trip.owner._id === user?._id ? (
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="p-2 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
+                    title="Delete trip"
                   >
-                    {tag}
-                  </span>
-                ))}
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowLeaveModal(true)}
+                    className="p-2 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
+                    title="Leave trip"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Collaborators */}
-        {trip.collaborators.length > 0 && (
-          <div className="bg-white shadow rounded-lg p-6 mb-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Collaborators</h2>
-            <div className="flex -space-x-2">
-              {trip.collaborators.map((collaborator) => {
-                if (typeof collaborator === 'string') {
-                  return (
-                    <div key={collaborator} className="w-10 h-10 rounded-full bg-white border-2 border-purple-100 flex items-center justify-center">
-                      <span className="text-sm font-medium text-purple-600">?</span>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={collaborator.user._id} className="relative group">
+              {/* Collaborators */}
+              <div className="absolute bottom-4 right-4 flex -space-x-3 z-20">
+                {/* Owner Avatar */}
+                {trip.owner._id !== user?._id && (
+                  <div className="relative group">
                     <img
-                      src={collaborator.user.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(collaborator.user.name)}&background=random`}
-                      alt={collaborator.user.name}
-                      className="w-10 h-10 rounded-full border-2 border-white"
+                      src={trip.owner.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(trip.owner.name)}&background=ffffff`}
+                      alt={trip.owner.name}
+                      className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover"
                     />
                     <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block">
                       <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                        {collaborator.user.name}
+                        {trip.owner.name} • Owner
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                )}
+                {/* Collaborator Avatars */}
+                {trip.collaborators
+                  .filter(isCollaboratorObject)
+                  .filter(collaborator => collaborator.user._id !== user?._id)
+                  .map((collaborator) => (
+                    <div key={collaborator.user._id} className="relative group">
+                      <img
+                        src={collaborator.user.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(collaborator.user.name)}&background=ffffff`}
+                        alt={collaborator.user.name}
+                        className="w-12 h-12 rounded-full border-2 border-white shadow-md object-cover"
+                      />
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block">
+                        <div className="bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                          {collaborator.user.name} • {collaborator.role}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Content Section */}
+        <div className="bg-white shadow rounded-lg p-6">
+          {trip.description && (
+            <p className="text-gray-600">{trip.description}</p>
+          )}
+
+          {trip.tags && trip.tags.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-2">
+              {trip.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Idea Board */}
         <div className="bg-white shadow rounded-lg p-6">
@@ -631,7 +676,7 @@ const DreamTripDetails: React.FC = () => {
 
       {/* Add Idea Modal */}
       {showAddIdeaModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b">
               <h2 className="text-xl font-semibold">Add New Idea</h2>
@@ -981,6 +1026,45 @@ const DreamTripDetails: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Leave Trip Modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Leave Dream Trip</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to leave "{trip.title}"? You will lose access to this trip.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleLeaveTrip();
+                  setShowLeaveModal(false);
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+              >
+                Leave Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collaborator Management Modal */}
+      <CollaboratorManagementModal
+        trip={trip}
+        isOpen={showCollaboratorModal}
+        onClose={() => setShowCollaboratorModal(false)}
+        onUpdate={(updatedTrip) => {
+          setTrip(updatedTrip);
+        }}
+      />
     </div>
   );
 };

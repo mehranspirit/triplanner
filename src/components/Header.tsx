@@ -59,12 +59,6 @@ const Header: React.FC = () => {
                 Calendar
               </Link>
               <Link
-                to="/dream-trips"
-                className={getTabClassName('/dream-trips')}
-              >
-                Dream Trips
-              </Link>
-              <Link
                 to="/activity-log"
                 className={getTabClassName('/activity-log')}
               >
@@ -178,13 +172,6 @@ const Header: React.FC = () => {
             onClick={() => setIsMenuOpen(false)}
           >
             Calendar
-          </Link>
-          <Link
-            to="/dream-trips"
-            className={getMobileTabClassName('/dream-trips')}
-            onClick={() => setIsMenuOpen(false)}
-          >
-            Dream Trips
           </Link>
           <Link
             to="/activity-log"

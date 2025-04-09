@@ -15,9 +15,9 @@ interface IdeaBoardProps {
 type ColumnId = 'maybe' | 'interested' | 'must-do';
 
 interface Columns {
-  'maybe': TripIdeaType[];
-  'interested': TripIdeaType[];
   'must-do': TripIdeaType[];
+  'interested': TripIdeaType[];
+  'maybe': TripIdeaType[];
 }
 
 export const IdeaBoard: React.FC<IdeaBoardProps> = ({
@@ -28,17 +28,17 @@ export const IdeaBoard: React.FC<IdeaBoardProps> = ({
   tripId
 }) => {
   const [columns, setColumns] = useState<Columns>({
-    'maybe': ideas.filter(idea => idea.priority === 1),
+    'must-do': ideas.filter(idea => idea.priority === 3),
     'interested': ideas.filter(idea => idea.priority === 2),
-    'must-do': ideas.filter(idea => idea.priority === 3)
+    'maybe': ideas.filter(idea => idea.priority === 1)
   });
 
   // Update columns when ideas prop changes
   useEffect(() => {
     setColumns({
-      'maybe': ideas.filter(idea => idea.priority === 1),
+      'must-do': ideas.filter(idea => idea.priority === 3),
       'interested': ideas.filter(idea => idea.priority === 2),
-      'must-do': ideas.filter(idea => idea.priority === 3)
+      'maybe': ideas.filter(idea => idea.priority === 1)
     });
   }, [ideas]);
 
@@ -58,9 +58,9 @@ export const IdeaBoard: React.FC<IdeaBoardProps> = ({
 
       // Update local columns state
       setColumns({
-        'maybe': updatedIdeas.filter(idea => idea.priority === 1),
+        'must-do': updatedIdeas.filter(idea => idea.priority === 3),
         'interested': updatedIdeas.filter(idea => idea.priority === 2),
-        'must-do': updatedIdeas.filter(idea => idea.priority === 3)
+        'maybe': updatedIdeas.filter(idea => idea.priority === 1)
       });
     } catch (error) {
       console.error('Failed to update idea priority:', error);
