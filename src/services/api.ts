@@ -175,25 +175,27 @@ export const api: API = {
         email: trip.owner.email,
         photoUrl: trip.owner.photoUrl || null
       },
-      collaborators: (trip.collaborators || []).map((c: any) => {
-        if (!c) return null;
-        if (typeof c === 'string') return c;
-        
-        try {
-          return {
-            user: {
-              _id: c.user?._id || c.user?.id,
-              name: c.user?.name || 'Unknown User',
-              email: c.user?.email || '',
-              photoUrl: c.user?.photoUrl || null
-            },
-            role: c.role || c._doc?.role || 'viewer'
-          };
-        } catch (err) {
-          console.error('Error transforming collaborator:', err);
-          return null;
-        }
-      }).filter(Boolean), // Remove any null values
+      collaborators: Array.isArray(trip.collaborators) 
+        ? trip.collaborators.map((c: any) => {
+            if (!c) return null;
+            if (typeof c === 'string') return c;
+            
+            try {
+              return {
+                user: {
+                  _id: c.user?._id || c.user?.id || '',
+                  name: c.user?.name || 'Unknown User',
+                  email: c.user?.email || '',
+                  photoUrl: c.user?.photoUrl || null
+                },
+                role: c.role || c._doc?.role || 'viewer'
+              };
+            } catch (err) {
+              console.error('Error transforming collaborator:', err);
+              return null;
+            }
+          }).filter(Boolean)
+        : [],
       shareableLink: trip.shareableLink,
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt,
@@ -856,25 +858,27 @@ export const api: API = {
         email: trip.owner.email,
         photoUrl: trip.owner.photoUrl || null
       },
-      collaborators: (trip.collaborators || []).map((c: any) => {
-        if (!c) return null;
-        if (typeof c === 'string') return c;
-        
-        try {
-          return {
-            user: {
-              _id: c.user?._id || c.user?.id,
-              name: c.user?.name || 'Unknown User',
-              email: c.user?.email || '',
-              photoUrl: c.user?.photoUrl || null
-            },
-            role: c.role || c._doc?.role || 'viewer'
-          };
-        } catch (err) {
-          console.error('Error transforming collaborator:', err);
-          return null;
-        }
-      }).filter(Boolean), // Remove any null values
+      collaborators: Array.isArray(trip.collaborators) 
+        ? trip.collaborators.map((c: any) => {
+            if (!c) return null;
+            if (typeof c === 'string') return c;
+            
+            try {
+              return {
+                user: {
+                  _id: c.user?._id || c.user?.id || '',
+                  name: c.user?.name || 'Unknown User',
+                  email: c.user?.email || '',
+                  photoUrl: c.user?.photoUrl || null
+                },
+                role: c.role || c._doc?.role || 'viewer'
+              };
+            } catch (err) {
+              console.error('Error transforming collaborator:', err);
+              return null;
+            }
+          }).filter(Boolean)
+        : [],
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt,
       thumbnailUrl: trip.thumbnailUrl,
