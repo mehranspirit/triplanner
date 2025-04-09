@@ -159,18 +159,8 @@ export const api: API = {
     }
     const trip = await response.json();
     console.log('Raw trip data:', JSON.stringify(trip, null, 2));
-    console.log('Raw collaborators:', JSON.stringify(trip.collaborators, null, 2));
     
-    if (trip.collaborators && trip.collaborators.length > 0) {
-      console.log('Collaborator roles:', trip.collaborators.map((c: any) => ({
-        userId: c.user._id,
-        name: c.user.name,
-        role: c.role,
-        roleType: typeof c.role
-      })));
-    }
-    
-    // Transform the trip data
+    // Transform the trip data with proper type handling
     const transformedTrip: Trip = {
       _id: trip._id,
       name: trip.name,
@@ -185,22 +175,19 @@ export const api: API = {
         email: trip.owner.email,
         photoUrl: trip.owner.photoUrl || null
       },
-      collaborators: (trip.collaborators || []).map((c: { user: { _id?: string, id?: string, name: string, email: string, photoUrl?: string | null }, role: 'editor' | 'viewer', addedAt: string, _doc?: { role: 'editor' | 'viewer' } }) => {
-        console.log('Mapping collaborator:', {
-          userId: c.user._id,
-          name: c.user.name,
-          role: c._doc?.role || c.role,
-          roleType: typeof (c._doc?.role || c.role)
-        });
+      collaborators: (trip.collaborators || []).map((c: any) => {
+        // Ensure we always return a properly structured collaborator object
+        if (typeof c === 'string') {
+          return c;
+        }
         return {
           user: {
-            _id: c.user._id,
+            _id: c.user._id || c.user.id,
             name: c.user.name,
             email: c.user.email,
             photoUrl: c.user.photoUrl || null
           },
-          role: c._doc?.role || c.role,
-          addedAt: c.addedAt
+          role: c.role || c._doc?.role || 'viewer'
         };
       }),
       shareableLink: trip.shareableLink,
@@ -210,9 +197,7 @@ export const api: API = {
       status: trip.status || 'planning',
       tags: trip.tags || []
     };
-    
-    console.log('Transformed collaborators:', JSON.stringify(transformedTrip.collaborators, null, 2));
-    console.log('Transformed trip:', JSON.stringify(transformedTrip, null, 2));
+
     return transformedTrip;
   },
 
