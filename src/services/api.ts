@@ -48,7 +48,7 @@ interface API {
   updateSettlement: (tripId: string, settlementId: string, updates: Partial<Settlement>) => Promise<Settlement>;
   deleteSettlement: (tripId: string, settlementId: string) => Promise<void>;
   getExpenseSummary: (tripId: string) => Promise<ExpenseSummary>;
-  getDreamTrip: (id: string) => Promise<DreamTrip>;
+  getDreamTrip: (id: string | undefined) => Promise<DreamTrip>;
   addDreamTripCollaborator: (tripId: string, email: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
   removeDreamTripCollaborator: (tripId: string, userId: string) => Promise<DreamTrip>;
   updateDreamTripCollaboratorRole: (tripId: string, userId: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
@@ -176,20 +176,24 @@ export const api: API = {
         photoUrl: trip.owner.photoUrl || null
       },
       collaborators: (trip.collaborators || []).map((c: any) => {
-        // Ensure we always return a properly structured collaborator object
-        if (typeof c === 'string') {
-          return c;
+        if (!c) return null;
+        if (typeof c === 'string') return c;
+        
+        try {
+          return {
+            user: {
+              _id: c.user?._id || c.user?.id,
+              name: c.user?.name || 'Unknown User',
+              email: c.user?.email || '',
+              photoUrl: c.user?.photoUrl || null
+            },
+            role: c.role || c._doc?.role || 'viewer'
+          };
+        } catch (err) {
+          console.error('Error transforming collaborator:', err);
+          return null;
         }
-        return {
-          user: {
-            _id: c.user._id || c.user.id,
-            name: c.user.name,
-            email: c.user.email,
-            photoUrl: c.user.photoUrl || null
-          },
-          role: c.role || c._doc?.role || 'viewer'
-        };
-      }),
+      }).filter(Boolean), // Remove any null values
       shareableLink: trip.shareableLink,
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt,
@@ -826,16 +830,63 @@ export const api: API = {
   },
 
   // Dream Trip specific methods
-  getDreamTrip: async (id: string): Promise<DreamTrip> => {
-    if (!id) throw new Error('Dream Trip ID is required');
+  getDreamTrip: async (id: string | undefined): Promise<DreamTrip> => {
+    if (!id) throw new Error('Trip ID is required');
+    console.log('Fetching trip with ID:', id);
     const response = await fetch(`${API_URL}/api/trips/dream/${id}`, {
       headers: getHeaders(),
     });
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to fetch dream trip');
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch trip');
     }
-    return response.json();
+    const trip = await response.json();
+    console.log('Raw trip data:', JSON.stringify(trip, null, 2));
+    
+    // Transform the trip data with proper type handling
+    const transformedTrip: DreamTrip = {
+      _id: trip._id,
+      title: trip.title,
+      description: trip.description,
+      targetDate: trip.targetDate,
+      ideas: trip.ideas || [],
+      owner: {
+        _id: trip.owner._id,
+        name: trip.owner.name,
+        email: trip.owner.email,
+        photoUrl: trip.owner.photoUrl || null
+      },
+      collaborators: (trip.collaborators || []).map((c: any) => {
+        if (!c) return null;
+        if (typeof c === 'string') return c;
+        
+        try {
+          return {
+            user: {
+              _id: c.user?._id || c.user?.id,
+              name: c.user?.name || 'Unknown User',
+              email: c.user?.email || '',
+              photoUrl: c.user?.photoUrl || null
+            },
+            role: c.role || c._doc?.role || 'viewer'
+          };
+        } catch (err) {
+          console.error('Error transforming collaborator:', err);
+          return null;
+        }
+      }).filter(Boolean), // Remove any null values
+      createdAt: trip.createdAt,
+      updatedAt: trip.updatedAt,
+      thumbnailUrl: trip.thumbnailUrl,
+      isPublic: trip.isPublic,
+      tags: trip.tags || [],
+      location: trip.location,
+      notes: trip.notes,
+      settings: trip.settings,
+      shareableLink: trip.shareableLink
+    };
+
+    return transformedTrip;
   },
 
   addDreamTripCollaborator: async (tripId: string, email: string, role: 'editor' | 'viewer'): Promise<DreamTrip> => {

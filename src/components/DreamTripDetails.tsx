@@ -8,8 +8,9 @@ import { CollaboratorManagementModal } from './CollaboratorManagementModal';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 
-const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
-  return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
+const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' } | null | undefined): c is { user: User; role: 'viewer' | 'editor' } => {
+  return typeof c === 'object' && c !== null && 'user' in c && 'role' in c && 
+    typeof c.user === 'object' && c.user !== null && '_id' in c.user;
 };
 
 const DreamTripDetails: React.FC = () => {
@@ -413,6 +414,14 @@ const DreamTripDetails: React.FC = () => {
     }));
   };
 
+  const isEditor = trip?.collaborators?.some(c => {
+    if (!c) return false;
+    return isCollaboratorObject(c) && c.user._id === user?._id && c.role === 'editor';
+  }) ?? false;
+
+  const isOwner = trip?.owner?._id === user?._id;
+  const canEdit = isOwner || isEditor;
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -499,7 +508,7 @@ const DreamTripDetails: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </button>
-                {trip.owner._id === user?._id ? (
+                {canEdit ? (
                   <button
                     onClick={() => setShowDeleteModal(true)}
                     className="p-2 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
