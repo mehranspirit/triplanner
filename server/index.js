@@ -1,4 +1,20 @@
-require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
+
+const envPath = path.join(__dirname, '.env');
+console.log('Loading .env from:', envPath);
+console.log('File exists:', fs.existsSync(envPath));
+if (fs.existsSync(envPath)) {
+  console.log('File contents:', fs.readFileSync(envPath, 'utf8'));
+}
+
+require('dotenv').config({ path: envPath });
+
+// Log all environment variables
+console.log('All environment variables:', Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.includes('SECRET') && !key.includes('KEY'))
+));
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -10,8 +26,6 @@ const expenseRoutes = require('./routes/expenses');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
-const path = require('path');
-const fs = require('fs');
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { s3Client, uploadToS3, getS3Url, getKeyFromUrl } = require('./utils/s3Config');
 const checkS3Connectivity = require('./utils/ensureUploadsDir');
@@ -264,6 +278,7 @@ app.patch('/api/users/:userId/role', auth, async (req, res) => {
 });
 
 // Connect to MongoDB
+console.log('Attempting to connect with URI:', process.env.MONGODB_URI);
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
     console.log('Connected to MongoDB');
