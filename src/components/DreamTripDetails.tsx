@@ -8,6 +8,18 @@ import { CollaboratorManagementModal } from './CollaboratorManagementModal';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 
+// Predefined fallback images for ideas
+const FALLBACK_IMAGES = {
+  places: 'https://images.pexels.com/photos/466685/pexels-photo-466685.jpeg?auto=compress&cs=tinysrgb&w=800',
+  transportation: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+  accommodation: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=800',
+  activities: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+  'arts-culture': 'https://images.pexels.com/photos/699466/pexels-photo-699466.jpeg?auto=compress&cs=tinysrgb&w=800',
+  'food-drink': 'https://images.pexels.com/photos/1640774/pexels-photo-1640774.jpeg?auto=compress&cs=tinysrgb&w=800',
+  entertainment: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+  default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
+};
+
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' } | null | undefined): c is { user: User; role: 'viewer' | 'editor' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c && 
     typeof c.user === 'object' && c.user !== null && '_id' in c.user;
@@ -402,7 +414,9 @@ const DreamTripDetails: React.FC = () => {
     setNewIdea(prev => ({
       ...prev,
       category,
-      subCategory: subCategories[0]
+      subCategory: subCategories[0],
+      // Set a default image URL based on the category if no image is provided
+      images: prev.images.length === 0 ? [{ url: FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default, caption: '' }] : prev.images
     }));
   };
 
@@ -777,6 +791,24 @@ const DreamTripDetails: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Priority
+                    </label>
+                    <select
+                      value={newIdea.priority}
+                      onChange={(e) => setNewIdea(prev => ({
+                        ...prev,
+                        priority: Number(e.target.value) as 1 | 2 | 3
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value={1}>Maybe</option>
+                      <option value={2}>Interested</option>
+                      <option value={3}>Must Do</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Image URL
                     </label>
                     <input
@@ -784,10 +816,14 @@ const DreamTripDetails: React.FC = () => {
                       value={newIdea.images[0]?.url || ''}
                       onChange={(e) => setNewIdea(prev => ({
                         ...prev,
-                        images: [{ url: e.target.value, caption: '' }]
+                        images: [{ url: e.target.value || FALLBACK_IMAGES[prev.category] || FALLBACK_IMAGES.default, caption: prev.images[0]?.caption || '' }]
                       }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Enter image URL or leave blank for default"
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Leave blank to use a default image for this category
+                    </p>
                   </div>
 
                   <div>
@@ -955,10 +991,14 @@ const DreamTripDetails: React.FC = () => {
                       value={selectedIdea.images[0]?.url || ''}
                       onChange={(e) => setSelectedIdea(prev => prev ? {
                         ...prev,
-                        images: [{ url: e.target.value, caption: prev.images[0]?.caption || '' }]
+                        images: [{ url: e.target.value || FALLBACK_IMAGES[prev.category] || FALLBACK_IMAGES.default, caption: prev.images[0]?.caption || '' }]
                       } : null)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Enter image URL or leave blank for default"
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Leave blank to use a default image for this category
+                    </p>
                   </div>
 
                   <div>
