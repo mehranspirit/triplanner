@@ -31,11 +31,11 @@ const renderSplitDetails = (participant: ExpenseParticipant, expense: Expense) =
   if (expense.splitMethod === 'equal') {
     return `Equal split (1/${splitDetails.equal?.splitCount})`;
   } else if (expense.splitMethod === 'percentage') {
-    return `${splitDetails.percentage?.value}%`;
+    return `${splitDetails.percentage?.value.toFixed(2)}%`;
   } else if (expense.splitMethod === 'shares') {
     return `${splitDetails.shares?.value} out of ${splitDetails.shares?.totalShares} shares`;
   } else {
-    return `Custom amount: ${splitDetails.custom?.amount} ${expense.currency}`;
+    return `Custom amount: ${formatCurrency(splitDetails.custom?.amount || 0, expense.currency)}`;
   }
 };
 
@@ -133,7 +133,7 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
                           </span>
                         </div>
                         <span className="text-sm text-gray-500">
-                          {participant.share} {expense.currency}
+                          {formatCurrency(participant.share, expense.currency)}
                         </span>
                       </div>
                     ))}
