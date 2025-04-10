@@ -197,7 +197,7 @@ const getDefaultThumbnail = async (tripName: string): Promise<string> => {
 const TripDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { state, updateTrip, deleteTrip, leaveTrip, addEvent, updateEvent, deleteEvent } = useTrip();
+  const tripContext = useTrip();
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
@@ -715,7 +715,7 @@ const TripDetails: React.FC = () => {
     
     // Update the context state
     try {
-      await updateTrip(updatedTrip);
+      await tripContext.updateTrip(updatedTrip);
       console.log('Trip update complete');
     } catch (err) {
       console.error('Error updating trip in context:', err);
@@ -741,7 +741,7 @@ const TripDetails: React.FC = () => {
         userId: user?._id,
         collaborators: trip.collaborators
       });
-      await leaveTrip(trip._id);
+      await tripContext.leaveTrip(trip._id);
       console.log('Successfully left trip');
       navigate('/trips');
     } catch (err) {
@@ -1121,7 +1121,7 @@ const TripDetails: React.FC = () => {
         events: trip.events.map(e => e.id === eventId ? updatedEvent : e) 
       };
 
-      await updateTrip(updatedTrip);
+      await tripContext.updateTrip(updatedTrip);
       setTrip(updatedTrip);
     } catch (error) {
       console.error('Error updating event status:', error);
@@ -1153,7 +1153,7 @@ const TripDetails: React.FC = () => {
         updatedEvent.likes = updatedEvent.likes.filter(id => id !== user._id);
       }
 
-      await updateEvent(trip._id, updatedEvent);
+      await tripContext.updateEvent(trip._id, updatedEvent);
       
       // Update local trip state
       if (trip) {
@@ -1197,7 +1197,7 @@ const TripDetails: React.FC = () => {
     try {
       if (!trip?._id) return;
       
-      await deleteEvent(trip._id, eventId);
+      await tripContext.deleteEvent(trip._id, eventId);
       // Update local trip state by filtering out the deleted event
       setTrip(prevTrip => {
         if (!prevTrip) return null;
@@ -1293,7 +1293,7 @@ const TripDetails: React.FC = () => {
   const handleDeleteTrip = async () => {
     if (!trip?._id) return;
     try {
-      await deleteTrip(trip._id);
+      await tripContext.deleteTrip(trip._id);
       navigate('/trips');
     } catch (err) {
       console.error('Error deleting trip:', err);
@@ -1500,7 +1500,7 @@ const TripDetails: React.FC = () => {
           events: updatedEvents
         };
         
-        await updateTrip(updatedTrip);
+        await tripContext.updateTrip(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event updated successfully!' });
       } else {
@@ -1510,7 +1510,7 @@ const TripDetails: React.FC = () => {
           events: [...trip.events, newEvent]
         };
         
-        await updateTrip(updatedTrip);
+        await tripContext.updateTrip(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event added successfully!' });
       }
@@ -1563,7 +1563,7 @@ const TripDetails: React.FC = () => {
     }
 
     try {
-      await addEvent(trip._id, newEvent as Event);
+      await tripContext.addEvent(trip._id, newEvent as Event);
       setIsModalOpen(false);
       resetEventForm();
     } catch (error) {

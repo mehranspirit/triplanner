@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import * as React from 'react';
 import { Event } from '../types/eventTypes';
 
 interface EventContextType {
@@ -8,10 +8,10 @@ interface EventContextType {
   deleteEvent: (eventId: string) => void;
 }
 
-const EventContext = createContext<EventContextType | undefined>(undefined);
+const EventContext = React.createContext<EventContextType | undefined>(undefined);
 
 export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = React.useState<Event[]>([]);
 
   const addEvent = (event: Event) => {
     setEvents(prev => [...prev, event]);
@@ -33,7 +33,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 };
 
 export const useEvent = () => {
-  const context = useContext(EventContext);
+  const context = React.useContext(EventContext);
   if (context === undefined) {
     throw new Error('useEvent must be used within an EventProvider');
   }

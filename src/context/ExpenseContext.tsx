@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import * as React from 'react';
 import { api } from '../services/api';
 import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
 
@@ -19,17 +19,17 @@ interface ExpenseContextType {
   refreshData: (tripId: string) => Promise<void>;
 }
 
-const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
+const ExpenseContext = React.createContext<ExpenseContextType | undefined>(undefined);
 
 export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: string }> = ({ children, tripId }) => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [settlements, setSettlements] = useState<Settlement[]>([]);
-  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [expenses, setExpenses] = React.useState<Expense[]>([]);
+  const [settlements, setSettlements] = React.useState<Settlement[]>([]);
+  const [expenseSummary, setExpenseSummary] = React.useState<ExpenseSummary | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
   // Initialize data when mounted
-  useEffect(() => {
+  React.useEffect(() => {
     refreshData(tripId);
   }, [tripId]);
 
@@ -139,7 +139,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 };
 
 export const useExpense = () => {
-  const context = useContext(ExpenseContext);
+  const context = React.useContext(ExpenseContext);
   if (context === undefined) {
     throw new Error('useExpense must be used within an ExpenseProvider');
   }

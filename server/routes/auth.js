@@ -61,7 +61,7 @@ router.get('/google/callback',
       const token = jwt.sign(
         { userId: req.user._id },
         process.env.JWT_SECRET,
-        { expiresIn: '24h' }
+        { expiresIn: '30d' }
       );
 
       const frontendURL = process.env.NODE_ENV === 'production'
@@ -139,7 +139,7 @@ router.post('/register', upload.single('photo'), async (req, res) => {
     const user = new User(userData);
     await user.save();
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.status(201).json({ 
       user: { 
         _id: user._id, 
@@ -177,7 +177,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ 
       user: { 
         _id: user._id, 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import * as React from 'react';
 import { Trip, Event } from '@/types';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
@@ -31,7 +31,7 @@ interface TripContextType {
   deleteEvent: (tripId: string, eventId: string) => Promise<void>;
 }
 
-const TripContext = createContext<TripContextType | undefined>(undefined);
+const TripContext = React.createContext<TripContextType | undefined>(undefined);
 
 function tripReducer(state: TripState, action: TripAction): TripState {
   switch (action.type) {
@@ -112,8 +112,8 @@ function tripReducer(state: TripState, action: TripAction): TripState {
   }
 }
 
-export const TripProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(tripReducer, {
+export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [state, dispatch] = React.useReducer(tripReducer, {
     trips: [],
     loading: false,
     error: null,
@@ -121,7 +121,7 @@ export const TripProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const { user } = useAuth();
 
-  useEffect(() => {
+  React.useEffect(() => {
     const fetchTrips = async () => {
       // Only fetch trips if we have a logged-in user
       if (!user) {
@@ -270,7 +270,7 @@ export const TripProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 };
 
 export const useTrip = () => {
-  const context = useContext(TripContext);
+  const context = React.useContext(TripContext);
   if (context === undefined) {
     throw new Error('useTrip must be used within a TripProvider');
   }
