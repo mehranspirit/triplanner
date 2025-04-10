@@ -274,6 +274,7 @@ export const TripIdea: React.FC<TripIdeaProps> = ({
     
     return parts.map((part, index) => {
       if (part.match(urlPattern)) {
+        const displayUrl = part.length > 50 ? part.substring(0, 47) + '...' : part;
         return (
           <a
             key={index}
@@ -282,8 +283,9 @@ export const TripIdea: React.FC<TripIdeaProps> = ({
             rel="noopener noreferrer"
             onClick={handleLinkClick}
             className="text-blue-600 hover:text-blue-800 hover:underline"
+            title={part}
           >
-            {part}
+            {displayUrl}
           </a>
         );
       }

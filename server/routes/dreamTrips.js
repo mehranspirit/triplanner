@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const DreamTrip = require('../models/DreamTrip');
 const User = require('../models/User');
 const { logActivity } = require('../utils/activityLogger');
+const fetch = require('node-fetch');
 
 // Get all dream trips for the authenticated user
 router.get('/', auth, async (req, res) => {
@@ -239,9 +240,37 @@ router.post('/:id/ideas', auth, async (req, res) => {
       return res.status(403).json({ message: 'You do not have access to this dream trip' });
     }
 
+    // If no images provided, fetch from Pexels
+    let images = req.body.images || [];
+    if (images.length === 0) {
+      try {
+        const response = await fetch(
+          `https://api.pexels.com/v1/search?query=${encodeURIComponent(req.body.title)}&per_page=1&orientation=landscape`,
+          {
+            headers: {
+              'Authorization': process.env.PEXELS_API_KEY
+            }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.photos && data.photos.length > 0) {
+            images = [{
+              url: data.photos[0].src.large2x,
+              caption: `Image for ${req.body.title}`
+            }];
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch image from Pexels:', error);
+      }
+    }
+
     // Add the new idea
     const newIdea = {
       ...req.body,
+      images,
       createdBy: req.user._id,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -303,10 +332,38 @@ router.put('/:id/ideas/:ideaId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Idea not found' });
     }
 
+    // If title is being updated and no images provided, fetch from Pexels
+    let images = req.body.images || dreamTrip.ideas[ideaIndex].images;
+    if (req.body.title && (!images || images.length === 0)) {
+      try {
+        const response = await fetch(
+          `https://api.pexels.com/v1/search?query=${encodeURIComponent(req.body.title)}&per_page=1&orientation=landscape`,
+          {
+            headers: {
+              'Authorization': process.env.PEXELS_API_KEY
+            }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.photos && data.photos.length > 0) {
+            images = [{
+              url: data.photos[0].src.large2x,
+              caption: `Image for ${req.body.title}`
+            }];
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch image from Pexels:', error);
+      }
+    }
+
     // Update the idea
     const updatedIdea = {
       ...dreamTrip.ideas[ideaIndex].toObject(),
       ...req.body,
+      images,
       updatedAt: new Date()
     };
 
