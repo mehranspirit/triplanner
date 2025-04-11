@@ -191,14 +191,14 @@ app.use('/api/auth', authRoutes);
 // Mount activities routes
 app.use('/api/activities', activitiesRoutes);
 
-// Mount AI suggestions routes
+// Mount AI suggestions routes first to handle both regular and dream trips
 app.use('/api', aiSuggestionsRoutes);
+
+// Mount dream trips routes
+app.use('/api/trips/dream', dreamTripsRouter);
 
 // Mount expense routes
 app.use('/api', expenseRoutes);
-
-// Register routes
-app.use('/api/trips/dream', dreamTripsRouter);
 
 // Add role change endpoint directly in index.js
 app.patch('/api/users/:userId/role', auth, async (req, res) => {

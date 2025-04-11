@@ -5,6 +5,12 @@ interface AISuggestionRequest {
   endDate: string;
 }
 
+interface DreamTripSuggestionRequest {
+  places: string[];
+  activities: string[];
+  customPrompt: string;
+}
+
 export const generateAISuggestions = async (request: AISuggestionRequest): Promise<string> => {
   const prompt = `Generate travel suggestions for a trip from ${request.startDate} to ${request.endDate}.
 Places to visit: ${request.places.join(', ')}
@@ -67,5 +73,72 @@ Format the response in a clear, easy-to-read way with sections and bullet points
       throw error;
     }
     throw new Error('Failed to generate suggestions. Please try again later.');
+  }
+};
+
+export const generateDreamTripSuggestions = async (request: DreamTripSuggestionRequest): Promise<string> => {
+  const basePrompt = `Generate dream trip suggestions based on the following preferences:
+Places of interest: ${request.places.join(', ')}
+Activities of interest: ${request.activities.join(', ')}
+
+${request.customPrompt ? `Additional requirements: ${request.customPrompt}\n` : ''}
+Please provide detailed suggestions for a dream trip that would be perfect for these preferences. Include:
+1. Specific destinations and locations that match the interests
+2. Unique and memorable activities based on the preferences
+3. Best times to visit these places
+4. Special experiences or hidden gems
+5. Practical tips for planning this dream trip
+6. Estimated budget considerations
+7. How to make this trip extra special
+
+Format the response in a clear, easy-to-read way with sections and bullet points. Make it inspiring and exciting!`;
+
+  try {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}`,
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: "You are an inspiring travel assistant that helps people plan their dream trips. You provide creative, detailed, and well-structured suggestions that make travel dreams come true."
+          },
+          {
+            role: "user",
+            content: basePrompt
+          }
+        ],
+        temperature: 1.5, // Slightly higher temperature for more creative responses
+        top_p: 0.95,
+        max_tokens: 1500, // More tokens for detailed dream trip suggestions
+        stream: false
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API Error:', errorData);
+      throw new Error(errorData.error?.message || `Failed to generate dream trip suggestions: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('Raw API Response:', data);
+    
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format from API');
+    }
+    
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error('Error generating dream trip suggestions:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Failed to generate dream trip suggestions. Please try again later.');
   }
 }; 

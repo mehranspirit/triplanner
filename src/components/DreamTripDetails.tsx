@@ -7,6 +7,11 @@ import { IdeaBoard } from './IdeaBoard';
 import { CollaboratorManagementModal } from './CollaboratorManagementModal';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
+import { DreamTripAISuggestionsModal } from './DreamTripAISuggestionsModal';
+import { AISuggestionsDisplay } from './AISuggestionsDisplay';
+import { generateDreamTripSuggestions } from '../services/aiService';
+import { AISuggestionHistory } from '@/types/eventTypes';
+import { SparklesIcon, PencilIcon, TrashIcon, ArrowRightOnRectangleIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 
 // Predefined fallback images for ideas
 const FALLBACK_IMAGES = {
@@ -52,6 +57,9 @@ const DreamTripDetails: React.FC = () => {
     subCategory: 'city'
   });
   const [showCollaboratorModal, setShowCollaboratorModal] = useState(false);
+  const [isAISuggestionsModalOpen, setIsAISuggestionsModalOpen] = useState(false);
+  const [aiSuggestions, setAISuggestions] = useState<string | null>(null);
+  const [suggestionsHistory, setSuggestionsHistory] = useState<AISuggestionHistory[]>([]);
 
   const subCategories: SubCategoryType = {
     transportation: 'flight',
@@ -218,6 +226,12 @@ const DreamTripDetails: React.FC = () => {
 
     fetchTrip();
   }, [id]);
+
+  useEffect(() => {
+    if (trip?._id) {
+      loadHistory(trip._id);
+    }
+  }, [trip?._id]);
 
   const handleDelete = async () => {
     if (!trip) return;
@@ -436,6 +450,104 @@ const DreamTripDetails: React.FC = () => {
   const isOwner = trip?.owner?._id === user?._id;
   const canEdit = isOwner || isEditor;
 
+  const loadHistory = async (tripId: string) => {
+    if (!user?._id) {
+      console.log('Missing user ID:', { userId: user?._id });
+      return;
+    }
+
+    try {
+      console.log('Loading AI suggestions history for:', { tripId, userId: user._id });
+      const history = await dreamTripService.getAISuggestions(tripId, user._id);
+      console.log('Loaded AI suggestions history:', history);
+      setSuggestionsHistory(history);
+    } catch (error) {
+      console.error('Error loading AI suggestions history:', error);
+      setError('Failed to load AI suggestions history');
+    }
+  };
+
+  const handleAISuggestionsSubmit = async (places: string[], activities: string[], customPrompt: string) => {
+    if (!trip || !user) return;
+
+    try {
+      const suggestions = await generateDreamTripSuggestions({
+        places,
+        activities,
+        customPrompt,
+      });
+
+      // Save to history
+      const historyItem: Omit<AISuggestionHistory, '_id'> = {
+        userId: user._id,
+        tripId: trip._id,
+        places,
+        activities,
+        suggestions,
+        createdAt: new Date().toISOString(),
+      };
+
+      try {
+        const savedHistory = await dreamTripService.saveAISuggestion(historyItem);
+        setSuggestionsHistory(prev => [savedHistory, ...prev]);
+        setAISuggestions(suggestions);
+        setIsAISuggestionsModalOpen(false);
+      } catch (error) {
+        console.error('Error saving AI suggestion:', error);
+        // Still show the suggestions even if saving fails
+        setAISuggestions(suggestions);
+        setIsAISuggestionsModalOpen(false);
+      }
+    } catch (error) {
+      console.error('Error generating AI suggestions:', error);
+      setError('Failed to generate suggestions. Please try again later.');
+    }
+  };
+
+  const handleSelectHistoryItem = (suggestion: AISuggestionHistory) => {
+    setAISuggestions(suggestion.suggestions);
+    setIsAISuggestionsModalOpen(false);
+  };
+
+  const handleDeleteHistoryItem = async (suggestionId: string) => {
+    if (!trip?._id) {
+      console.error('Cannot delete suggestion - missing trip ID');
+      return;
+    }
+
+    try {
+      await dreamTripService.deleteAISuggestion(suggestionId);
+      setError('Suggestion deleted successfully');
+      await loadHistory(trip._id);
+    } catch (error) {
+      console.error('Error deleting suggestion:', error);
+      setError('Failed to delete suggestion');
+    }
+  };
+
+  const getCreatorInfo = (creatorId: string): User | undefined => {
+    if (!trip) return undefined;
+
+    // Check if it's the owner
+    if (trip.owner._id === creatorId) {
+      return trip.owner;
+    }
+
+    // Check collaborators
+    const collaborator = trip.collaborators.find(c => {
+      if (typeof c === 'string') {
+        return c === creatorId;
+      }
+      return c.user._id === creatorId;
+    });
+
+    if (collaborator && typeof collaborator !== 'string') {
+      return collaborator.user;
+    }
+
+    return undefined;
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -498,57 +610,52 @@ const DreamTripDetails: React.FC = () => {
                 {canEdit && (
                   <>
                     <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setShowEditForm(true);
-                      }}
-                      className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
-                      title="Edit trip"
+                      onClick={() => setIsAISuggestionsModalOpen(true)}
+                      className="p-2 text-gray-900 bg-white hover:bg-gray-50 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/50 shadow-md"
+                      title="Get AI Suggestions"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
+                      <SparklesIcon className="h-5 w-5" />
                     </button>
                     <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setShowCollaboratorModal(true);
-                      }}
-                      className="p-2 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
-                      title="Manage collaborators"
+                      onClick={() => setShowCollaboratorModal(true)}
+                      className="p-2 text-gray-900 bg-white hover:bg-gray-50 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/50 shadow-md"
+                      title="Manage Collaborators"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
+                      <UserGroupIcon className="h-5 w-5" />
                     </button>
+                    <button
+                      onClick={() => setShowEditForm(true)}
+                      className="p-2 text-gray-900 bg-white hover:bg-gray-50 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white/50 shadow-md"
+                      title="Edit Trip"
+                    >
+                      <PencilIcon className="h-5 w-5" />
+                    </button>
+                    {isOwner ? (
+                      <button
+                        onClick={() => setShowDeleteModal(true)}
+                        className="p-2 text-white bg-red-600 hover:bg-red-700 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-md"
+                        title="Delete Trip"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setShowLeaveModal(true)}
+                        className="p-2 text-white bg-red-600 hover:bg-red-700 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-md"
+                        title="Leave Trip"
+                      >
+                        <ArrowRightOnRectangleIcon className="h-5 w-5" />
+                      </button>
+                    )}
                   </>
                 )}
-                {isOwner && (
+                {!canEdit && (
                   <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setShowDeleteModal(true);
-                    }}
-                    className="p-2 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
-                    title="Delete trip"
+                    onClick={() => setShowLeaveModal(true)}
+                    className="p-2 text-white bg-red-600 hover:bg-red-700 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-md"
+                    title="Leave Trip"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-                {!isOwner && (
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setShowLeaveModal(true);
-                    }}
-                    className="p-2 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
-                    title="Leave trip"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
+                    <ArrowRightOnRectangleIcon className="h-5 w-5" />
                   </button>
                 )}
               </div>
@@ -680,25 +787,24 @@ const DreamTripDetails: React.FC = () => {
       )}
 
       {/* AI Suggestions Modal */}
-      {showAISuggestions && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">AI Travel Suggestions</h3>
-              <button
-                onClick={() => setShowAISuggestions(false)}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <p className="text-gray-600 mb-4">
-              AI suggestions feature coming soon! This will help you discover amazing places and activities for your dream trip.
-            </p>
-          </div>
-        </div>
+      {trip && (
+        <DreamTripAISuggestionsModal
+          isOpen={isAISuggestionsModalOpen}
+          onClose={() => setIsAISuggestionsModalOpen(false)}
+          onSubmit={handleAISuggestionsSubmit}
+          history={suggestionsHistory}
+          onSelectHistoryItem={handleSelectHistoryItem}
+          onDeleteHistoryItem={handleDeleteHistoryItem}
+          getCreatorInfo={getCreatorInfo}
+        />
+      )}
+
+      {/* AI Suggestions Display */}
+      {aiSuggestions && (
+        <AISuggestionsDisplay
+          suggestions={aiSuggestions}
+          onClose={() => setAISuggestions(null)}
+        />
       )}
 
       {/* Add Idea Modal */}
