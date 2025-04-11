@@ -517,8 +517,8 @@ const DreamTripDetails: React.FC = () => {
 
     try {
       await dreamTripService.deleteAISuggestion(suggestionId);
-      setError('Suggestion deleted successfully');
-      await loadHistory(trip._id);
+      // Update the suggestions history state locally
+      setSuggestionsHistory(prev => prev.filter(suggestion => suggestion._id !== suggestionId));
     } catch (error) {
       console.error('Error deleting suggestion:', error);
       setError('Failed to delete suggestion');
