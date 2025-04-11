@@ -3315,6 +3315,19 @@ const TripDetails: React.FC = () => {
   const handleEditEvent = (event: Event) => {
     setIsEditingEvent(event.id);
     setEventType(event.type);
+
+    // Set the airport and airline queries for arrival/departure events
+    if (event.type === 'arrival' || event.type === 'departure') {
+      const e = event as ArrivalDepartureEvent;
+      setAirportQuery(e.airport || '');
+      setAirlineQuery(e.airline || '');
+    } else if (event.type === 'flight') {
+      const e = event as FlightEvent;
+      setDepartureAirportQuery(e.departureAirport || '');
+      setArrivalAirportQuery(e.arrivalAirport || '');
+      setAirlineQuery(e.airline || '');
+    }
+
     setEventData({
       type: event.type,
       date: event.date,
