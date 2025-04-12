@@ -300,6 +300,16 @@ async function renderTemplate(templateName, data) {
  * @returns {string} - Formatted date string
  */
 function formatDate(date) {
+  // Ensure we're working with the date string directly to avoid timezone issues
+  if (typeof date === 'string') {
+    const [year, month, day] = date.split('T')[0].split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
   return date.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -314,6 +324,11 @@ function formatDate(date) {
  * @returns {string} - Formatted time string
  */
 function formatTime(date) {
+  // Ensure we're working with the date string directly to avoid timezone issues
+  if (typeof date === 'string') {
+    const [time] = date.split('T')[1].split('.');
+    return time;
+  }
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit'
@@ -342,8 +357,8 @@ function formatEventDetails(event) {
     case 'stay':
       details += `<p>${event.accommodationName || 'Accommodation'}</p>`;
       if (event.address) details += `<p><strong>Address:</strong> ${event.address}</p>`;
-      if (event.checkIn) details += `<p><strong>Check-in:</strong> ${formatDate(new Date(event.checkIn))}</p>`;
-      if (event.checkOut) details += `<p><strong>Check-out:</strong> ${formatDate(new Date(event.checkOut))}</p>`;
+      if (event.checkIn) details += `<p><strong>Check-in:</strong> ${formatDate(event.checkIn)}</p>`;
+      if (event.checkOut) details += `<p><strong>Check-out:</strong> ${formatDate(event.checkOut)}</p>`;
       if (event.reservationNumber) details += `<p><strong>Reservation:</strong> ${event.reservationNumber}</p>`;
       if (event.contactInfo) details += `<p><strong>Contact:</strong> ${event.contactInfo}</p>`;
       break;

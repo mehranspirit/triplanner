@@ -881,6 +881,17 @@ const TripDetails: React.FC = () => {
       eventsByDate[dateString].push(event);
     });
 
+    const formatDateForExport = (dateString: string) => {
+      const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    };
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -972,16 +983,9 @@ const TripDetails: React.FC = () => {
           </h1>
           ${Object.entries(eventsByDate)
             .map(([dateString, events]) => {
-              const [year, month, day] = dateString.split('-').map(Number);
-              const date = new Date(year, month - 1, day);
               return `
                 <div class="date-header">
-                  ${date.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
+                  ${formatDateForExport(dateString)}
                 </div>
                 ${events.map(event => `
                   <div class="event-card">
@@ -1011,8 +1015,8 @@ const TripDetails: React.FC = () => {
                             <div class="event-details">
                               ${e.accommodationName ? `<div>Accommodation: ${e.accommodationName}</div>` : ''}
                               ${e.address ? `<div>Address: ${e.address}</div>` : ''}
-                              ${e.checkIn ? `<div>Check-in: ${new Date(e.checkIn).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
-                              ${e.checkOut ? `<div>Check-out: ${new Date(e.checkOut).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
+                              ${e.checkIn ? `<div>Check-in: ${formatDateForExport(e.checkIn)}</div>` : ''}
+                              ${e.checkOut ? `<div>Check-out: ${formatDateForExport(e.checkOut)}</div>` : ''}
                               ${e.reservationNumber ? `<div>Reservation: ${e.reservationNumber}</div>` : ''}
                               ${e.contactInfo ? `<div>Contact: ${e.contactInfo}</div>` : ''}
                             </div>
