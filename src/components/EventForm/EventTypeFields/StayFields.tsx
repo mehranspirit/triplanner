@@ -27,8 +27,9 @@ const StayFields: React.FC<StayFieldsProps> = ({ eventData, onChange }) => {
           type="date"
           value={eventData.date?.split('T')[0] || ''}
           onChange={(e) => {
-            onChange<StayEvent>('date', e.target.value);
-            onChange<StayEvent>('checkIn' as keyof StayEvent, e.target.value);
+            const value = e.target.value;
+            onChange<StayEvent>('date', value);
+            onChange<StayEvent>('checkIn' as keyof StayEvent, value);
           }}
           className="input"
           required

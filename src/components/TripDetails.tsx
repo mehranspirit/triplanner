@@ -1011,8 +1011,8 @@ const TripDetails: React.FC = () => {
                             <div class="event-details">
                               ${e.accommodationName ? `<div>Accommodation: ${e.accommodationName}</div>` : ''}
                               ${e.address ? `<div>Address: ${e.address}</div>` : ''}
-                              ${e.checkIn ? `<div>Check-in: ${e.checkIn}</div>` : ''}
-                              ${e.checkOut ? `<div>Check-out: ${e.checkOut}</div>` : ''}
+                              ${e.checkIn ? `<div>Check-in: ${new Date(e.checkIn).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
+                              ${e.checkOut ? `<div>Check-out: ${new Date(e.checkOut).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
                               ${e.reservationNumber ? `<div>Reservation: ${e.reservationNumber}</div>` : ''}
                               ${e.contactInfo ? `<div>Contact: ${e.contactInfo}</div>` : ''}
                             </div>
@@ -1402,7 +1402,7 @@ const TripDetails: React.FC = () => {
           ...baseEvent,
           accommodationName: eventData.accommodationName || '',
           address: eventData.address || '',
-          checkIn: eventData.checkIn || '',
+          checkIn: eventData.date,
           checkOut: eventData.checkOut || '',
           reservationNumber: eventData.reservationNumber || '',
           contactInfo: eventData.contactInfo || '',
@@ -2788,7 +2788,7 @@ const TripDetails: React.FC = () => {
           const stayEvent = event as StayEvent;
           return (
             <div className="text-sm text-gray-600">
-              <p>Check-in: {stayEvent.checkIn || stayEvent.date}</p>
+              <p>Check-in: {stayEvent.date}</p>
               {stayEvent.checkOut && <p>Check-out: {stayEvent.checkOut}</p>}
               {stayEvent.address && <p>Address: {stayEvent.address}</p>}
             </div>
@@ -2900,7 +2900,7 @@ const TripDetails: React.FC = () => {
                 {stayEvent.accommodationName}
               </p>
               <p className="text-xs text-gray-500">
-                Check-in: {stayEvent.checkIn || stayEvent.date}
+                Check-in: {stayEvent.date}
               </p>
               {stayEvent.checkOut && (
                 <p className="text-xs text-gray-500">
@@ -3896,7 +3896,7 @@ const TripDetails: React.FC = () => {
                                             const e = event as StayEvent;
                                         return (
                                               <div className="mt-2 space-y-1 text-sm text-gray-600">
-                                                <p>Check-in: {e.checkIn}</p>
+                                                <p>Check-in: {e.date}</p>
                                                 {e.checkOut && <p>Check-out: {e.checkOut}</p>}
                                                 {e.address && <p>Address: {e.address}</p>}
                                               </div>
