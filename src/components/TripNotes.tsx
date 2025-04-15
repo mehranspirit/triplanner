@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -7,6 +7,7 @@ import { api, TripNote } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Avatar from './Avatar';
 import { debounce } from 'lodash';
+import { UserHighlight } from '../extensions/UserHighlight';
 import '../styles/TripNotes.css';
 
 interface TripNotesProps {
@@ -14,11 +15,20 @@ interface TripNotesProps {
   canEdit: boolean;
 }
 
-interface MenuBarProps {
-  editor: Editor;
-}
+// Generate a pastel color based on user ID
+const generateUserColor = (userId: string) => {
+  // Generate a hash from the user ID
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
 
-const MenuBar: React.FC<MenuBarProps> = ({ editor }) => {
+  // Generate pastel color
+  const hue = hash % 360;
+  return `hsla(${hue}, 70%, 85%, 0.5)`;
+};
+
+const MenuBar = ({ editor }: { editor: any }) => {
   if (!editor) {
     return null;
   }
@@ -110,11 +120,22 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
       TaskList,
       TaskItem.configure({
         nested: true
+      }),
+      UserHighlight.configure({
+        user: user ? {
+          _id: user._id,
+          name: user.name,
+          photoUrl: user.photoUrl || undefined
+        } : null
       })
     ],
     content: note?.content || '',
     editable: canEdit,
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
+      // Only highlight text if it's a content change (not a selection change)
+      if (transaction.docChanged && user) {
+        editor.commands.setUserHighlight();
+      }
       const content = editor.getHTML();
       debouncedUpdateNotes(content);
     },
@@ -174,86 +195,22 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden">
       {canEdit && editor && (
-        <div className="flex-none border-b border-gray-200">
-          <div className="p-2 overflow-x-auto whitespace-nowrap">
-            <div className="flex gap-1 min-w-max">
-              <button
-                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 1 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                h1
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                h2
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 3 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                h3
-              </button>
-              <div className="w-px h-6 bg-gray-200 mx-1" />
-              <button
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                className={`px-2 py-1 rounded ${editor.isActive('bold') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                <strong>B</strong>
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                className={`px-2 py-1 rounded ${editor.isActive('italic') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                <em>I</em>
-              </button>
-              <div className="w-px h-6 bg-gray-200 mx-1" />
-              <button
-                onClick={() => editor.chain().focus().toggleBulletList().run()}
-                className={`px-2 py-1 rounded ${editor.isActive('bulletList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                • List
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                className={`px-2 py-1 rounded ${editor.isActive('orderedList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                1. List
-              </button>
-              <button
-                onClick={() => editor.chain().focus().toggleTaskList().run()}
-                className={`px-2 py-1 rounded ${editor.isActive('taskList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                ☐ Tasks
-              </button>
-              <div className="w-px h-6 bg-gray-200 mx-1" />
-              <button
-                onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                className={`px-2 py-1 rounded ${editor.isActive('blockquote') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-              >
-                Quote
-              </button>
-              <button
-                onClick={() => editor.chain().focus().setHorizontalRule().run()}
-                className="px-2 py-1 rounded hover:bg-gray-100"
-              >
-                Line
-              </button>
-            </div>
-          </div>
+        <div className="flex-none">
+          <MenuBar editor={editor} />
         </div>
       )}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="p-4">
-          <EditorContent editor={editor} className="prose max-w-none" />
+      <div className="flex-1 overflow-y-auto min-h-0 relative">
+        <div className="absolute inset-0">
+          <div className="h-full p-4">
+            <EditorContent editor={editor} className="prose max-w-none" />
+          </div>
         </div>
       </div>
       
       {note?.lastEditedBy && (
-        <div className="flex-none border-t border-gray-200 p-4 flex items-center space-x-2 text-sm text-gray-500">
+        <div className="flex-none border-t border-gray-200 p-4 flex items-center space-x-2 text-sm text-gray-500 bg-white">
           <Avatar
             photoUrl={note.lastEditedBy.photoUrl}
             name={note.lastEditedBy.name}

@@ -4070,24 +4070,23 @@ const TripDetails: React.FC = () => {
           <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
             <div className="px-4 py-5 sm:px-6 flex-shrink-0">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium text-gray-900">Trip Details</h3>
-                <div className="flex space-x-2">
+                <div className="flex w-full">
                   <button
                     onClick={() => setActiveTab('map')}
-                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                    className={`flex-1 py-2 text-base font-medium border-b-2 ${
                       activeTab === 'map'
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'border-indigo-500 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     Map
                   </button>
                   <button
                     onClick={() => setActiveTab('notes')}
-                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                    className={`flex-1 py-2 text-base font-medium border-b-2 ${
                       activeTab === 'notes'
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'border-indigo-500 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
                     Notes
@@ -4095,7 +4094,7 @@ const TripDetails: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="border-t border-gray-200 flex-1">
+            <div className="flex-1">
               <div className="h-full">
                 {activeTab === 'map' && mapTripData && <TripMap trip={mapTripData} />}
                 {activeTab === 'notes' && trip && (

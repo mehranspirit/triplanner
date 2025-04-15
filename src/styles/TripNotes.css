@@ -31,6 +31,69 @@
   background-color: rgba(0, 0, 0, 0.3);
 }
 
+/* User highlight styles */
+.ProseMirror span[data-user-highlight] {
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Tooltip with avatar */
+.ProseMirror span[data-user-highlight]::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: calc(50% - 57px);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid white;
+  background-color: #666;
+  z-index: 101;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='white' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M12 14c-6.1 0-8 4-8 4v2h16v-2s-1.9-4-8-4z'/%3E%3C/svg%3E");
+  clip-path: circle(50%);
+  transform: translate(16px, -6px);
+  box-sizing: border-box;
+}
+
+.ProseMirror span[data-user-highlight]::after {
+  content: attr(data-user-name);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: max-content;
+  background-color: rgba(51, 51, 51, 0.85);
+  color: white;
+  padding: 10px 14px 10px 44px;
+  border-radius: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  pointer-events: none;
+}
+
+/* User photo */
+.ProseMirror span[data-user-highlight][data-user-photo]::before {
+  background-image: var(--avatar-url);
+}
+
+/* Show tooltip and avatar on hover */
+.ProseMirror span[data-user-highlight]:hover::before,
+.ProseMirror span[data-user-highlight]:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* List styles */
 .ProseMirror ul,
 .ProseMirror ol {
