@@ -207,14 +207,11 @@ const TripDetails: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'map' | 'notes'>('map');
   
-  // Wrap the useTrip hook in a try-catch to handle initialization errors
-  let tripContext: TripContextType | undefined;
-  try {
-    tripContext = useTrip();
-  } catch (err) {
-    console.warn('TripContext not yet initialized, will retry...');
-  }
-
+  // Call useTrip at the top level, but handle potential errors in the effect
+  const tripContext = useTrip();
+  
+  // Remove the try-catch block around useTrip and handle errors where the context is used
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLeaveWarningOpen, setIsLeaveWarningOpen] = useState(false);
   const [isDeleteWarningOpen, setIsDeleteWarningOpen] = useState(false);
@@ -727,14 +724,9 @@ const TripDetails: React.FC = () => {
       // Update the local state with the full new trip
       setTrip(tripCopy);
       
-      // Only update the context if it's available
-      if (tripContext) {
-        await tripContext.updateTrip(updatedTrip);
-        console.log('Trip update complete');
-      } else {
-        // If context is not available, use the API directly
-        await api.updateTrip(updatedTrip);
-      }
+      // Use the API directly since we're handling errors here
+      await api.updateTrip(updatedTrip);
+      console.log('Trip update complete');
     } catch (err) {
       console.error('Error updating trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to update trip');
@@ -755,11 +747,7 @@ const TripDetails: React.FC = () => {
     }
 
     try {
-      if (tripContext) {
-        await tripContext.leaveTrip(trip._id);
-      } else {
-        await api.leaveTrip(trip._id);
-      }
+      await api.leaveTrip(trip._id);
       navigate('/trips');
     } catch (err) {
       console.error('Error leaving trip:', err);
@@ -1317,11 +1305,7 @@ const TripDetails: React.FC = () => {
   const handleDeleteTrip = async () => {
     if (!trip?._id) return;
     try {
-      if (tripContext) {
-        await tripContext.deleteTrip(trip._id);
-      } else {
-        await api.deleteTrip(trip._id);
-      }
+      await api.deleteTrip(trip._id);
       navigate('/trips');
     } catch (err) {
       console.error('Error deleting trip:', err);
