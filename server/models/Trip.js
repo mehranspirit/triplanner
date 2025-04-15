@@ -95,6 +95,48 @@ const eventSchema = new mongoose.Schema({
   }
 });
 
+const noteEditSchema = new mongoose.Schema({
+  content: {
+    type: String,
+    required: true
+  },
+  user: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    name: String,
+    email: String,
+    photoUrl: String
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const tripNoteSchema = new mongoose.Schema({
+  content: {
+    type: String,
+    default: ''
+  },
+  edits: [noteEditSchema],
+  lastEditedBy: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    name: String,
+    email: String,
+    photoUrl: String
+  },
+  lastEditedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { timestamps: true });
+
 const tripSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -102,7 +144,7 @@ const tripSchema = new mongoose.Schema({
   },
   thumbnailUrl: String,
   description: String,
-  notes: String,
+  note: tripNoteSchema,
   events: [eventSchema],
   owner: {
     type: mongoose.Schema.Types.ObjectId,

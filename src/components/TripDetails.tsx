@@ -33,6 +33,10 @@ import { TrashIcon } from '@heroicons/react/24/solid';
 import { UserGroupIcon } from '@heroicons/react/24/solid';
 import { ShareIcon } from '@heroicons/react/24/solid';
 import { ArrowDownTrayIcon } from '@heroicons/react/24/solid';
+import TripNotes from './TripNotes';
+
+// Import the TripContextType
+import type { TripContextType } from '../context/TripContext';
 
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
@@ -197,11 +201,20 @@ const getDefaultThumbnail = async (tripName: string): Promise<string> => {
 const TripDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const tripContext = useTrip();
   const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'map' | 'notes'>('map');
+  
+  // Wrap the useTrip hook in a try-catch to handle initialization errors
+  let tripContext: TripContextType | undefined;
+  try {
+    tripContext = useTrip();
+  } catch (err) {
+    console.warn('TripContext not yet initialized, will retry...');
+  }
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLeaveWarningOpen, setIsLeaveWarningOpen] = useState(false);
   const [isDeleteWarningOpen, setIsDeleteWarningOpen] = useState(false);
@@ -616,17 +629,37 @@ const TripDetails: React.FC = () => {
       await loadHistory(id);
     } catch (error) {
       console.error('Error fetching trip:', error);
-      setError('Failed to load trip details');
+      setError(error instanceof Error ? error.message : 'Failed to load trip details');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (id && user?._id) {
-      fetchTrip();
-    }
-  }, [id, user?._id]);
+    const fetchTrip = async () => {
+      if (!id) return;
+
+      try {
+        setLoading(true);
+        // Check if we're on a dream trip URL
+        if (window.location.pathname.includes('/trips/dream/')) {
+          navigate(`/trips/dream/${id}`);
+          return;
+        }
+
+        const tripData = await api.getTrip(id);
+        setTrip(tripData);
+        // ... rest of the fetchTrip function ...
+      } catch (error) {
+        console.error('Error fetching trip:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load trip details');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrip();
+  }, [id, navigate]);
 
   useEffect(() => {
     const loadThumbnail = async () => {
@@ -688,41 +721,27 @@ const TripDetails: React.FC = () => {
   const handleTripUpdate = async (updatedTrip: Trip) => {
     console.log('Updating trip with new data:', updatedTrip);
     
-    // Check if only collaborators have changed
-    const onlyCollaboratorsChanged = 
-      trip && 
-      trip._id === updatedTrip._id &&
-      trip.name === updatedTrip.name &&
-      trip.events.length === updatedTrip.events.length &&
-      JSON.stringify(trip.events) === JSON.stringify(updatedTrip.events);
-    
-    if (onlyCollaboratorsChanged) {
-      console.log('Only collaborators changed, updating just collaborator data');
-      // Update only the collaborators without replacing the entire trip object
-      setTrip(prevTrip => {
-        if (!prevTrip) return updatedTrip;
-        return {
-          ...prevTrip,
-          collaborators: updatedTrip.collaborators
-        };
-      });
-    } else {
+    try {
       // Create a deep copy of the updated trip to avoid reference issues
       const tripCopy = JSON.parse(JSON.stringify(updatedTrip)) as Trip;
       // Update the local state with the full new trip
       setTrip(tripCopy);
-    }
-    
-    // Update the context state
-    try {
-      await tripContext.updateTrip(updatedTrip);
-      console.log('Trip update complete');
+      
+      // Only update the context if it's available
+      if (tripContext) {
+        await tripContext.updateTrip(updatedTrip);
+        console.log('Trip update complete');
+      } else {
+        // If context is not available, use the API directly
+        await api.updateTrip(updatedTrip);
+      }
     } catch (err) {
-      console.error('Error updating trip in context:', err);
-      // If context update fails, fetch the latest trip data from the server
+      console.error('Error updating trip:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update trip');
+      // If update fails, fetch the latest trip data from the server
       try {
         const latestTrip = await api.getTrip(updatedTrip._id || id || '');
-        setTrip(latestTrip as Trip);
+        setTrip(latestTrip);
       } catch (fetchErr) {
         console.error('Failed to fetch latest trip data after error:', fetchErr);
       }
@@ -736,13 +755,11 @@ const TripDetails: React.FC = () => {
     }
 
     try {
-      console.log('Attempting to leave trip:', {
-        tripId: trip._id,
-        userId: user?._id,
-        collaborators: trip.collaborators
-      });
-      await tripContext.leaveTrip(trip._id);
-      console.log('Successfully left trip');
+      if (tripContext) {
+        await tripContext.leaveTrip(trip._id);
+      } else {
+        await api.leaveTrip(trip._id);
+      }
       navigate('/trips');
     } catch (err) {
       console.error('Error leaving trip:', err);
@@ -1125,8 +1142,7 @@ const TripDetails: React.FC = () => {
         events: trip.events.map(e => e.id === eventId ? updatedEvent : e) 
       };
 
-      await tripContext.updateTrip(updatedTrip);
-      setTrip(updatedTrip);
+      await handleTripUpdate(updatedTrip);
     } catch (error) {
       console.error('Error updating event status:', error);
       setError('Failed to update event status');
@@ -1157,15 +1173,12 @@ const TripDetails: React.FC = () => {
         updatedEvent.likes = updatedEvent.likes.filter(id => id !== user._id);
       }
 
-      await tripContext.updateEvent(trip._id, updatedEvent);
-      
-      // Update local trip state
-      if (trip) {
-        const updatedEvents = trip.events.map(e => 
-          e.id === eventId ? updatedEvent : e
-        );
-        setTrip({ ...trip, events: updatedEvents });
-      }
+      const updatedTrip = {
+        ...trip,
+        events: trip.events.map(e => e.id === eventId ? updatedEvent : e)
+      };
+
+      await handleTripUpdate(updatedTrip);
     } catch (error) {
       console.error('Error updating vote:', error);
       setError('Failed to update vote');
@@ -1198,22 +1211,29 @@ const TripDetails: React.FC = () => {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
+    if (!trip?._id) return;
+    
     try {
-      if (!trip?._id) return;
-      
-      await tripContext.deleteEvent(trip._id, eventId);
+      if (tripContext) {
+        await tripContext.deleteEvent(trip._id, eventId);
+      } else {
+        const updatedTrip = {
+          ...trip,
+          events: trip.events.filter(e => e.id !== eventId)
+        };
+        await api.updateTrip(updatedTrip);
+      }
       // Update local trip state by filtering out the deleted event
       setTrip(prevTrip => {
         if (!prevTrip) return null;
         return {
           ...prevTrip,
-          events: prevTrip.events.filter(event => event.id !== eventId)
+          events: prevTrip.events.filter(e => e.id !== eventId)
         };
       });
-      setIsDeleteEventWarningOpen(false);
-      setEventToDelete(null);
     } catch (error) {
       console.error('Error deleting event:', error);
+      setError('Failed to delete event');
     }
   };
 
@@ -1297,7 +1317,11 @@ const TripDetails: React.FC = () => {
   const handleDeleteTrip = async () => {
     if (!trip?._id) return;
     try {
-      await tripContext.deleteTrip(trip._id);
+      if (tripContext) {
+        await tripContext.deleteTrip(trip._id);
+      } else {
+        await api.deleteTrip(trip._id);
+      }
       navigate('/trips');
     } catch (err) {
       console.error('Error deleting trip:', err);
@@ -1504,7 +1528,7 @@ const TripDetails: React.FC = () => {
           events: updatedEvents
         };
         
-        await tripContext.updateTrip(updatedTrip);
+        await handleTripUpdate(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event updated successfully!' });
       } else {
@@ -1514,7 +1538,7 @@ const TripDetails: React.FC = () => {
           events: [...trip.events, newEvent]
         };
         
-        await tripContext.updateTrip(updatedTrip);
+        await handleTripUpdate(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event added successfully!' });
       }
@@ -1532,42 +1556,19 @@ const TripDetails: React.FC = () => {
     }
   };
 
-  const handleAddEvent = async () => {
-    if (!trip) return;
-
-    const newEvent = {
-      id: uuidv4(),
-      type: eventType as EventType,
-      date: eventData.date,
-      notes: eventData.notes,
-      thumbnailUrl: eventData.thumbnailUrl,
-      status: eventData.status,
-      source: eventData.source,
-      createdBy: {
-        _id: user?._id || '',
-        name: user?.name || '',
-        email: user?.email || '',
-        photoUrl: user?.photoUrl || ''
-      },
-      updatedBy: {
-        _id: user?._id || '',
-        name: user?.name || '',
-        email: user?.email || '',
-        photoUrl: user?.photoUrl || ''
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      likes: [],
-      dislikes: []
-    };
-
-    // If no thumbnail URL is provided, fetch one based on the place name
-    if (!eventData.thumbnailUrl) {
-      newEvent.thumbnailUrl = await getEventThumbnail(newEvent as Event);
-    }
+  const handleAddEvent = async (newEvent: Event) => {
+    if (!trip?._id) return;
 
     try {
-      await tripContext.addEvent(trip._id, newEvent as Event);
+      if (tripContext) {
+        await tripContext.addEvent(trip._id, newEvent);
+      } else {
+        const updatedTrip = {
+          ...trip,
+          events: [...trip.events, newEvent]
+        };
+        await api.updateTrip(updatedTrip);
+      }
       setIsModalOpen(false);
       resetEventForm();
     } catch (error) {
@@ -4068,11 +4069,43 @@ const TripDetails: React.FC = () => {
           {/* Map view */}
           <div className="bg-white shadow rounded-none md:rounded-lg h-[700px] flex flex-col" style={{ zIndex: 0 }}>
             <div className="px-4 py-5 sm:px-6 flex-shrink-0">
-              <h3 className="text-lg font-medium text-gray-900">Trip Map</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">Trip Details</h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setActiveTab('map')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                      activeTab === 'map'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Map
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('notes')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                      activeTab === 'notes'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Notes
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="border-t border-gray-200 flex-1">
               <div className="h-full">
-                {mapTripData && <TripMap trip={mapTripData} />}
+                {activeTab === 'map' && mapTripData && <TripMap trip={mapTripData} />}
+                {activeTab === 'notes' && trip && (
+                  <TripNotes
+                    tripId={trip._id}
+                    canEdit={trip.owner._id === user?._id || trip.collaborators.some(c => 
+                      typeof c === 'object' && c.role === 'editor' && c.user._id === user?._id
+                    )}
+                  />
+                )}
               </div>
             </div>
           </div>

@@ -20,7 +20,7 @@ type TripAction =
   | { type: 'UPDATE_EVENT'; payload: { tripId: string; event: Event } }
   | { type: 'DELETE_EVENT'; payload: { tripId: string; eventId: string } };
 
-interface TripContextType {
+export interface TripContextType {
   state: TripState;
   addTrip: (trip: Trip) => Promise<void>;
   updateTrip: (trip: Trip) => Promise<void>;

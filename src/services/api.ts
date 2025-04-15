@@ -12,6 +12,27 @@ const isCollaboratorObject = (c: Collaborator): c is { user: User; role: 'editor
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
 };
 
+export interface TripNote {
+  content: string;
+  edits: {
+    content: string;
+    user: {
+      _id: string;
+      name: string;
+      email: string;
+      photoUrl: string | null;
+    };
+    timestamp: string;
+  }[];
+  lastEditedBy: {
+    _id: string;
+    name: string;
+    email: string;
+    photoUrl: string | null;
+  };
+  lastEditedAt: string;
+}
+
 interface API {
   getUsers: () => Promise<User[]>;
   changeUserRole: (userId: string, isAdmin: boolean) => Promise<User>;
@@ -52,6 +73,8 @@ interface API {
   addDreamTripCollaborator: (tripId: string, email: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
   removeDreamTripCollaborator: (tripId: string, userId: string) => Promise<DreamTrip>;
   updateDreamTripCollaboratorRole: (tripId: string, userId: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
+  getTripNotes: (tripId: string) => Promise<TripNote>;
+  updateTripNotes: (tripId: string, content: string) => Promise<TripNote>;
 }
 
 export const api: API = {
@@ -930,6 +953,32 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to update collaborator role');
+    }
+    return response.json();
+  },
+
+  getTripNotes: async (tripId: string): Promise<TripNote> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/notes`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch trip notes');
+    }
+    return response.json();
+  },
+
+  updateTripNotes: async (tripId: string, content: string): Promise<TripNote> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/notes`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to update trip notes');
     }
     return response.json();
   },

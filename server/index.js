@@ -23,6 +23,7 @@ const authRoutes = require('./routes/auth');
 const activitiesRoutes = require('./routes/activities');
 const aiSuggestionsRoutes = require('./routes/aiSuggestions');
 const expenseRoutes = require('./routes/expenses');
+const notesRoutes = require('./routes/notes');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
@@ -194,11 +195,14 @@ app.use('/api/activities', activitiesRoutes);
 // Mount AI suggestions routes first to handle both regular and dream trips
 app.use('/api', aiSuggestionsRoutes);
 
-// Mount dream trips routes
-app.use('/api/trips/dream', dreamTripsRouter);
-
 // Mount expense routes
 app.use('/api', expenseRoutes);
+
+// Mount notes routes
+app.use('/api', notesRoutes);
+
+// Mount dream trips routes
+app.use('/api/trips/dream', dreamTripsRouter);
 
 // Add role change endpoint directly in index.js
 app.patch('/api/users/:userId/role', auth, async (req, res) => {

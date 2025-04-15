@@ -1,0 +1,272 @@
+import React, { useEffect, useState } from 'react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import { api, TripNote } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import Avatar from './Avatar';
+import { debounce } from 'lodash';
+import '../styles/TripNotes.css';
+
+interface TripNotesProps {
+  tripId: string;
+  canEdit: boolean;
+}
+
+interface MenuBarProps {
+  editor: Editor;
+}
+
+const MenuBar: React.FC<MenuBarProps> = ({ editor }) => {
+  if (!editor) {
+    return null;
+  }
+
+  return (
+    <div className="border-b border-gray-200 p-2 overflow-x-auto whitespace-nowrap">
+      <div className="flex gap-1 min-w-max">
+        <button
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 1 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          h1
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          h2
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 3 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          h3
+        </button>
+        <div className="w-px h-6 bg-gray-200 mx-1" />
+        <button
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          className={`px-2 py-1 rounded ${editor.isActive('bold') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          <strong>B</strong>
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          className={`px-2 py-1 rounded ${editor.isActive('italic') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          <em>I</em>
+        </button>
+        <div className="w-px h-6 bg-gray-200 mx-1" />
+        <button
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          className={`px-2 py-1 rounded ${editor.isActive('bulletList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          • List
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          className={`px-2 py-1 rounded ${editor.isActive('orderedList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          1. List
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          className={`px-2 py-1 rounded ${editor.isActive('taskList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          ☐ Tasks
+        </button>
+        <div className="w-px h-6 bg-gray-200 mx-1" />
+        <button
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          className={`px-2 py-1 rounded ${editor.isActive('blockquote') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+        >
+          Quote
+        </button>
+        <button
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          className="px-2 py-1 rounded hover:bg-gray-100"
+        >
+          Line
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
+  const { user } = useAuth();
+  const [note, setNote] = useState<TripNote | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3]
+        }
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true
+      })
+    ],
+    content: note?.content || '',
+    editable: canEdit,
+    onUpdate: ({ editor }) => {
+      const content = editor.getHTML();
+      debouncedUpdateNotes(content);
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl focus:outline-none max-w-none'
+      }
+    }
+  });
+
+  // Debounced function to update notes
+  const debouncedUpdateNotes = debounce(async (content: string) => {
+    try {
+      const updatedNote = await api.updateTripNotes(tripId, content);
+      setNote(updatedNote);
+    } catch (err) {
+      console.error('Error updating notes:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update notes');
+    }
+  }, 1000);
+
+  useEffect(() => {
+    const fetchNotes = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const tripNote = await api.getTripNotes(tripId);
+        setNote(tripNote);
+        if (editor) {
+          editor.commands.setContent(tripNote.content);
+        }
+      } catch (err) {
+        console.error('Error fetching notes:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch notes');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchNotes();
+  }, [tripId, editor]);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-600 p-4">
+        Error: {error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-12rem)] overflow-hidden">
+      {canEdit && editor && (
+        <div className="flex-none border-b border-gray-200">
+          <div className="p-2 overflow-x-auto whitespace-nowrap">
+            <div className="flex gap-1 min-w-max">
+              <button
+                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 1 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                h1
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                h2
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                className={`px-2 py-1 rounded ${editor.isActive('heading', { level: 3 }) ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                h3
+              </button>
+              <div className="w-px h-6 bg-gray-200 mx-1" />
+              <button
+                onClick={() => editor.chain().focus().toggleBold().run()}
+                className={`px-2 py-1 rounded ${editor.isActive('bold') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                <strong>B</strong>
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+                className={`px-2 py-1 rounded ${editor.isActive('italic') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                <em>I</em>
+              </button>
+              <div className="w-px h-6 bg-gray-200 mx-1" />
+              <button
+                onClick={() => editor.chain().focus().toggleBulletList().run()}
+                className={`px-2 py-1 rounded ${editor.isActive('bulletList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                • List
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                className={`px-2 py-1 rounded ${editor.isActive('orderedList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                1. List
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleTaskList().run()}
+                className={`px-2 py-1 rounded ${editor.isActive('taskList') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                ☐ Tasks
+              </button>
+              <div className="w-px h-6 bg-gray-200 mx-1" />
+              <button
+                onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                className={`px-2 py-1 rounded ${editor.isActive('blockquote') ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              >
+                Quote
+              </button>
+              <button
+                onClick={() => editor.chain().focus().setHorizontalRule().run()}
+                className="px-2 py-1 rounded hover:bg-gray-100"
+              >
+                Line
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="p-4">
+          <EditorContent editor={editor} className="prose max-w-none" />
+        </div>
+      </div>
+      
+      {note?.lastEditedBy && (
+        <div className="flex-none border-t border-gray-200 p-4 flex items-center space-x-2 text-sm text-gray-500">
+          <Avatar
+            photoUrl={note.lastEditedBy.photoUrl}
+            name={note.lastEditedBy.name}
+            size="sm"
+          />
+          <span>
+            Last edited by {note.lastEditedBy.name} on{' '}
+            {new Date(note.lastEditedAt).toLocaleDateString()}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TripNotes; 
