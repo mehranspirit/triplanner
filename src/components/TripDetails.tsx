@@ -2624,6 +2624,13 @@ const TripDetails: React.FC = () => {
     };
   }, []);
 
+  // Load AI suggestions history when component mounts
+  useEffect(() => {
+    if (trip?._id && user?._id) {
+      loadHistory(trip._id);
+    }
+  }, [trip?._id, user?._id]);
+
   if (loading) {
     return (
       <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 flex items-center justify-center h-screen">
