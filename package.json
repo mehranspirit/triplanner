@@ -16,6 +16,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",
+    "@google/generative-ai": "^0.24.0",
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.2.0",
     "@tiptap/extension-task-item": "^2.11.7",

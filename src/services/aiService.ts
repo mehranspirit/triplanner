@@ -1,3 +1,5 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
 interface AISuggestionRequest {
   places: string[];
   activities: string[];
@@ -10,6 +12,10 @@ interface DreamTripSuggestionRequest {
   activities: string[];
   customPrompt: string;
 }
+
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
 
 export const generateAISuggestions = async (request: AISuggestionRequest): Promise<string> => {
   const prompt = `Generate travel suggestions for a trip from ${request.startDate} to ${request.endDate}.
@@ -26,47 +32,28 @@ Please provide detailed suggestions for activities and experiences that would be
 Format the response in a clear, easy-to-read way with sections and bullet points.`;
 
   try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}`,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: "You are a helpful travel assistant that provides detailed and well-structured travel suggestions."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 1.3,
-        top_p: 0.95,
-        max_tokens: 1000,
-        stream: false
-      }),
+    // Configure generation parameters for more dynamic responses
+    const generationConfig = {
+      temperature: 0.9,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 2048,
+    };
+
+    // Generate content with Gemini
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API Error:', errorData);
-      throw new Error(errorData.error?.message || `Failed to generate suggestions: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    console.log('Raw API Response:', data); // Log the raw response for debugging
+    const response = await result.response;
+    const text = response.text();
     
-    // Extract the content from the assistant's message
-    if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response format from API');
+    if (!text) {
+      throw new Error('Empty response from AI');
     }
     
-    return data.choices[0].message.content;
+    return text;
   } catch (error) {
     console.error('Error generating AI suggestions:', error);
     if (error instanceof Error) {
@@ -94,46 +81,28 @@ Please provide detailed suggestions for a dream trip that would be perfect for t
 Format the response in a clear, easy-to-read way with sections and bullet points. Make it inspiring and exciting!`;
 
   try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}`,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: "You are an inspiring travel assistant that helps people plan their dream trips. You provide creative, detailed, and well-structured suggestions that make travel dreams come true."
-          },
-          {
-            role: "user",
-            content: basePrompt
-          }
-        ],
-        temperature: 1.5, // Slightly higher temperature for more creative responses
-        top_p: 0.95,
-        max_tokens: 1500, // More tokens for detailed dream trip suggestions
-        stream: false
-      }),
+    // Configure generation parameters for more creative responses
+    const generationConfig = {
+      temperature: 1.0, // Higher temperature for more creative responses
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 2048,
+    };
+
+    // Generate content with Gemini
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: basePrompt }] }],
+      generationConfig,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API Error:', errorData);
-      throw new Error(errorData.error?.message || `Failed to generate dream trip suggestions: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    console.log('Raw API Response:', data);
+    const response = await result.response;
+    const text = response.text();
     
-    if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response format from API');
+    if (!text) {
+      throw new Error('Empty response from AI');
     }
     
-    return data.choices[0].message.content;
+    return text;
   } catch (error) {
     console.error('Error generating dream trip suggestions:', error);
     if (error instanceof Error) {
