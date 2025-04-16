@@ -27,8 +27,8 @@ import Avatar from './Avatar';
 import EventForm from './EventForm';
 import { AISuggestionsModal } from './AISuggestionsModal';
 import { AISuggestionsDisplay } from './AISuggestionsDisplay';
-import { generateAISuggestions } from '../services/aiService';
-import { SparklesIcon } from '@heroicons/react/24/solid';
+import { generateAISuggestions, generateDestinationSuggestions } from '../services/aiService';
+import { SparklesIcon } from '@heroicons/react/24/outline';
 import { TrashIcon } from '@heroicons/react/24/solid';
 import { UserGroupIcon } from '@heroicons/react/24/solid';
 import { ShareIcon } from '@heroicons/react/24/solid';
@@ -318,6 +318,7 @@ const TripDetails: React.FC = () => {
   }>>([]);
   const departureAirportInputRef = useRef<HTMLInputElement>(null);
   const arrivalAirportInputRef = useRef<HTMLInputElement>(null);
+  const [isGeneratingDestinations, setIsGeneratingDestinations] = useState(false);
 
   // Add type guard function at the top of the component
   const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
@@ -1219,6 +1220,9 @@ const TripDetails: React.FC = () => {
           events: prevTrip.events.filter(e => e.id !== eventId)
         };
       });
+      // Close the modal after successful deletion
+      setIsDeleteEventWarningOpen(false);
+      setEventToDelete(null);
     } catch (error) {
       console.error('Error deleting event:', error);
       setError('Failed to delete event');
@@ -2631,6 +2635,40 @@ const TripDetails: React.FC = () => {
     }
   }, [trip?._id, user?._id]);
 
+  const handleGenerateDestinations = async () => {
+    if (!trip || !user || user.photoUrl === undefined) return;
+
+    try {
+      setIsGeneratingDestinations(true);
+      const confirmedEvents = trip.events.filter(e => e.status === 'confirmed');
+      
+      const suggestions = await generateDestinationSuggestions(
+        confirmedEvents,
+        { startDate: trip.startDate, endDate: trip.endDate },
+        {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          photoUrl: user.photoUrl || null
+        }
+      );
+
+      // Add suggestions to trip
+      const updatedTrip = {
+        ...trip,
+        events: [...trip.events, ...suggestions]
+      };
+
+      await handleTripUpdate(updatedTrip);
+      setSuccess('Added 3 AI-suggested destinations');
+    } catch (error) {
+      console.error('Error generating destinations:', error);
+      setError('Failed to generate destination suggestions');
+    } finally {
+      setIsGeneratingDestinations(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 flex items-center justify-center h-screen">
@@ -2706,18 +2744,18 @@ const TripDetails: React.FC = () => {
   };
 
   const renderEventCard = (event: Event) => {
-    const getEventIcon = () => {
-      switch (event.type) {
+    const isAIGenerated = event.source === 'other' && event.notes?.includes('✨ AI-Generated Suggestion');
+    
+    const getEventIcon = (type: string) => {
+      switch (type) {
         case 'arrival':
-          return '✈️';
         case 'departure':
+        case 'flight':
           return '✈️';
         case 'stay':
           return '🏨';
         case 'destination':
           return '📍';
-        case 'flight':
-          return '✈️';
         case 'train':
           return '🚂';
         case 'rental_car':
@@ -2764,421 +2802,42 @@ const TripDetails: React.FC = () => {
           return 'Event';
       }
     };
-
-    const getEventDetails = () => {
-      switch (event.type) {
-        case 'arrival':
-        case 'departure': {
-          const flightEvent = event as ArrivalDepartureEvent;
-          return (
-            <div className="text-sm text-gray-600">
-              <p>{flightEvent.time}</p>
-              {flightEvent.flightNumber && <p>Flight: {flightEvent.flightNumber}</p>}
-              {flightEvent.airline && <p>Airline: {flightEvent.airline}</p>}
-              {flightEvent.terminal && <p>Terminal: {flightEvent.terminal}</p>}
-              {flightEvent.gate && <p>Gate: {flightEvent.gate}</p>}
-            </div>
-          );
-        }
-        case 'stay': {
-          const stayEvent = event as StayEvent;
-          return (
-            <div className="text-sm text-gray-600">
-              <p>Check-in: {stayEvent.date}</p>
-              {stayEvent.checkOut && <p>Check-out: {stayEvent.checkOut}</p>}
-              {stayEvent.address && <p>Address: {stayEvent.address}</p>}
-            </div>
-          );
-        }
-        case 'destination': {
-          const destinationEvent = event as DestinationEvent;
-          return (
-            <div className="text-sm text-gray-600">
-              {destinationEvent.address && <p>Address: {destinationEvent.address}</p>}
-              {destinationEvent.description && <p>{destinationEvent.description}</p>}
-            </div>
-          );
-        }
-        case 'flight': {
-          const flightEvent = event as FlightEvent;
-          return (
-            <div className="text-sm text-gray-600">
-              {flightEvent.airline && <p>Airline: {flightEvent.airline}</p>}
-              {flightEvent.flightNumber && <p>Flight: {flightEvent.flightNumber}</p>}
-              {flightEvent.departureAirport && <p>From: {flightEvent.departureAirport}</p>}
-              {flightEvent.arrivalAirport && <p>To: {flightEvent.arrivalAirport}</p>}
-              {flightEvent.departureTime && <p>Departure: {flightEvent.departureTime}</p>}
-              {flightEvent.arrivalTime && <p>Arrival: {flightEvent.arrivalTime}</p>}
-              {flightEvent.terminal && <p>Terminal: {flightEvent.terminal}</p>}
-              {flightEvent.gate && <p>Gate: {flightEvent.gate}</p>}
-              {flightEvent.bookingReference && <p>Booking Ref: {flightEvent.bookingReference}</p>}
-            </div>
-          );
-        }
-        case 'train': {
-          const trainEvent = event as TrainEvent;
-          return (
-            <div className="flex justify-between items-end">
-              <div className="text-sm text-gray-600">
-                <p>Venice to Vienna</p>
-                {trainEvent.departureTime && <p>Departure: {trainEvent.departureTime}</p>}
-                {trainEvent.arrivalTime && <p>Arrival: {trainEvent.arrivalTime}</p>}
-                {trainEvent.carriageNumber && <p>Carriage: {trainEvent.carriageNumber}</p>}
-                {trainEvent.seatNumber && <p>Seat: {trainEvent.seatNumber}</p>}
-              </div>
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        case 'rental_car': {
-          const carEvent = event as RentalCarEvent;
-          return (
-            <div className="text-sm text-gray-600">
-              {carEvent.carType && <p>Car Type: {carEvent.carType}</p>}
-              {carEvent.pickupLocation && <p>Pickup: {carEvent.pickupLocation}</p>}
-              {carEvent.dropoffLocation && <p>Dropoff: {carEvent.dropoffLocation}</p>}
-              {carEvent.pickupTime && <p>Pickup Time: {carEvent.pickupTime}</p>}
-              {carEvent.dropoffTime && <p>Dropoff Time: {carEvent.dropoffTime}</p>}
-              {carEvent.licensePlate && <p>License Plate: {carEvent.licensePlate}</p>}
-              {carEvent.bookingReference && <p>Booking Ref: {carEvent.bookingReference}</p>}
-            </div>
-          );
-        }
-        case 'bus': {
-          const busEvent = event as BusEvent;
-          return (
-            <div className="text-sm text-gray-600">
-              {busEvent.busOperator && <p>Operator: {busEvent.busOperator}</p>}
-              {busEvent.busNumber && <p>Bus: {busEvent.busNumber}</p>}
-              {busEvent.departureTime && <p>Departure: {busEvent.departureTime}</p>}
-              {busEvent.arrivalTime && <p>Arrival: {busEvent.arrivalTime}</p>}
-              {busEvent.seatNumber && <p>Seat: {busEvent.seatNumber}</p>}
-            </div>
-          );
-        }
-        default:
-          return null;
-      }
-    };
-
-    const renderEventContent = () => {
-      switch (event.type) {
-        case 'arrival':
-        case 'departure': {
-          const flightEvent = event as ArrivalDepartureEvent;
-          return (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {event.type === 'arrival' ? `Arrival at ${flightEvent.airport}` : `Departure from ${flightEvent.airport}`}
-              </p>
-              <p className="text-xs text-gray-500">
-                {flightEvent.airline && `${flightEvent.airline}`} {flightEvent.flightNumber}
-                {flightEvent.time && ` • ${flightEvent.time}`}
-              </p>
-              {flightEvent.terminal && (
-                <p className="text-xs text-gray-500">Terminal: {flightEvent.terminal}</p>
-              )}
-              {flightEvent.gate && (
-                <p className="text-xs text-gray-500">Gate: {flightEvent.gate}</p>
-              )}
-              {event.status === 'exploring' && renderExploringContent()}
-              {event.notes && renderNotes()}
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        
-        case 'stay': {
-          const stayEvent = event as StayEvent;
-          return (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {stayEvent.accommodationName}
-              </p>
-              <p className="text-xs text-gray-500">
-                Check-in: {stayEvent.date}
-              </p>
-              {stayEvent.checkOut && (
-                <p className="text-xs text-gray-500">
-                  Check-out: {stayEvent.checkOut}
-                </p>
-              )}
-              {stayEvent.address && (
-                <p className="text-xs text-gray-500 mt-1 truncate">
-                  {stayEvent.address}
-                </p>
-              )}
-              {event.status === 'exploring' && renderExploringContent()}
-              {event.notes && renderNotes()}
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        
-        case 'destination': {
-          const destinationEvent = event as DestinationEvent;
-          return (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {destinationEvent.placeName}
-              </p>
-              {destinationEvent.address && (
-                <p className="text-xs text-gray-500 mt-1 truncate">
-                  {destinationEvent.address}
-                </p>
-              )}
-              {destinationEvent.description && (
-                <p className="text-xs text-gray-500 mt-1 truncate">
-                  {destinationEvent.description}
-                </p>
-              )}
-              {destinationEvent.openingHours && (
-                <p className="text-xs text-gray-500">
-                  Hours: {destinationEvent.openingHours}
-                </p>
-              )}
-              {event.status === 'exploring' && renderExploringContent()}
-              {event.notes && renderNotes()}
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        
-        case 'flight': {
-          const flightEvent = event as FlightEvent;
-          return (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {flightEvent.airline || 'Flight'} {flightEvent.flightNumber || ''}
-              </p>
-              <p className="text-xs text-gray-500">
-                {flightEvent.departureAirport || ''} to {flightEvent.arrivalAirport || ''}
-              </p>
-              {flightEvent.departureTime && (
-                <p className="text-xs text-gray-500">
-                  Departure: {flightEvent.departureTime}
-                </p>
-              )}
-              {flightEvent.arrivalTime && (
-                <p className="text-xs text-gray-500">
-                  Arrival: {flightEvent.arrivalTime}
-                </p>
-              )}
-              {flightEvent.terminal && (
-                <p className="text-xs text-gray-500">
-                  Terminal: {flightEvent.terminal}
-                </p>
-              )}
-              {flightEvent.gate && (
-                <p className="text-xs text-gray-500">
-                  Gate: {flightEvent.gate}
-                </p>
-              )}
-              {event.status === 'exploring' && renderExploringContent()}
-              {event.notes && renderNotes()}
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        
-        case 'train': {
-          const trainEvent = event as TrainEvent;
-          return (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {trainEvent.trainOperator || 'Train'} {trainEvent.trainNumber || ''}
-              </p>
-              <p className="text-xs text-gray-500">
-                {trainEvent.departureStation || ''} to {trainEvent.arrivalStation || ''}
-              </p>
-              {trainEvent.departureTime && (
-                <p className="text-xs text-gray-500">
-                  Departure: {trainEvent.departureTime}
-                </p>
-              )}
-              {trainEvent.arrivalTime && (
-                <p className="text-xs text-gray-500">
-                  Arrival: {trainEvent.arrivalTime}
-                </p>
-              )}
-              {trainEvent.carriageNumber && (
-                <p className="text-xs text-gray-500">
-                  Carriage: {trainEvent.carriageNumber}
-                </p>
-              )}
-              {trainEvent.seatNumber && (
-                <p className="text-xs text-gray-500">
-                  Seat: {trainEvent.seatNumber}
-                </p>
-              )}
-              {event.status === 'exploring' && renderExploringContent()}
-              {event.notes && renderNotes()}
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        
-        case 'rental_car': {
-          const carEvent = event as RentalCarEvent;
-          return (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {carEvent.carCompany || 'Rental Car'}
-              </p>
-              {carEvent.carType && (
-                <p className="text-xs text-gray-500">
-                  {carEvent.carType}
-                </p>
-              )}
-              <p className="text-xs text-gray-500">
-                {carEvent.pickupLocation || ''} to {carEvent.dropoffLocation || ''}
-              </p>
-              {carEvent.pickupTime && (
-                <p className="text-xs text-gray-500">
-                  Pickup: {carEvent.pickupTime}
-                </p>
-              )}
-              {carEvent.dropoffTime && (
-                <p className="text-xs text-gray-500">
-                  Dropoff: {carEvent.dropoffTime}
-                </p>
-              )}
-              {carEvent.licensePlate && (
-                <p className="text-xs text-gray-500">
-                  License Plate: {carEvent.licensePlate}
-                </p>
-              )}
-              {event.status === 'exploring' && renderExploringContent()}
-              {event.notes && renderNotes()}
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        case 'bus': {
-          const busEvent = event as BusEvent;
-          return (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {busEvent.busOperator || 'Bus'} {busEvent.busNumber || ''}
-              </p>
-              <p className="text-xs text-gray-500">
-                {busEvent.departureStation || ''} to {busEvent.arrivalStation || ''}
-              </p>
-              {busEvent.departureTime && (
-                <p className="text-xs text-gray-500">
-                  Departure: {busEvent.departureTime}
-                </p>
-              )}
-              {busEvent.arrivalTime && (
-                <p className="text-xs text-gray-500">
-                  Arrival: {busEvent.arrivalTime}
-                </p>
-              )}
-              {busEvent.seatNumber && (
-                <p className="text-xs text-gray-500">
-                  Seat: {busEvent.seatNumber}
-                </p>
-              )}
-              {event.status === 'exploring' && renderExploringContent()}
-              {event.notes && renderNotes()}
-              {renderCreatorInfo(event)}
-            </div>
-          );
-        }
-        
-        default:
-          return null;
-      }
-    };
-
-    const renderExploringContent = () => (
-      <div className="mt-2">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleVote(event.id, getUserVoteStatus(event) === 'liked' ? 'remove' : 'like');
-              }}
-              className={`flex items-center space-x-1 px-2 py-1 rounded ${
-                getUserVoteStatus(event) === 'liked'
-                  ? 'bg-green-100 text-green-800'
-                  : 'hover:bg-gray-100 text-gray-600'
-              }`}
-            >
-              <span className="text-lg">👍</span>
-              <span>{event.likes?.length || 0}</span>
-            </button>
-          </div>
-          <div className="flex items-center">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleVote(event.id, getUserVoteStatus(event) === 'disliked' ? 'remove' : 'dislike');
-              }}
-              className={`flex items-center space-x-1 px-2 py-1 rounded ${
-                getUserVoteStatus(event) === 'disliked'
-                  ? 'bg-red-100 text-red-800'
-                  : 'hover:bg-gray-100 text-gray-600'
-              }`}
-            >
-              <span className="text-lg">👎</span>
-              <span>{event.dislikes?.length || 0}</span>
-            </button>
-          </div>
-        </div>
-        {((event.likes && event.likes.length > 0) || (event.dislikes && event.dislikes.length > 0)) && (
-          <div className="mt-2 text-sm text-gray-500">
-            <div className="flex flex-col space-y-1">
-              {event.likes && event.likes.length > 0 && (
-                <div className="flex items-center">
-                  <span className="font-medium">Liked by:</span>
-                  <span className="ml-1">{getVoterNames(event).likes.join(', ')}</span>
-                </div>
-              )}
-              {event.dislikes && event.dislikes.length > 0 && (
-                <div className="flex items-center">
-                  <span className="font-medium">Disliked by:</span>
-                  <span className="ml-1">{getVoterNames(event).dislikes.join(', ')}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-
-    const renderNotes = () => (
-      <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-        Notes: <span dangerouslySetInnerHTML={{ __html: event.notes?.replace(
-          /(https?:\/\/[^\s]+)/g,
-          '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800">$1</a>'
-        ) || '' }} />
-      </p>
-    );
-
+    
     return (
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-        <div className="flex flex-col">
-          {/* Event type header */}
-          <div className="flex items-center mb-3">
-            <div className="text-2xl mr-2">{getEventIcon()}</div>
-            <h2 className="text-xl font-semibold text-indigo-600 capitalize">{event.type.replace('_', ' ')}</h2>
-          </div>
-
-          {/* Main content */}
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">{getEventTitle(event)}</h3>
-            <p className="text-sm text-gray-500">{event.date}</p>
-            {getEventDetails()}
-          </div>
-
-          {/* Bottom section */}
-          <div className="mt-4">
-            {event.status === 'exploring' && renderExploringContent()}
-            {event.notes && renderNotes()}
+      <div
+        key={event.id}
+        className={`event-card ${isAIGenerated ? 'border-l-4 border-l-indigo-400' : ''} bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden`}
+      >
+        <div
+          className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+          onClick={(e) => toggleEventExpansion(event.id, e)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <span className="text-xl">
+                  {event.type === 'destination' ? '📍' : getEventIcon(event.type)}
+                </span>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">
+                  {isAIGenerated && (
+                    <span className="inline-flex items-center mr-2 text-indigo-600">
+                      <SparklesIcon className="h-4 w-4 mr-1" />
+                      <span className="text-xs font-medium">AI Suggested</span>
+                    </span>
+                  )}
+                  {getEventTitle(event)}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {event.date && new Date(event.date).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            {/* Rest of the event card content */}
           </div>
         </div>
+        {/* Rest of the event card */}
       </div>
     );
   };
@@ -3582,12 +3241,31 @@ const TripDetails: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900">Events</h3>
                 <div className="flex items-center space-x-2">
                   {canEdit && (
-                    <button
-                      onClick={() => setIsModalOpen(true)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                    >
-                      Add Event
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        Add Event
+                      </button>
+                      <button
+                        onClick={handleGenerateDestinations}
+                        disabled={isGeneratingDestinations}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {isGeneratingDestinations ? (
+                          <>
+                            <SparklesIcon className="animate-spin -ml-1 mr-2 h-5 w-5" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <SparklesIcon className="-ml-1 mr-2 h-5 w-5" />
+                            Suggest Destinations
+                          </>
+                        )}
+                      </button>
+                    </>
                   )}
         </div>
               </div>
