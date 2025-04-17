@@ -14,8 +14,10 @@ import { v4 as uuidv4 } from 'uuid';
 interface AISuggestionRequest {
   places: string[];
   activities: string[];
-  startDate: string;
-  endDate: string;
+  tripDates: {
+    startDate: string;
+    endDate: string;
+  };
 }
 
 interface DreamTripSuggestionRequest {
@@ -29,21 +31,45 @@ const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
 
 export const generateAISuggestions = async (request: AISuggestionRequest): Promise<string> => {
-  const prompt = `Generate travel suggestions for a trip from ${request.startDate} to ${request.endDate}.
+  const prompt = `Generate travel suggestions for a trip from ${request.tripDates.startDate} to ${request.tripDates.endDate}.
 Places to visit: ${request.places.join(', ')}
 Interested in: ${request.activities.join(', ')}
 
-Please provide detailed suggestions for activities and experiences that would be enjoyable during this trip. Include:
-1. Specific attractions or locations to visit
-2. Recommended activities based on the interests
-3. Tips for timing and duration of activities
-4. Any seasonal considerations
-5. Practical advice for visiting these places
+Please provide detailed suggestions for activities and experiences in a clear, organized format. Include:
 
-Format the response in a clear, easy-to-read way with sections and bullet points.`;
+1. Overview
+- Brief introduction to the destination
+- Best time to visit
+- How many days recommended
+
+2. Must-See Attractions
+- Name and description of each attraction
+- Recommended duration
+- Best time to visit
+- Practical tips
+
+3. Recommended Activities
+- Detailed activity descriptions
+- Duration and difficulty level where applicable
+- Best time for each activity
+- Required equipment or preparation
+
+4. Local Experiences
+- Cultural activities
+- Food and dining recommendations
+- Local customs and etiquette
+- Hidden gems
+
+5. Practical Information
+- Transportation tips
+- Accommodation suggestions
+- Safety considerations
+- Money-saving tips
+
+Format the response in clear sections with proper spacing. Use simple dashes (-) for bullet points. Do not use asterisks or other special formatting characters.`;
 
   try {
-    // Configure generation parameters for more dynamic responses
+    // Configure generation parameters for cleaner formatting
     const generationConfig = {
       temperature: 0.9,
       topK: 40,
@@ -58,11 +84,33 @@ Format the response in a clear, easy-to-read way with sections and bullet points
     });
 
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
     
     if (!text) {
       throw new Error('Empty response from AI');
     }
+
+    // Clean up the response
+    text = text
+      // Remove any asterisks
+      .replace(/\*/g, '')
+      // Remove any double asterisks
+      .replace(/\*\*/g, '')
+      // Ensure consistent bullet points and remove extra bullets before dashed items
+      .replace(/[•●■]/g, '-')
+      .replace(/\s*[•●■-]\s*-\s*/g, '- ')
+      // Remove any multiple dashes
+      .replace(/--+/g, '-')
+      // Ensure proper spacing after section numbers
+      .replace(/(\d+\.)\s*([A-Z])/g, '$1 $2')
+      // Remove any extra newlines
+      .replace(/\n{3,}/g, '\n\n')
+      // Ensure proper spacing after bullet points
+      .replace(/\n-\s*/g, '\n- ')
+      // Add extra indentation for subcategories while keeping the dash
+      .replace(/\n\s*-\s+(Duration:|Best time|Practical|Recommended)/g, '\n    - $1')
+      // Clean up any remaining formatting artifacts
+      .replace(/^\s*-\s*([A-Z][^:]+):\s*$/gm, '$1:');
     
     return text;
   } catch (error) {
@@ -79,22 +127,45 @@ export const generateDreamTripSuggestions = async (request: DreamTripSuggestionR
 Places of interest: ${request.places.join(', ')}
 Activities of interest: ${request.activities.join(', ')}
 
-${request.customPrompt ? `Additional requirements: ${request.customPrompt}\n` : ''}
-Please provide detailed suggestions for a dream trip that would be perfect for these preferences. Include:
-1. Specific destinations and locations that match the interests
-2. Unique and memorable activities based on the preferences
-3. Best times to visit these places
-4. Special experiences or hidden gems
-5. Practical tips for planning this dream trip
-6. Estimated budget considerations
-7. How to make this trip extra special
+${request.customPrompt ? `Additional requirements: ${request.customPrompt}\n\n` : ''}
+Please provide detailed suggestions for a dream trip in the following structured format:
 
-Format the response in a clear, easy-to-read way with sections and bullet points. Make it inspiring and exciting!`;
+1. Dream Destination Overview
+- Introduction to why this destination is perfect
+- Best seasons to visit
+- Recommended duration
+- Unique selling points
+
+2. Signature Experiences
+- Must-do activities and attractions
+- Hidden gems and unique opportunities
+- Special seasonal events
+- Photography spots and viewpoints
+
+3. Luxury & Special Experiences
+- High-end accommodations
+- Fine dining recommendations
+- VIP tours and exclusive access
+- Wellness and spa experiences
+
+4. Adventure & Activities
+- Outdoor activities and adventures
+- Cultural experiences
+- Local workshops and classes
+- Private guides and experts
+
+5. Planning & Logistics
+- Best ways to reach the destination
+- Local transportation options
+- Recommended trip flow
+- Booking tips and contacts
+
+Format the response in clear sections with proper spacing. Use simple dashes (-) for bullet points. Do not use asterisks or other special formatting characters. For subcategories, use indented dashes.`;
 
   try {
-    // Configure generation parameters for more creative responses
+    // Configure generation parameters for cleaner formatting
     const generationConfig = {
-      temperature: 1.0, // Higher temperature for more creative responses
+      temperature: 0.9,
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 2048,
@@ -107,11 +178,33 @@ Format the response in a clear, easy-to-read way with sections and bullet points
     });
 
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
     
     if (!text) {
       throw new Error('Empty response from AI');
     }
+    
+    // Clean up the response using the same formatting strategy
+    text = text
+      // Remove any asterisks
+      .replace(/\*/g, '')
+      // Remove any double asterisks
+      .replace(/\*\*/g, '')
+      // Ensure consistent bullet points and remove extra bullets before dashed items
+      .replace(/[•●■]/g, '-')
+      .replace(/\s*[•●■-]\s*-\s*/g, '- ')
+      // Remove any multiple dashes
+      .replace(/--+/g, '-')
+      // Ensure proper spacing after section numbers
+      .replace(/(\d+\.)\s*([A-Z])/g, '$1 $2')
+      // Remove any extra newlines
+      .replace(/\n{3,}/g, '\n\n')
+      // Ensure proper spacing after bullet points
+      .replace(/\n-\s*/g, '\n- ')
+      // Add extra indentation for subcategories while keeping the dash
+      .replace(/\n\s*-\s+(Duration:|Best time|Practical|Recommended|Price|Location|Hours|Tips|Details|When|Where|Cost|Contact|Booking|Note):/g, '\n    - $1')
+      // Clean up any remaining formatting artifacts
+      .replace(/^\s*-\s*([A-Z][^:]+):\s*$/gm, '$1:');
     
     return text;
   } catch (error) {

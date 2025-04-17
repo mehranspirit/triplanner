@@ -2523,8 +2523,10 @@ const TripDetails: React.FC = () => {
       const suggestions = await generateAISuggestions({
         places,
         activities,
-        startDate: trip.startDate,
-        endDate: trip.endDate,
+        tripDates: {
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+        },
       });
 
       // Save to history
