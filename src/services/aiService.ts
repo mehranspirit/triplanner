@@ -174,21 +174,70 @@ const formatEventForPrompt = (event: Event): string => {
 };
 
 export const generateDestinationSuggestions = async (
-  confirmedEvents: Event[],
+  allEvents: Event[],
   tripDates: { startDate: string; endDate: string },
   user: { _id: string; name: string; email: string; photoUrl: string | null; }
 ): Promise<DestinationEvent[]> => {
-  const prompt = `Based on the following confirmed events in the trip from ${tripDates.startDate} to ${tripDates.endDate}, suggest exactly 3 diverse destinations to visit:
+  console.log('\n=== AI SERVICE: STARTING DESTINATION GENERATION ===');
+  console.log('Trip dates:', tripDates);
+  console.log('Total events:', allEvents.length);
+  
+  // Get existing AI-suggested events (from both confirmed and exploring)
+  const aiSuggestions = allEvents.filter(e => {
+    const isAISuggestion = e.source === 'other' && e.notes?.includes('AI-Generated Suggestion');
+    if (isAISuggestion) {
+      console.log('Found existing AI suggestion:', {
+        id: e.id,
+        type: e.type,
+        name: (e as any).placeName || 'N/A',
+        date: e.date,
+        status: e.status
+      });
+    }
+    return isAISuggestion;
+  });
 
-Current Confirmed Events (in chronological order):
+  console.log('\nTotal existing AI suggestions:', aiSuggestions.length);
+  
+  const existingAISuggestions = aiSuggestions.map(e => {
+    const formatted = formatEventForPrompt(e);
+    console.log('Formatted existing suggestion:', formatted);
+    return formatted;
+  });
+
+  // Separate confirmed and exploring events for the prompt
+  const confirmedEvents = allEvents.filter(e => e.status === 'confirmed');
+  const exploringEvents = allEvents.filter(e => e.status === 'exploring' && !aiSuggestions.includes(e));
+
+  console.log('\n=== PREPARING AI PROMPT ===');
+  console.log('Confirmed events:', confirmedEvents.length);
+  console.log('Exploring events:', exploringEvents.length);
+  
+  const prompt = `Based on the following events in our trip from ${tripDates.startDate} to ${tripDates.endDate}, suggest 3 new and diverse destinations to visit.
+
+Confirmed Events (in chronological order):
 ${confirmedEvents.map(e => formatEventForPrompt(e)).join('\n')}
 
-You must provide exactly 3 suggestions in this specific order:
-1. A cultural attraction (museum, historical site, theater, etc.)
-2. An outdoor activity or location (hiking trail, viewpoint, etc.)
-3. A local experience (market, neighborhood, food destination, etc.)
+${exploringEvents.length > 0 ? `
+Currently Exploring These Options:
+${exploringEvents.map(e => formatEventForPrompt(e)).join('\n')}
+` : ''}
 
-For each suggestion, consider the existing events' schedule and suggest a logical date to visit between ${tripDates.startDate} and ${tripDates.endDate}. Avoid scheduling conflicts with confirmed events.
+${existingAISuggestions.length > 0 ? `
+=== IMPORTANT: Previously AI-Generated Destinations ===
+${existingAISuggestions.join('\n')}
+
+IMPORTANT: You must NOT suggest any destinations already in the trip. Ensure your new suggestions are possibly in different areas and offer different types of experiences.
+` : ''}
+
+You must provide exactly 3 NEW suggestions in this specific order:
+1. A cultural attraction (museum, historical site, theater, etc.) - MUST be different from any existing suggestions
+2. An outdoor activity or location (hiking trail, viewpoint, etc.) - MUST be different from any existing suggestions
+3. A local experience (neighborhood, food destination, market, etc.) - MUST be different from any existing suggestions
+
+For each suggestion, consider:
+- Ensure timing doesn't conflict with existing events
+- Focus on unique experiences not mentioned in any previous suggestions
 
 For each suggestion, use exactly this format with no deviations:
 SUGGESTION_START
@@ -204,11 +253,14 @@ SUGGESTION_END
 Ensure each suggestion is wrapped with SUGGESTION_START and SUGGESTION_END markers.
 Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existing schedule.`;
 
+  console.log('\nPrompt preview (first 500 chars):', prompt.substring(0, 500) + '...');
+
   try {
+    console.log('\n=== GENERATING NEW SUGGESTIONS ===');
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.7,
+        temperature: 0.95,
         topK: 40,
         topP: 0.95,
         maxOutputTokens: 2048,

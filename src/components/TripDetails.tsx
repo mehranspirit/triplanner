@@ -566,6 +566,14 @@ const TripDetails: React.FC = () => {
       }
 
       const tripData = await api.getTrip(id);
+      console.log('Fetched trip data:', {
+        id: tripData._id,
+        name: tripData.name,
+        startDate: tripData.startDate,
+        endDate: tripData.endDate,
+        rawData: tripData
+      });
+      
       setTrip(tripData);
       setEventData({
         type: 'stay',
@@ -646,6 +654,14 @@ const TripDetails: React.FC = () => {
         }
 
         const tripData = await api.getTrip(id);
+        console.log('Fetched trip data:', {
+          id: tripData._id,
+          name: tripData.name,
+          startDate: tripData.startDate,
+          endDate: tripData.endDate,
+          rawData: tripData
+        });
+        
         setTrip(tripData);
         // ... rest of the fetchTrip function ...
       } catch (error) {
@@ -2639,12 +2655,61 @@ const TripDetails: React.FC = () => {
     if (!trip || !user || user.photoUrl === undefined) return;
 
     try {
+      console.log('=== STARTING AI GENERATION ===');
+      
+      // Calculate trip dates from events
+      const sortedEvents = [...trip.events].sort((a, b) => {
+        const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
+        const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
+        return dateA - dateB;
+      });
+
+      let startDate: Date | null = null;
+      let endDate: Date | null = null;
+
+      sortedEvents.forEach(event => {
+        const eventDate = event.type === 'stay' 
+          ? new Date((event as StayEvent).checkIn)
+          : new Date(event.date);
+
+        if (!startDate || eventDate < startDate) {
+          startDate = eventDate;
+        }
+
+        // For stay events, use checkout date as potential end date
+        if (event.type === 'stay') {
+          const checkoutDate = new Date((event as StayEvent).checkOut);
+          if (!endDate || checkoutDate > endDate) {
+            endDate = checkoutDate;
+          }
+        } else {
+          if (!endDate || eventDate > endDate) {
+            endDate = eventDate;
+          }
+        }
+      });
+
+      // If no events, use trip dates or current date
+      if (!startDate) startDate = trip.startDate ? new Date(trip.startDate) : new Date();
+      if (!endDate) endDate = trip.endDate ? new Date(trip.endDate) : startDate;
+
+      console.log('Trip details:', { 
+        id: trip._id, 
+        name: trip.name,
+        calculatedStartDate: startDate.toISOString(),
+        calculatedEndDate: endDate.toISOString(),
+        rawTrip: trip
+      });
+
       setIsGeneratingDestinations(true);
-      const confirmedEvents = trip.events.filter(e => e.status === 'confirmed');
+      console.log('Total events to process:', trip.events.length);
       
       const suggestions = await generateDestinationSuggestions(
-        confirmedEvents,
-        { startDate: trip.startDate, endDate: trip.endDate },
+        trip.events,
+        { 
+          startDate: startDate.toISOString(), 
+          endDate: endDate.toISOString() 
+        },
         {
           _id: user._id,
           name: user.name,
@@ -2653,6 +2718,8 @@ const TripDetails: React.FC = () => {
         }
       );
 
+      console.log('Received suggestions:', suggestions.length);
+
       // Add suggestions to trip
       const updatedTrip = {
         ...trip,
@@ -2660,9 +2727,11 @@ const TripDetails: React.FC = () => {
       };
 
       await handleTripUpdate(updatedTrip);
+      console.log('=== AI GENERATION COMPLETE ===');
       setSuccess('Added 3 AI-suggested destinations');
     } catch (error) {
-      console.error('Error generating destinations:', error);
+      console.error('=== AI GENERATION ERROR ===');
+      console.error('Error details:', error);
       setError('Failed to generate destination suggestions');
     } finally {
       setIsGeneratingDestinations(false);

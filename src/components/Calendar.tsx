@@ -249,23 +249,29 @@ const Calendar: React.FC = () => {
       let startDate: Date | null = null;
       let endDate: Date | null = null;
 
+      // Parse dates without timezone conversion
+      const parseDate = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
+
       const sortedEvents = [...trip.events].sort((a, b) => {
-        const dateA = a.type === 'stay' ? new Date((a as StayEvent).checkIn).getTime() : new Date(a.date).getTime();
-        const dateB = b.type === 'stay' ? new Date((b as StayEvent).checkIn).getTime() : new Date(b.date).getTime();
-        return dateA - dateB;
+        const dateA = a.type === 'stay' ? parseDate((a as StayEvent).checkIn) : parseDate(a.date);
+        const dateB = b.type === 'stay' ? parseDate((b as StayEvent).checkIn) : parseDate(b.date);
+        return dateA.getTime() - dateB.getTime();
       });
 
       sortedEvents.forEach(event => {
         const eventDate = event.type === 'stay' 
-          ? new Date((event as StayEvent).checkIn)
-          : new Date(event.date);
+          ? parseDate((event as StayEvent).checkIn)
+          : parseDate(event.date);
 
         if (!startDate || eventDate < startDate) {
           startDate = eventDate;
         }
 
         if (event.type === 'stay') {
-          const checkoutDate = new Date((event as StayEvent).checkOut);
+          const checkoutDate = parseDate((event as StayEvent).checkOut);
           if (!endDate || checkoutDate > endDate) {
             endDate = checkoutDate;
           }
@@ -276,6 +282,15 @@ const Calendar: React.FC = () => {
         }
       });
 
+      // If no events, use trip dates if available, otherwise current date
+      if (!startDate && trip.startDate) {
+        const [year, month, day] = trip.startDate.split('T')[0].split('-').map(Number);
+        startDate = new Date(year, month - 1, day);
+      }
+      if (!endDate && trip.endDate) {
+        const [year, month, day] = trip.endDate.split('T')[0].split('-').map(Number);
+        endDate = new Date(year, month - 1, day);
+      }
       if (!startDate) startDate = new Date();
       if (!endDate) endDate = startDate;
 
