@@ -27,7 +27,7 @@ import Avatar from './Avatar';
 import EventForm from './EventForm';
 import { AISuggestionsModal } from './AISuggestionsModal';
 import { AISuggestionsDisplay } from './AISuggestionsDisplay';
-import { generateAISuggestions, generateDestinationSuggestions } from '../services/aiService';
+import { generateAISuggestions, generateDestinationSuggestions, parseEventFromText } from '../services/aiService';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import { TrashIcon } from '@heroicons/react/24/solid';
 import { UserGroupIcon } from '@heroicons/react/24/solid';
@@ -319,6 +319,9 @@ const TripDetails: React.FC = () => {
   const departureAirportInputRef = useRef<HTMLInputElement>(null);
   const arrivalAirportInputRef = useRef<HTMLInputElement>(null);
   const [isGeneratingDestinations, setIsGeneratingDestinations] = useState(false);
+  const [activeEventTab, setActiveEventTab] = useState<'form' | 'text'>('form');
+  const [eventText, setEventText] = useState('');
+  const [isParsingText, setIsParsingText] = useState(false);
 
   // Add type guard function at the top of the component
   const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
@@ -1297,6 +1300,23 @@ const TripDetails: React.FC = () => {
       busOperator: '',
       busNumber: ''
     });
+    setEventText('');
+    setActiveEventTab('text'); // Change default tab to text
+    setIsEditingEvent(null);
+    setFormFeedback({ type: '', message: '' });
+    // Reset queries and suggestions for airports/airlines
+    setAirportQuery('');
+    setAirlineQuery('');
+    setDepartureAirportQuery('');
+    setArrivalAirportQuery('');
+    setAirportSuggestions([]);
+    setAirlineSuggestions([]);
+    setDepartureAirportSuggestions([]);
+    setArrivalAirportSuggestions([]);
+    setShowAirportSuggestions(false);
+    setShowAirlineSuggestions(false);
+    setShowDepartureAirportSuggestions(false);
+    setShowArrivalAirportSuggestions(false);
   };
 
   useEffect(() => {
@@ -1535,6 +1555,8 @@ const TripDetails: React.FC = () => {
         await handleTripUpdate(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event updated successfully!' });
+        setIsModalOpen(false);
+        resetEventForm();
       } else {
         // Add new event
         const updatedTrip: Trip = {
@@ -1545,10 +1567,9 @@ const TripDetails: React.FC = () => {
         await handleTripUpdate(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event added successfully!' });
+        setIsModalOpen(false);
+        resetEventForm();
       }
-
-      setIsModalOpen(false);
-      resetEventForm();
     } catch (error) {
       console.error('Error submitting event:', error);
       setFormFeedback({
@@ -2740,6 +2761,127 @@ const TripDetails: React.FC = () => {
     }
   };
 
+  const formatEventSummary = (event: Event): string => {
+    switch (event.type) {
+      case 'arrival':
+      case 'departure': {
+        const e = event as ArrivalDepartureEvent;
+        return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${e.airport}${e.time ? ` at ${e.time}` : ''} on ${new Date(e.date).toLocaleDateString()}${e.airline ? ` with ${e.airline}` : ''}${e.flightNumber ? ` (${e.flightNumber})` : ''}`;
+      }
+      case 'stay': {
+        const e = event as StayEvent;
+        return `Stay at ${e.accommodationName} from ${new Date(e.checkIn).toLocaleDateString()} to ${new Date(e.checkOut || e.date).toLocaleDateString()}`;
+      }
+      case 'destination': {
+        const e = event as DestinationEvent;
+        return `Visit to ${e.placeName} on ${new Date(e.date).toLocaleDateString()}`;
+      }
+      case 'flight': {
+        const e = event as FlightEvent;
+        return `Flight from ${e.departureAirport} to ${e.arrivalAirport} on ${new Date(e.date).toLocaleDateString()}${e.airline ? ` with ${e.airline}` : ''}${e.flightNumber ? ` (${e.flightNumber})` : ''}`;
+      }
+      case 'train': {
+        const e = event as TrainEvent;
+        return `Train from ${e.departureStation} to ${e.arrivalStation} on ${new Date(e.date).toLocaleDateString()}${e.trainOperator ? ` with ${e.trainOperator}` : ''}${e.trainNumber ? ` (${e.trainNumber})` : ''}`;
+      }
+      case 'rental_car': {
+        const e = event as RentalCarEvent;
+        return `Car rental from ${e.pickupLocation} to ${e.dropoffLocation} on ${new Date(e.date).toLocaleDateString()}${e.carCompany ? ` with ${e.carCompany}` : ''}`;
+      }
+      case 'bus': {
+        const e = event as BusEvent;
+        return `Bus from ${e.departureStation} to ${e.arrivalStation} on ${new Date(e.date).toLocaleDateString()}${e.busOperator ? ` with ${e.busOperator}` : ''}${e.busNumber ? ` (${e.busNumber})` : ''}`;
+      }
+      default:
+        return `${event.type} on ${new Date(event.date).toLocaleDateString()}`;
+    }
+  };
+
+  const handleTextSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trip || !eventText.trim() || !user) return;
+
+    setIsParsingText(true);
+    try {
+      const parsedEvents = await parseEventFromText({
+        text: eventText,
+        trip: {
+          name: trip.name,
+          description: trip.description || '',
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          events: trip.events
+        },
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          photoUrl: user.photoUrl || null
+        }
+      });
+
+      if (Array.isArray(parsedEvents)) {
+        // Multiple events were returned
+        const updatedTrip = {
+          ...trip,
+          events: [...trip.events, ...parsedEvents]
+        };
+        
+        await handleTripUpdate(updatedTrip);
+        setTrip(updatedTrip);
+        
+        // Create a summary of all parsed events
+        const eventSummaries = parsedEvents.map(formatEventSummary);
+        const summaryMessage = eventSummaries.map(summary => `• ${summary}`).join('\n');
+        
+        // Close the modal and show confirmation
+        setIsModalOpen(false);
+        resetEventForm();
+        setConfirmationModal({
+          isOpen: true,
+          title: `Added ${parsedEvents.length} Events`,
+          message: summaryMessage,
+          onClose: () => setConfirmationModal(prev => ({ ...prev, isOpen: false }))
+        });
+      } else {
+        // Single event was returned
+        // Set the form data with the parsed event
+        setEventType(parsedEvents.type);
+        setEventData(parsedEvents);
+        
+        // Show a summary of the parsed event
+        const eventSummary = formatEventSummary(parsedEvents);
+        
+        // Switch to the form tab to let user verify/edit
+        setActiveEventTab('form');
+        setFormFeedback({ 
+          type: 'success', 
+          message: 'Event details parsed successfully. Please verify below.' 
+        });
+      }
+    } catch (error) {
+      setFormFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to parse event details'
+      });
+    } finally {
+      setIsParsingText(false);
+    }
+  };
+
+  // Add new state for confirmation modal
+  const [confirmationModal, setConfirmationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onClose: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onClose: () => {},
+  });
+
   if (loading) {
     return (
       <div className="max-w-full md:max-w-7xl mx-auto px-0 md:px-4 flex items-center justify-center h-screen">
@@ -3332,7 +3474,7 @@ const TripDetails: React.FC = () => {
                         ) : (
                           <>
                             <SparklesIcon className="-ml-1 mr-2 h-5 w-5" />
-                            Suggest Destinations
+                            Suggest
                           </>
                         )}
                       </button>
@@ -3863,6 +4005,8 @@ const TripDetails: React.FC = () => {
                 onClick={() => {
                   setIsModalOpen(false);
                   setIsEditingEvent(null);
+                  setEventText('');
+                  setActiveEventTab('form');
                 }}
                 className="text-gray-400 hover:text-gray-500"
               >
@@ -3873,43 +4017,132 @@ const TripDetails: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Event Type</label>
-                <select
-                  value={eventType}
-                  onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
-                  className="input"
-                >
-                  <option value="arrival">Arrival</option>
-                  <option value="departure">Departure</option>
-                  <option value="stay">Stay</option>
-                  <option value="destination">Destination</option>
-                  <option value="flight">Flight</option>
-                  <option value="train">Train</option>
-                  <option value="rental_car">Rental Car</option>
-                  <option value="bus">Bus</option>
-                </select>
-              </div>
+            {/* Tab Buttons */}
+            <div className="flex space-x-4 mb-4">
+              <button
+                onClick={() => setActiveEventTab('text')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md ${
+                  activeEventTab === 'text'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <SparklesIcon className="h-5 w-5" />
+                  <span>AI Parse Text/Email</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveEventTab('form')}
+                className={`flex-1 py-2 text-sm font-medium rounded-md ${
+                  activeEventTab === 'form'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Manual Entry
+              </button>
+            </div>
 
-              {renderEventForm()}
-
-              <div className="flex justify-end space-x-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setIsEditingEvent(null);
-                  }}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {isEditingEvent ? 'Save Changes' : 'Add Event'}
-                </button>
+            {/* Form Feedback */}
+            {formFeedback.message && (
+              <div
+                className={`mb-4 p-4 rounded-md ${
+                  formFeedback.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                }`}
+              >
+                {formFeedback.message}
               </div>
-            </form>
+            )}
+
+            {activeEventTab === 'form' ? (
+              <form onSubmit={handleSubmit}>
+                <div className="mb-4">
+                  <label className="block text-gray-700 mb-2">Event Type</label>
+                  <select
+                    value={eventType}
+                    onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
+                    className="input"
+                  >
+                    <option value="arrival">Arrival</option>
+                    <option value="departure">Departure</option>
+                    <option value="stay">Stay</option>
+                    <option value="destination">Destination</option>
+                    <option value="flight">Flight</option>
+                    <option value="train">Train</option>
+                    <option value="rental_car">Rental Car</option>
+                    <option value="bus">Bus</option>
+                  </select>
+                </div>
+
+                {renderEventForm()}
+
+                <div className="flex justify-end space-x-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setIsEditingEvent(null);
+                    }}
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {isEditingEvent ? 'Save Changes' : 'Add Event'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleTextSubmit}>
+                <div className="mb-4">
+                  <label className="block text-gray-700 mb-2">
+                    Paste Reservation Email or Describe Event
+                  </label>
+                  <div className="relative">
+                    <div className="absolute top-3 right-3">
+                      <SparklesIcon className="h-5 w-5 text-indigo-500 animate-pulse" />
+                    </div>
+                    <textarea
+                      value={eventText}
+                      onChange={(e) => setEventText(e.target.value)}
+                      className="input min-h-[200px] pr-10"
+                      placeholder="Paste any travel confirmation email (flights, hotels, trains, car rentals) or describe your event in natural language..."
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end space-x-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setEventText('');
+                    }}
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary flex items-center space-x-2"
+                    disabled={isParsingText}
+                  >
+                    {isParsingText ? (
+                      <>
+                        <SparklesIcon className="h-5 w-5 animate-spin" />
+                        <span>Parsing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <SparklesIcon className="h-5 w-5" />
+                        <span>Parse with AI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -4135,6 +4368,40 @@ const TripDetails: React.FC = () => {
           suggestions={aiSuggestions}
           onClose={() => setAISuggestions(null)}
         />
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmationModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{ zIndex: 1100 }}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="ml-3 w-0 flex-1">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {confirmationModal.title}
+                </h3>
+                <div className="mt-2">
+                  <p className="text-sm text-gray-500 whitespace-pre-line">
+                    {confirmationModal.message}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={confirmationModal.onClose}
+                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -175,6 +175,28 @@ const extractMapRelevantData = (trip: Trip) => {
   };
 };
 
+// Add rate limiting configuration
+const RATE_LIMIT_DELAY = 1000; // 1 second between requests
+const MAX_RETRIES = 3;
+
+// Add retry function for fetch requests
+const fetchWithRetry = async (url: string, retries = MAX_RETRIES): Promise<Response> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response;
+  } catch (error) {
+    if (retries > 0) {
+      console.log(`Retrying request to ${url}, ${retries} attempts remaining`);
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      return fetchWithRetry(url, retries - 1);
+    }
+    throw error;
+  }
+};
+
 const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
@@ -248,28 +270,21 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
 
   const fetchRoute = async (start: Location, end: Location, type: 'driving' | 'train' | 'flight' = 'driving'): Promise<RouteInfo | null> => {
     try {
-      // Check cache first
       const cacheKey = getRouteCacheKey(start.lat, start.lon, end.lat, end.lon);
       if (routeCache[cacheKey]) {
         console.log(`Using cached route data for: ${start.displayName} to ${end.displayName}`);
         return { ...routeCache[cacheKey], type };
       }
       
-      // Add a small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       
-      let response;
       let route: RouteInfo;
 
       if (type === 'driving') {
-        response = await fetch(
+        const response = await fetchWithRetry(
           `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson`
         );
         
-        if (!response.ok) {
-          throw new Error('Failed to fetch driving route');
-        }
-
         const data = await response.json();
         
         if (data.code !== 'Ok' || !data.routes || !data.routes[0]) {
@@ -282,50 +297,42 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           distance: data.routes[0].distance,
           type: 'driving'
         };
+
+        // Cache the result
+        routeCache[cacheKey] = route;
+        saveRouteCache();
       } else if (type === 'flight') {
-        // Calculate a curved path for the flight
         const distance = calculateDistance(start.lat, start.lon, end.lat, end.lon);
         const coordinates = generateFlightPath(start.lat, start.lon, end.lat, end.lon);
         
-        // Estimate flight duration based on distance (assuming average speed of 800km/h)
-        const duration = Math.round(distance / 800 * 60); // Convert to minutes
-        
         route = {
           coordinates,
-          duration,
+          duration: Math.round(distance / 800 * 60),
           distance,
           type: 'flight',
-          departureTime: new Date().toISOString(), // Default to current time
-          arrivalTime: new Date(Date.now() + duration * 60000).toISOString() // Add duration to current time
+          departureTime: new Date().toISOString(),
+          arrivalTime: new Date(Date.now() + Math.round(distance / 800 * 60) * 60000).toISOString()
         };
       } else {
-        // For train routes, use a dashed line between points
-        const coordinates = [[start.lat, start.lon], [end.lat, end.lon]] as [number, number][];
-        const distance = calculateDistance(start.lat, start.lon, end.lat, end.lon);
-        
-        // Estimate train duration based on distance (assuming average speed of 120km/h)
-        const duration = Math.round(distance / 120 * 60); // Convert to minutes
-        
+        // For train routes, use a simple straight line
         route = {
-          coordinates,
-          duration,
-          distance,
-          type: 'train',
-          departureTime: new Date().toISOString(), // Default to current time
-          arrivalTime: new Date(Date.now() + duration * 60000).toISOString() // Add duration to current time
+          coordinates: [[start.lat, start.lon], [end.lat, end.lon]],
+          duration: 0,
+          distance: calculateDistance(start.lat, start.lon, end.lat, end.lon),
+          type: 'train'
         };
       }
-      
-      // Cache the result
-      routeCache[cacheKey] = route;
-      
-      // Save updated cache to localStorage
-      saveRouteCache();
-      
+
       return route;
     } catch (err) {
       console.warn('Error fetching route:', err);
-      return null;
+      // Fallback to straight line for any type if there's an error
+      return {
+        coordinates: [[start.lat, start.lon], [end.lat, end.lon]],
+        duration: 0,
+        distance: calculateDistance(start.lat, start.lon, end.lat, end.lon),
+        type
+      };
     }
   };
 
@@ -399,7 +406,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
 
   const fetchTripLocation = async (tripName: string): Promise<Location | null> => {
     try {
-      // Remove common words and get keywords from trip name
       const keywords = tripName
         .toLowerCase()
         .replace(/[^\w\s]/g, '')
@@ -407,7 +413,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         .filter(word => !['trip', 'to', 'in', 'at', 'the', 'a', 'an'].includes(word))
         .join(' ');
         
-      // Check cache first
       const cacheKey = getLocationCacheKey(keywords);
       if (locationCache[cacheKey]) {
         console.log(`Using cached location data for trip: ${tripName}`);
@@ -427,14 +432,11 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         };
       }
 
-      const response = await fetch(
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      const response = await fetchWithRetry(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keywords)}`
       );
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch location for ${keywords}`);
-      }
-
       const data = await response.json();
       
       if (data && data.length > 0) {
@@ -444,10 +446,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           displayName: data[0].display_name
         };
         
-        // Cache the result
         locationCache[cacheKey] = locationData;
-        
-        // Save updated cache to localStorage
         saveLocationCache();
         
         return {
@@ -846,6 +845,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           maxZoom={19}
           updateWhenIdle={true}
           updateWhenZooming={false}
+          subdomains={['a', 'b', 'c']} // Use multiple subdomains to distribute requests
         />
         
         {/* Render routes */}

@@ -7,7 +7,8 @@ import {
   FlightEvent,
   TrainEvent,
   RentalCarEvent,
-  BusEvent
+  BusEvent,
+  EventType
 } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -24,6 +25,35 @@ interface DreamTripSuggestionRequest {
   places: string[];
   activities: string[];
   customPrompt: string;
+}
+
+interface TextEventParseRequest {
+  text: string;
+  trip: {
+    name: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+    events: Event[];
+  };
+  user: {
+    _id: string;
+    name: string;
+    email: string;
+    photoUrl: string | null;
+  };
+}
+
+interface ParsedEventData {
+  type: EventType;
+  fields: Record<string, any>;
+  confidence: number;
+  reasoning: string;
+}
+
+interface ParsedResponse {
+  type: 'single' | 'multiple';
+  events: ParsedEventData[];
 }
 
 // Initialize Gemini
@@ -271,9 +301,9 @@ export const generateDestinationSuggestions = async (
   tripDates: { startDate: string; endDate: string },
   user: { _id: string; name: string; email: string; photoUrl: string | null; }
 ): Promise<DestinationEvent[]> => {
-  console.log('\n=== AI SERVICE: STARTING DESTINATION GENERATION ===');
-  console.log('Trip dates:', tripDates);
-  console.log('Total events:', allEvents.length);
+  //console.log('\n=== AI SERVICE: STARTING DESTINATION GENERATION ===');
+  //console.log('Trip dates:', tripDates);
+  //console.log('Total events:', allEvents.length);
   
   // Get existing AI-suggested events (from both confirmed and exploring)
   const aiSuggestions = allEvents.filter(e => {
@@ -290,11 +320,11 @@ export const generateDestinationSuggestions = async (
     return isAISuggestion;
   });
 
-  console.log('\nTotal existing AI suggestions:', aiSuggestions.length);
+  //console.log('\nTotal existing AI suggestions:', aiSuggestions.length);
   
   const existingAISuggestions = aiSuggestions.map(e => {
     const formatted = formatEventForPrompt(e);
-    console.log('Formatted existing suggestion:', formatted);
+    //console.log('Formatted existing suggestion:', formatted);
     return formatted;
   });
 
@@ -302,9 +332,9 @@ export const generateDestinationSuggestions = async (
   const confirmedEvents = allEvents.filter(e => e.status === 'confirmed');
   const exploringEvents = allEvents.filter(e => e.status === 'exploring' && !aiSuggestions.includes(e));
 
-  console.log('\n=== PREPARING AI PROMPT ===');
-  console.log('Confirmed events:', confirmedEvents.length);
-  console.log('Exploring events:', exploringEvents.length);
+  //console.log('\n=== PREPARING AI PROMPT ===');
+  //console.log('Confirmed events:', confirmedEvents.length);
+  //console.log('Exploring events:', exploringEvents.length);
   
   const prompt = `Based on the following events in our trip from ${tripDates.startDate} to ${tripDates.endDate}, suggest 3 new and diverse destinations to visit.
 
@@ -346,10 +376,10 @@ SUGGESTION_END
 Ensure each suggestion is wrapped with SUGGESTION_START and SUGGESTION_END markers.
 Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existing schedule.`;
 
-  console.log('\nPrompt preview (first 500 chars):', prompt.substring(0, 500) + '...');
+  //('\nPrompt preview (first 500 chars):', prompt.substring(0, 500) + '...');
 
   try {
-    console.log('\n=== GENERATING NEW SUGGESTIONS ===');
+    //console.log('\n=== GENERATING NEW SUGGESTIONS ===');
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
@@ -368,7 +398,7 @@ Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existi
     
     if (!suggestionMatches || suggestionMatches.length !== 3) {
       console.error('Invalid number of suggestions:', suggestionMatches?.length);
-      console.log('Raw response:', text);
+      //console.log('Raw response:', text);
       throw new Error('Failed to generate exactly 3 suggestions. Retrying...');
     }
 
@@ -441,5 +471,244 @@ Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existi
   } catch (error) {
     console.error('Error generating destination suggestions:', error);
     throw new Error('Failed to generate destination suggestions. Please try again.');
+  }
+};
+
+export const parseEventFromText = async (request: TextEventParseRequest): Promise<Event | Event[]> => {
+  const prompt = `Parse the following text (I'll tell you when we get to the actual text that needs parsing) and extract travel event details. The text could be either a natural language description or an email containing reservation details. The events is related to this trip wit hthe following info:
+
+Trip Context:
+- Name: ${request.trip.name}
+- Description: ${request.trip.description}
+- Date Range: ${request.trip.startDate} to ${request.trip.endDate}
+- Current Events: ${request.trip.events.map(formatEventForPrompt).join('\n')}
+
+
+Possible Event Types and Their Required Fields:
+1. arrival: (Use for flights TO the trip destination)
+   Required:
+   - date (YYYY-MM-DD format)
+   - time (HH:mm format)
+   - airport (string) (This is the airport we're flying to)
+   Optional:
+   - flightNumber (string)
+   - airline (string)
+   - terminal (string)
+   - gate (string)
+   - bookingReference (string)
+
+2. departure: (Use for flights FROM the trip destination)
+   Required:
+   - date (YYYY-MM-DD format)
+   - time (HH:mm format)
+   - airport (string) (This is the airport we're flying from)
+   Optional:
+   - flightNumber (string)
+   - airline (string)
+   - terminal (string)
+   - gate (string)
+   - bookingReference (string)
+
+3. flight: (Use for flights WITHIN the trip)
+   Required:
+   - date (YYYY-MM-DD format)
+   - departureAirport (string)
+   - arrivalAirport (string)
+   Optional:
+   - airline (string)
+   - flightNumber (string)
+   - departureTime (HH:mm format)
+   - arrivalTime (HH:mm format)
+   - terminal (string)
+   - gate (string)
+   - bookingReference (string)
+
+4. stay:
+   Required:
+   - date (YYYY-MM-DD format)
+   - accommodationName (string)
+   - checkIn (YYYY-MM-DD format)
+   - checkOut (YYYY-MM-DD format)
+   Optional:
+   - address (string)
+   - reservationNumber (string)
+   - contactInfo (string)
+
+5. destination:
+   Required:
+   - date (YYYY-MM-DD format)
+   - placeName (string)
+   Optional:
+   - address (string)
+   - description (string)
+   - openingHours (string)
+
+6. train:
+   Required:
+   - date (YYYY-MM-DD format)
+   Optional:
+   - trainNumber (string)
+   - trainOperator (string)
+   - departureStation (string)
+   - arrivalStation (string)
+   - departureTime (HH:mm format)
+   - arrivalTime (HH:mm format)
+   - carriageNumber (string)
+   - seatNumber (string)
+   - bookingReference (string)
+
+7. rental_car:
+   Required:
+   - date (YYYY-MM-DD format)
+   Optional:
+   - carCompany (string)
+   - pickupLocation (string)
+   - dropoffLocation (string)
+   - pickupTime (HH:mm format)
+   - dropoffTime (HH:mm format)
+   - carType (string)
+   - bookingReference (string)
+   - licensePlate (string)
+
+8. bus:
+   Required:
+   - date (YYYY-MM-DD format)
+   Optional:
+   - busNumber (string)
+   - busOperator (string)
+   - departureStation (string)
+   - arrivalStation (string)
+   - departureTime (HH:mm format)
+   - arrivalTime (HH:mm format)
+   - seatNumber (string)
+   - bookingReference (string)
+
+Common fields for all events:
+- status: 'confirmed' | 'exploring'
+- source: 'manual' | 'google_places' | 'google_flights' | 'booking.com' | 'airbnb' | 'expedia' | 'tripadvisor' | 'other'
+- location?: { lat: number, lng: number, address?: string }
+- notes?: string
+- thumbnailUrl?: string
+
+Important flight related Event Rules:
+1. For text or reservation containing flights TO or FROM the trip destination:
+   - Create "arrival" events for flights TO the destination. for these events use the airport we're flying to as the airport field.
+   - Create "departure" events for flights FROM the destination. for these events use the airport we're flying from as the airport field.
+   - DO NOT create additional "flight" events for these cases
+
+2. For flights WITHIN the trip dates and between locations during the trip:
+   - Create ONLY a "flight" event
+   - DO NOT create "arrival" or "departure" events for these cases
+
+3. If you are parsing an Arrival and a Departure from the same text or reservation, DO NOT create additional Flight events.
+
+NOW THIS IS THE ACTUAL TEXT TO PARSE:
+${request.text}
+
+Return the response in this exact JSON format:
+{
+  "type": "single" | "multiple", (based on how many events you detected in the text. Return flights with both arrival to and departure from the trip destination are also multiple events)
+  "events": [{
+    "type": "one of: arrival, departure, stay, destination, flight, train, rental_car, bus",
+    "fields": {
+      // All fields matching the type's interface, including required and any detected optional fields
+      // Dates must be in YYYY-MM-DD format
+      // Times must be in HH:mm format
+      // Include status (default to 'confirmed')
+      // Include source (default to 'other')
+    },
+    "confidence": 0-1 score of confidence in the parsing,
+    "reasoning": "explanation of why this type was chosen and how the fields were extracted"
+  }]
+}`;
+
+  try {
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.1,
+        topK: 1,
+        topP: 0.1,
+        maxOutputTokens: 1024,
+      },
+    });
+
+    const response = await result.response;
+    const text = response.text();
+    
+    if (!text) {
+      throw new Error('Empty response from AI');
+    }
+
+    // Log the raw response
+    //console.log('Raw AI response:', text);
+
+    // Clean up the response text
+    let cleanText = text
+      // Remove any markdown code block markers
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      // Remove any leading/trailing whitespace
+      .trim()
+      // Ensure the text starts with { and ends with }
+      .replace(/^[^{]*({.*})[^}]*$/s, '$1')
+      // Unescape quotes
+      .replace(/\\"/g, '"');
+
+    //console.log('Cleaned response:', cleanText);
+
+    const parsed = JSON.parse(cleanText) as ParsedResponse;
+    
+    if (!parsed.type || !parsed.events || !Array.isArray(parsed.events)) {
+      throw new Error('Invalid response format from AI');
+    }
+
+    // Convert the parsed events into actual Event objects
+    const events = parsed.events.map((eventData: ParsedEventData) => {
+      if (!eventData.type || !eventData.fields || typeof eventData.confidence !== 'number') {
+        throw new Error('Invalid event format in AI response');
+      }
+
+      // Create base event with user information
+      const baseEvent: Partial<Event> = {
+        id: uuidv4(),
+        type: eventData.type,
+        date: '', // Will be set based on specific event type
+        status: 'confirmed',
+        source: 'other',
+        location: { lat: 0, lng: 0 },
+        notes: `Parsed from text with ${Math.round(eventData.confidence * 100)}% confidence\n\nReasoning: ${eventData.reasoning}`,
+        createdBy: {
+          _id: request.user._id,
+          name: request.user.name,
+          email: request.user.email,
+          photoUrl: request.user.photoUrl
+        },
+        updatedBy: {
+          _id: request.user._id,
+          name: request.user.name,
+          email: request.user.email,
+          photoUrl: request.user.photoUrl
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Merge the AI-parsed fields with the base event
+      const event = {
+        ...baseEvent,
+        ...eventData.fields,
+      } as Event;
+
+      return event;
+    });
+
+    // If there's only one event, return it directly
+    // If there are multiple events (like arrival and departure from the same flight booking),
+    // return the array of events
+    return parsed.type === 'single' ? events[0] : events;
+  } catch (error) {
+    console.error('Error parsing event from text:', error);
+    throw new Error('Failed to parse event details. Please try again or enter details manually.');
   }
 }; 
