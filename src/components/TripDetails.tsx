@@ -267,7 +267,8 @@ const TripDetails: React.FC = () => {
     dropoffTime: '',
     licensePlate: '',
     busOperator: '',
-    busNumber: ''
+    busNumber: '',
+    dropoffDate: ''
   });
   const [isCollaboratorModalOpen, setIsCollaboratorModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -620,7 +621,8 @@ const TripDetails: React.FC = () => {
         dropoffTime: '',
         licensePlate: '',
         busOperator: '',
-        busNumber: ''
+        busNumber: '',
+        dropoffDate: ''
       });
 
       // Load thumbnails
@@ -1000,6 +1002,18 @@ const TripDetails: React.FC = () => {
                 page-break-inside: avoid;
               }
             }
+            .ai-generated {
+              display: inline-flex;
+              align-items: center;
+              gap: 0.5rem;
+              color: #4F46E5;
+              font-size: 0.875rem;
+              margin-bottom: 0.5rem;
+            }
+            .ai-generated svg {
+              width: 1rem;
+              height: 1rem;
+            }
           </style>
         </head>
         <body>
@@ -1018,6 +1032,14 @@ const TripDetails: React.FC = () => {
                       <span class="event-icon">${getEventIcon(event.type)}</span>
                       <span class="event-type">${event.type}</span>
                     </div>
+                    ${event.source === 'other' && event.notes?.includes('✨ AI-Generated Suggestion') ? `
+                      <div class="ai-generated">
+                        <svg viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" />
+                        </svg>
+                        <span>AI Suggested</span>
+                      </div>
+                    ` : ''}
                     <div class="event-title">${getEventTitle(event)}</div>
                     ${(() => {
                       switch (event.type) {
@@ -1087,9 +1109,19 @@ const TripDetails: React.FC = () => {
                         }
                         case 'rental_car': {
                           const e = event as RentalCarEvent;
-                          return e.pickupLocation && e.dropoffLocation 
-                            ? `${e.pickupLocation} to ${e.dropoffLocation}`
-                            : 'Car Rental';
+                          return `
+                            <div class="mt-2 space-y-1 text-sm text-gray-600">
+                              ${e.carCompany ? `<div>Car Company: ${e.carCompany}</div>` : ''}
+                              ${e.carType ? `<div>Car Type: ${e.carType}</div>` : ''}
+                              ${e.pickupLocation ? `<div>Pickup Location: ${e.pickupLocation}</div>` : ''}
+                              ${e.pickupTime ? `<div>Pickup Time: ${e.pickupTime}</div>` : ''}
+                              ${e.dropoffLocation ? `<div>Dropoff Location: ${e.dropoffLocation}</div>` : ''}
+                              ${e.dropoffDate ? `<div>Dropoff Date: ${e.dropoffDate}</div>` : ''}
+                              ${e.dropoffTime ? `<div>Dropoff Time: ${e.dropoffTime}</div>` : ''}
+                              ${e.licensePlate ? `<div>License Plate: ${e.licensePlate}</div>` : ''}
+                              ${e.bookingReference ? `<div>Booking Reference: ${e.bookingReference}</div>` : ''}
+                            </div>
+                          `;
                         }
                         case 'bus': {
                           const e = event as BusEvent;
@@ -1298,7 +1330,8 @@ const TripDetails: React.FC = () => {
       dropoffTime: '',
       licensePlate: '',
       busOperator: '',
-      busNumber: ''
+      busNumber: '',
+      dropoffDate: ''
     });
     setEventText('');
     setActiveEventTab('text'); // Change default tab to text
@@ -1516,6 +1549,7 @@ const TripDetails: React.FC = () => {
           dropoffLocation: eventData.dropoffLocation || '',
           pickupTime: eventData.pickupTime || '',
           dropoffTime: eventData.dropoffTime || '',
+          dropoffDate: eventData.dropoffDate || '',
           licensePlate: eventData.licensePlate || '',
           bookingReference: eventData.bookingReference || ''
         } as RentalCarEvent;
@@ -1567,8 +1601,8 @@ const TripDetails: React.FC = () => {
         await handleTripUpdate(updatedTrip);
         setTrip(updatedTrip);
         setFormFeedback({ type: 'success', message: 'Event added successfully!' });
-        setIsModalOpen(false);
-        resetEventForm();
+      setIsModalOpen(false);
+      resetEventForm();
       }
     } catch (error) {
       console.error('Error submitting event:', error);
@@ -2322,6 +2356,17 @@ const TripDetails: React.FC = () => {
                 }
                 className="input"
                 required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Dropoff Date</label>
+              <input
+                type="date"
+                value={eventData.dropoffDate}
+                onChange={(e) =>
+                  setEventData({ ...eventData, dropoffDate: e.target.value })
+                }
+                className="input"
               />
             </div>
             <div className="mb-4">
@@ -3262,6 +3307,7 @@ const TripDetails: React.FC = () => {
             dropoffLocation: (event as RentalCarEvent).dropoffLocation || '',
             pickupTime: (event as RentalCarEvent).pickupTime || '',
             dropoffTime: (event as RentalCarEvent).dropoffTime || '',
+            dropoffDate: (event as RentalCarEvent).dropoffDate || '',
             licensePlate: (event as RentalCarEvent).licensePlate || '',
             bookingReference: (event as RentalCarEvent).bookingReference || ''
           }
@@ -3831,6 +3877,7 @@ const TripDetails: React.FC = () => {
                                               <div className="mt-2 space-y-1 text-sm text-gray-600">
                                                 {e.carType && <p>Car Type: {e.carType}</p>}
                                                 {e.pickupTime && <p>Pickup Time: {e.pickupTime}</p>}
+                                                {e.dropoffDate && <p>Dropoff Date: {e.dropoffDate}</p>}
                                                 {e.dropoffTime && <p>Dropoff Time: {e.dropoffTime}</p>}
                                                 {e.licensePlate && <p>License Plate: {e.licensePlate}</p>}
                                                 {e.bookingReference && <p>Booking Ref: {e.bookingReference}</p>}
@@ -4056,43 +4103,43 @@ const TripDetails: React.FC = () => {
             )}
 
             {activeEventTab === 'form' ? (
-              <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-2">Event Type</label>
-                  <select
-                    value={eventType}
-                    onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
-                    className="input"
-                  >
-                    <option value="arrival">Arrival</option>
-                    <option value="departure">Departure</option>
-                    <option value="stay">Stay</option>
-                    <option value="destination">Destination</option>
-                    <option value="flight">Flight</option>
-                    <option value="train">Train</option>
-                    <option value="rental_car">Rental Car</option>
-                    <option value="bus">Bus</option>
-                  </select>
-                </div>
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Event Type</label>
+                <select
+                  value={eventType}
+                  onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
+                  className="input"
+                >
+                  <option value="arrival">Arrival</option>
+                  <option value="departure">Departure</option>
+                  <option value="stay">Stay</option>
+                  <option value="destination">Destination</option>
+                  <option value="flight">Flight</option>
+                  <option value="train">Train</option>
+                  <option value="rental_car">Rental Car</option>
+                  <option value="bus">Bus</option>
+                </select>
+              </div>
 
-                {renderEventForm()}
+              {renderEventForm()}
 
-                <div className="flex justify-end space-x-2 mt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      setIsEditingEvent(null);
-                    }}
-                    className="btn btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    {isEditingEvent ? 'Save Changes' : 'Add Event'}
-                  </button>
-                </div>
-              </form>
+              <div className="flex justify-end space-x-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setIsEditingEvent(null);
+                  }}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {isEditingEvent ? 'Save Changes' : 'Add Event'}
+                </button>
+              </div>
+            </form>
             ) : (
               <form onSubmit={handleTextSubmit}>
                 <div className="mb-4">
@@ -4102,7 +4149,7 @@ const TripDetails: React.FC = () => {
                   <div className="relative">
                     <div className="absolute top-3 right-3">
                       <SparklesIcon className="h-5 w-5 text-indigo-500 animate-pulse" />
-                    </div>
+          </div>
                     <textarea
                       value={eventText}
                       onChange={(e) => setEventText(e.target.value)}

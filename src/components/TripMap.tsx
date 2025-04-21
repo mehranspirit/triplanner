@@ -284,7 +284,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         const response = await fetchWithRetry(
           `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson`
         );
-        
+
         const data = await response.json();
         
         if (data.code !== 'Ok' || !data.routes || !data.routes[0]) {
@@ -322,7 +322,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           type: 'train'
         };
       }
-
+      
       return route;
     } catch (err) {
       console.warn('Error fetching route:', err);
@@ -436,7 +436,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
       const response = await fetchWithRetry(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keywords)}`
       );
-      
+
       const data = await response.json();
       
       if (data && data.length > 0) {

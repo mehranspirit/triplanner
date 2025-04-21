@@ -1,5 +1,5 @@
 import React from 'react';
-import { RentalCarEvent } from '@/types';
+import { RentalCarEvent } from '../../../types/eventTypes';
 
 interface RentalCarFieldsProps {
   eventData: Partial<RentalCarEvent>;
@@ -47,6 +47,16 @@ const RentalCarFields: React.FC<RentalCarFieldsProps> = ({ eventData, onChange }
           onChange={(e) => onChange<RentalCarEvent>('pickupTime', e.target.value)}
           className="input"
           placeholder="Enter pickup time"
+        />
+      </div>
+      <div className="mb-4">
+        <label className="block text-gray-700 mb-2">Dropoff Date (optional)</label>
+        <input
+          type="date"
+          value={eventData.dropoffDate || ''}
+          onChange={(e) => onChange<RentalCarEvent>('dropoffDate', e.target.value)}
+          className="input"
+          placeholder="Enter dropoff date"
         />
       </div>
       <div className="mb-4">

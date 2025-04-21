@@ -192,6 +192,7 @@ export interface EventFormData {
   dropoffLocation?: string;
   pickupTime?: string;
   dropoffTime?: string;
+  dropoffDate?: string;
   licensePlate?: string;
   busOperator?: string;
   busNumber?: string;
@@ -230,6 +231,7 @@ export interface RentalCarEvent extends Event {
   dropoffLocation?: string;
   pickupTime?: string;
   dropoffTime?: string;
+  dropoffDate?: string; // YYYY-MM-DD format
   carType?: string;
   bookingReference?: string;
   licensePlate?: string;

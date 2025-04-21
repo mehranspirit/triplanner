@@ -230,6 +230,7 @@ export interface RentalCarEvent extends Event {
   dropoffLocation?: string;
   pickupTime?: string;
   dropoffTime?: string;
+  dropoffDate?: string; // YYYY-MM-DD format
   carType?: string;
   bookingReference?: string;
   licensePlate?: string;

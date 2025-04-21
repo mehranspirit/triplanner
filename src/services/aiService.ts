@@ -285,7 +285,7 @@ const formatEventForPrompt = (event: Event): string => {
     }
     case 'rental_car': {
       const e = event as RentalCarEvent;
-      return `Car rental from ${e.pickupLocation} to ${e.dropoffLocation} on ${formatDate(e.date)}${e.carCompany ? ` from ${e.carCompany}` : ''}${e.carType ? ` (${e.carType})` : ''}${e.pickupTime ? ` - Pickup: ${e.pickupTime}` : ''}${e.dropoffTime ? `, Dropoff: ${e.dropoffTime}` : ''}`;
+      return `Car rental from ${e.pickupLocation} to ${e.dropoffLocation} on ${formatDate(e.date)}${e.carCompany ? ` from ${e.carCompany}` : ''}${e.carType ? ` (${e.carType})` : ''}${e.pickupTime ? ` - Pickup: ${e.pickupTime}` : ''}${e.dropoffTime ? `, Dropoff: ${e.dropoffTime}` : ''}${e.dropoffDate ? ` until ${formatDate(e.dropoffDate)}` : ''}`;
     }
     case 'bus': {
       const e = event as BusEvent;
@@ -566,6 +566,7 @@ Possible Event Types and Their Required Fields:
    - dropoffLocation (string)
    - pickupTime (HH:mm format)
    - dropoffTime (HH:mm format)
+   - dropoffDate (YYYY-MM-DD format)
    - carType (string)
    - bookingReference (string)
    - licensePlate (string)

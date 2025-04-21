@@ -61,6 +61,7 @@ const eventSchema = new mongoose.Schema({
   dropoffLocation: String,
   pickupTime: String,
   dropoffTime: String,
+  dropoffDate: String,
   licensePlate: String,
   // Bus fields
   busOperator: String,
