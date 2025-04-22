@@ -100,14 +100,14 @@ try {
   if (savedRoutes) {
     const parsedRoutes = JSON.parse(savedRoutes);
     Object.assign(routeCache, parsedRoutes);
-    console.log('Loaded route cache from localStorage:', Object.keys(parsedRoutes).length, 'routes');
+    //console.log('Loaded route cache from localStorage:', Object.keys(parsedRoutes).length, 'routes');
   }
   
   const savedLocations = localStorage.getItem('tripMapLocationCache');
   if (savedLocations) {
     const parsedLocations = JSON.parse(savedLocations);
     Object.assign(locationCache, parsedLocations);
-    console.log('Loaded location cache from localStorage:', Object.keys(parsedLocations).length, 'locations');
+    //console.log('Loaded location cache from localStorage:', Object.keys(parsedLocations).length, 'locations');
   }
 } catch (err) {
   console.warn('Failed to load cache from localStorage:', err);
@@ -189,7 +189,7 @@ const fetchWithRetry = async (url: string, retries = MAX_RETRIES): Promise<Respo
     return response;
   } catch (error) {
     if (retries > 0) {
-      console.log(`Retrying request to ${url}, ${retries} attempts remaining`);
+      //console.log(`Retrying request to ${url}, ${retries} attempts remaining`);
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       return fetchWithRetry(url, retries - 1);
     }
@@ -272,7 +272,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     try {
       const cacheKey = getRouteCacheKey(start.lat, start.lon, end.lat, end.lon);
       if (routeCache[cacheKey]) {
-        console.log(`Using cached route data for: ${start.displayName} to ${end.displayName}`);
+        //console.log(`Using cached route data for: ${start.displayName} to ${end.displayName}`);
         return { ...routeCache[cacheKey], type };
       }
       
@@ -415,7 +415,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         
       const cacheKey = getLocationCacheKey(keywords);
       if (locationCache[cacheKey]) {
-        console.log(`Using cached location data for trip: ${tripName}`);
+        //console.log(`Using cached location data for trip: ${tripName}`);
         return {
           ...locationCache[cacheKey],
           event: {
@@ -472,7 +472,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   };
 
   useEffect(() => {
-    console.log('TripMap: Fetching locations for events');
+    //console.log('TripMap: Fetching locations for events');
     const fetchLocations = async () => {
       try {
         setIsLoading(true);
@@ -615,7 +615,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           // Check cache first
           const cacheKey = getLocationCacheKey(searchQuery);
           if (locationCache[cacheKey]) {
-            console.log(`Using cached location data for: ${searchQuery}`);
+            //console.log(`Using cached location data for: ${searchQuery}`);
             return {
               ...locationCache[cacheKey],
               event: {
@@ -681,7 +681,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         const confirmedLocations = validLocations.filter(
           loc => !loc.event.status || loc.event.status === 'confirmed'
         );
-        console.log('Confirmed locations for routes:', confirmedLocations.length);
+        //console.log('Confirmed locations for routes:', confirmedLocations.length);
         
         // Fetch routes between consecutive confirmed locations
         const routePromises: Promise<RouteInfo | null>[] = [];
@@ -850,7 +850,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         
         {/* Render routes */}
         {routes.map((route, index) => {
-          console.log('Rendering route:', route.type, route.coordinates.length);
+          //console.log('Rendering route:', route.type, route.coordinates.length);
           return (
             <Polyline
               key={`${route.type}-${index}`}

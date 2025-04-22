@@ -38,7 +38,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
       const serverTrip = await api.getTrip(trip._id);
       
       // Log the updated collaborators
-      console.log('Updated collaborators after adding:', serverTrip.collaborators);
+      //console.log('Updated collaborators after adding:', serverTrip.collaborators);
       
       // Update the UI with the server data
       onUpdate(serverTrip);
@@ -65,7 +65,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
       const serverTrip = await api.getTrip(trip._id);
       
       // Log the updated collaborators
-      console.log('Updated collaborators after removing:', serverTrip.collaborators);
+      //console.log('Updated collaborators after removing:', serverTrip.collaborators);
       
       // Update the UI with the server data
       onUpdate(serverTrip);
@@ -89,18 +89,18 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
-      console.log('Starting role update:', {
-        tripId: trip._id,
-        userId,
-        newRole,
-        currentCollaborators: trip.collaborators
-          .filter(isCollaboratorObject)
-          .map(c => ({
-            userId: c.user._id,
-            name: c.user.name,
-            role: c.role
-          }))
-      });
+      // console.log('Starting role update:', {
+      //   tripId: trip._id,
+      //   userId,
+      //   newRole,
+      //   currentCollaborators: trip.collaborators
+      //     .filter(isCollaboratorObject)
+      //     .map(c => ({
+      //       userId: c.user._id,
+      //       name: c.user.name,
+      //       role: c.role
+      //     }))
+      // });
       
       // Create an optimistic update to maintain the order of collaborators
       const updatedTrip = {
@@ -132,12 +132,12 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
           .filter(isCollaboratorObject)
           .find(c => c.user._id === userId);
         
-        console.log('Updated collaborator data:', {
-          userId,
-          name: updatedCollaborator?.user.name,
-          role: updatedCollaborator?.role,
-          roleType: typeof updatedCollaborator?.role
-        });
+        // console.log('Updated collaborator data:', {
+        //   userId,
+        //   name: updatedCollaborator?.user.name,
+        //   role: updatedCollaborator?.role,
+        //   roleType: typeof updatedCollaborator?.role
+        // });
         
         // Update the UI with the server data, but maintain the order
         const orderedServerTrip = {
@@ -154,7 +154,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
         
         onUpdate(orderedServerTrip);
         
-        console.log('Role update complete');
+        //console.log('Role update complete');
       } catch (fetchErr) {
         console.error('Error fetching updated trip:', fetchErr);
         // We already updated the UI optimistically, so no need to do it again

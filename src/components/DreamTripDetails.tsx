@@ -452,14 +452,14 @@ const DreamTripDetails: React.FC = () => {
 
   const loadHistory = async (tripId: string) => {
     if (!user?._id) {
-      console.log('Missing user ID:', { userId: user?._id });
+      //console.log('Missing user ID:', { userId: user?._id });
       return;
     }
 
     try {
-      console.log('Loading AI suggestions history for:', { tripId, userId: user._id });
+      //console.log('Loading AI suggestions history for:', { tripId, userId: user._id });
       const history = await dreamTripService.getAISuggestions(tripId, user._id);
-      console.log('Loaded AI suggestions history:', history);
+      //console.log('Loaded AI suggestions history:', history);
       setSuggestionsHistory(history);
     } catch (error) {
       console.error('Error loading AI suggestions history:', error);

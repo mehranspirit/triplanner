@@ -548,9 +548,9 @@ const TripDetails: React.FC = () => {
     }
 
     try {
-      console.log('Loading AI suggestions history for:', { tripId, userId: user._id });
+      //console.log('Loading AI suggestions history for:', { tripId, userId: user._id });
       const history = await api.getAISuggestions(tripId, user._id);
-      console.log('Loaded AI suggestions history:', history);
+      //console.log('Loaded AI suggestions history:', history);
       setSuggestionsHistory(history);
     } catch (error) {
       console.error('Error loading AI suggestions history:', error);
@@ -738,7 +738,7 @@ const TripDetails: React.FC = () => {
   }, []);
 
   const handleTripUpdate = async (updatedTrip: Trip) => {
-    console.log('Updating trip with new data:', updatedTrip);
+    //console.log('Updating trip with new data:', updatedTrip);
     
     try {
       // Create a deep copy of the updated trip to avoid reference issues
@@ -748,7 +748,7 @@ const TripDetails: React.FC = () => {
       
       // Use the API directly since we're handling errors here
       await api.updateTrip(updatedTrip);
-      console.log('Trip update complete');
+      //console.log('Trip update complete');
     } catch (err) {
       console.error('Error updating trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to update trip');
@@ -2723,7 +2723,7 @@ const TripDetails: React.FC = () => {
     if (!trip || !user || user.photoUrl === undefined) return;
 
     try {
-      console.log('=== STARTING AI GENERATION ===');
+      //console.log('=== STARTING AI GENERATION ===');
       
       // Calculate trip dates from events
       const sortedEvents = [...trip.events].sort((a, b) => {
@@ -2761,16 +2761,16 @@ const TripDetails: React.FC = () => {
       if (!startDate) startDate = trip.startDate ? new Date(trip.startDate) : new Date();
       if (!endDate) endDate = trip.endDate ? new Date(trip.endDate) : startDate;
 
-      console.log('Trip details:', { 
-        id: trip._id, 
-        name: trip.name,
-        calculatedStartDate: startDate.toISOString(),
-        calculatedEndDate: endDate.toISOString(),
-        rawTrip: trip
-      });
+      //console.log('Trip details:', { 
+      //  id: trip._id, 
+      //  name: trip.name,
+      //  calculatedStartDate: startDate.toISOString(),
+      //  calculatedEndDate: endDate.toISOString(),
+      //  rawTrip: trip
+      //});
 
       setIsGeneratingDestinations(true);
-      console.log('Total events to process:', trip.events.length);
+      //console.log('Total events to process:', trip.events.length);
       
       const suggestions = await generateDestinationSuggestions(
         trip.events,
@@ -2786,7 +2786,7 @@ const TripDetails: React.FC = () => {
         }
       );
 
-      console.log('Received suggestions:', suggestions.length);
+      //console.log('Received suggestions:', suggestions.length);
 
       // Add suggestions to trip
       const updatedTrip = {
@@ -2795,11 +2795,11 @@ const TripDetails: React.FC = () => {
       };
 
       await handleTripUpdate(updatedTrip);
-      console.log('=== AI GENERATION COMPLETE ===');
+      //console.log('=== AI GENERATION COMPLETE ===');
       setSuccess('Added 3 AI-suggested destinations');
     } catch (error) {
-      console.error('=== AI GENERATION ERROR ===');
-      console.error('Error details:', error);
+      //console.error('=== AI GENERATION ERROR ===');
+      //console.error('Error details:', error);
       setError('Failed to generate destination suggestions');
     } finally {
       setIsGeneratingDestinations(false);
@@ -2968,19 +2968,19 @@ const TripDetails: React.FC = () => {
   );
   const canEdit = isOwner || (collaborator && getCollaboratorRole(collaborator) === 'editor');
 
-  console.log('User and ownership debug:', {
-    userId: user?._id,
-    userIdType: typeof user?._id,
-    ownerId: trip.owner._id,
-    ownerIdType: typeof trip.owner._id,
-    isOwner,
-    user,
-    tripOwner: trip.owner,
-    collaborator,
-    canEdit
-  });
+  // console.log('User and ownership debug:', {
+  //   userId: user?._id,
+  //   userIdType: typeof user?._id,
+  //   ownerId: trip.owner._id,
+  //   ownerIdType: typeof trip.owner._id,
+  //   isOwner,
+  //   user,
+  //   tripOwner: trip.owner,
+  //   collaborator,
+  //   canEdit
+  // });
 
-  console.log('Rendering collaborators:', trip.collaborators);
+  // console.log('Rendering collaborators:', trip.collaborators);
 
   const renderCreatorInfo = (event: Event) => {
     const creatorInfo = getCreatorInfo(event.createdBy);
