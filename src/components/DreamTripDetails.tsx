@@ -920,10 +920,13 @@ const DreamTripDetails: React.FC = () => {
                     <input
                       type="url"
                       value={newIdea.images[0]?.url || ''}
-                      onChange={(e) => setNewIdea(prev => ({
-                        ...prev,
-                        images: [{ url: e.target.value || FALLBACK_IMAGES[prev.category] || FALLBACK_IMAGES.default, caption: prev.images[0]?.caption || '' }]
-                      }))}
+                      onChange={(e) => {
+                        const url = e.target.value;
+                        setNewIdea(prev => ({
+                          ...prev,
+                          images: url ? [{ url, caption: prev.images[0]?.caption || '' }] : []
+                        }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="Enter image URL or leave blank for default"
                     />
@@ -1095,10 +1098,13 @@ const DreamTripDetails: React.FC = () => {
                     <input
                       type="url"
                       value={selectedIdea.images[0]?.url || ''}
-                      onChange={(e) => setSelectedIdea(prev => prev ? {
-                        ...prev,
-                        images: [{ url: e.target.value || FALLBACK_IMAGES[prev.category] || FALLBACK_IMAGES.default, caption: prev.images[0]?.caption || '' }]
-                      } : null)}
+                      onChange={(e) => {
+                        const url = e.target.value;
+                        setSelectedIdea(prev => prev ? {
+                          ...prev,
+                          images: url ? [{ url, caption: prev.images[0]?.caption || '' }] : []
+                        } : null);
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="Enter image URL or leave blank for default"
                     />

@@ -240,7 +240,7 @@ router.post('/:id/ideas', auth, async (req, res) => {
       return res.status(403).json({ message: 'You do not have access to this dream trip' });
     }
 
-    // If no images provided, fetch from Pexels
+    // If no images provided or empty images array, fetch from Pexels
     let images = req.body.images || [];
     if (images.length === 0) {
       try {
@@ -264,6 +264,21 @@ router.post('/:id/ideas', auth, async (req, res) => {
         }
       } catch (error) {
         console.warn('Failed to fetch image from Pexels:', error);
+        // If Pexels fails, use a default image based on category
+        const defaultImages = {
+          places: 'https://images.pexels.com/photos/466685/pexels-photo-466685.jpeg?auto=compress&cs=tinysrgb&w=800',
+          transportation: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+          accommodation: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=800',
+          activities: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+          'arts-culture': 'https://images.pexels.com/photos/699466/pexels-photo-699466.jpeg?auto=compress&cs=tinysrgb&w=800',
+          'food-drink': 'https://images.pexels.com/photos/1640774/pexels-photo-1640774.jpeg?auto=compress&cs=tinysrgb&w=800',
+          entertainment: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+          default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
+        };
+        images = [{
+          url: defaultImages[req.body.category] || defaultImages.default,
+          caption: `Image for ${req.body.title}`
+        }];
       }
     }
 
@@ -356,6 +371,21 @@ router.put('/:id/ideas/:ideaId', auth, async (req, res) => {
         }
       } catch (error) {
         console.warn('Failed to fetch image from Pexels:', error);
+        // If Pexels fails, use a default image based on category
+        const defaultImages = {
+          places: 'https://images.pexels.com/photos/466685/pexels-photo-466685.jpeg?auto=compress&cs=tinysrgb&w=800',
+          transportation: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+          accommodation: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=800',
+          activities: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+          'arts-culture': 'https://images.pexels.com/photos/699466/pexels-photo-699466.jpeg?auto=compress&cs=tinysrgb&w=800',
+          'food-drink': 'https://images.pexels.com/photos/1640774/pexels-photo-1640774.jpeg?auto=compress&cs=tinysrgb&w=800',
+          entertainment: 'https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=800',
+          default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
+        };
+        images = [{
+          url: defaultImages[req.body.category || dreamTrip.ideas[ideaIndex].category] || defaultImages.default,
+          caption: `Image for ${req.body.title}`
+        }];
       }
     }
 

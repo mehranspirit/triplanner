@@ -329,44 +329,42 @@ export const TripIdea: React.FC<TripIdeaProps> = ({
         </span>
       </div>
 
-      {idea.images && idea.images.length > 0 && idea.images[0].url && (
-        <div className="relative mb-3">
-          <img
-            src={idea.images[0].url}
-            alt={idea.images[0].caption || idea.title}
-            className="w-full h-48 object-cover rounded-lg"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              // Use category-specific fallback or default
-              const fallbackUrl = FALLBACK_IMAGES[idea.category] || FALLBACK_IMAGES.default;
-              target.src = fallbackUrl;
-            }}
-          />
-          {idea.images[0].caption && (
-            <p className="mt-1 text-sm text-gray-600 truncate">{idea.images[0].caption}</p>
-          )}
-          <div className="absolute top-2 right-2 flex gap-1">
-            <button
-              onClick={() => onEdit(idea)}
-              className="p-1 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
-              title="Edit idea"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => onDelete(idea._id)}
-              className="p-1 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
-              title="Delete idea"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          </div>
+      <div className="relative mb-3">
+        <img
+          src={idea.images?.[0]?.url || FALLBACK_IMAGES[idea.category] || FALLBACK_IMAGES.default}
+          alt={idea.images?.[0]?.caption || idea.title}
+          className="w-full h-48 object-cover rounded-lg"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            // Use category-specific fallback or default
+            const fallbackUrl = FALLBACK_IMAGES[idea.category] || FALLBACK_IMAGES.default;
+            target.src = fallbackUrl;
+          }}
+        />
+        {idea.images?.[0]?.caption && (
+          <p className="mt-1 text-sm text-gray-600 truncate">{idea.images[0].caption}</p>
+        )}
+        <div className="absolute top-2 right-2 flex gap-1">
+          <button
+            onClick={() => onEdit(idea)}
+            className="p-1 bg-white/90 hover:bg-white rounded-full text-gray-700 shadow-md transition-colors"
+            title="Edit idea"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onDelete(idea._id)}
+            className="p-1 bg-white/90 hover:bg-white rounded-full text-red-600 shadow-md transition-colors"
+            title="Delete idea"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
-      )}
+      </div>
 
       {idea.notes && (
         <div className="text-sm text-gray-600">
