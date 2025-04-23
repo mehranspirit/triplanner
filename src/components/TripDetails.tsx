@@ -16,6 +16,7 @@ import {
   TrainEvent,
   RentalCarEvent,
   BusEvent,
+  ActivityEvent,
   AISuggestionHistory
 } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
@@ -24,7 +25,7 @@ import CollaboratorModal from './CollaboratorModal';
 import ShareModal from './ShareModal';
 import TripMap from './TripMap';
 import Avatar from './Avatar';
-import EventForm from './EventForm';
+//import EventForm from './EventForm';
 import { AISuggestionsModal } from './AISuggestionsModal';
 import { AISuggestionsDisplay } from './AISuggestionsDisplay';
 import { generateAISuggestions, generateDestinationSuggestions, parseEventFromText } from '../services/aiService';
@@ -49,7 +50,8 @@ const DEFAULT_THUMBNAILS = {
   flight: 'https://images.pexels.com/photos/358319/pexels-photo-358319.jpeg?auto=compress&cs=tinysrgb&w=300',
   train: 'https://images.pexels.com/photos/302428/pexels-photo-302428.jpeg?auto=compress&cs=tinysrgb&w=300',
   rental_car: 'https://images.pexels.com/photos/30292047/pexels-photo-30292047.jpeg?auto=compress&cs=tinysrgb&w=300',
-  bus: 'https://images.pexels.com/photos/3608967/pexels-photo-3608967.jpeg?auto=compress&cs=tinysrgb&w=300'
+  bus: 'https://images.pexels.com/photos/3608967/pexels-photo-3608967.jpeg?auto=compress&cs=tinysrgb&w=300',
+  activity: 'https://images.pexels.com/photos/1659438/pexels-photo-1659438.jpeg?auto=compress&cs=tinysrgb&w=300'
 };
 
 // Predefined thumbnails as fallback
@@ -859,21 +861,15 @@ const TripDetails: React.FC = () => {
       }
     };
 
-    const getEventTitle = (event: Event) => {
+    const getEventTitle = (event: Event): string => {
       switch (event.type) {
         case 'arrival':
-        case 'departure': {
-          const e = event as ArrivalDepartureEvent;
-          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${e.airport || 'Airport'}`;
-        }
-        case 'stay': {
-          const e = event as StayEvent;
-          return e.accommodationName || 'Accommodation';
-        }
-        case 'destination': {
-          const e = event as DestinationEvent;
-          return e.placeName || 'Destination';
-        }
+        case 'departure':
+          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport || 'Airport'}`;
+        case 'stay':
+          return (event as StayEvent).accommodationName || 'Accommodation';
+        case 'destination':
+          return (event as DestinationEvent).placeName || 'Destination';
         case 'flight': {
           const e = event as FlightEvent;
           return `${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim();
@@ -884,11 +880,15 @@ const TripDetails: React.FC = () => {
         }
         case 'rental_car': {
           const e = event as RentalCarEvent;
-          return `${e.carCompany || 'Car'} Rental`;
+          return `${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`;
         }
         case 'bus': {
           const e = event as BusEvent;
           return `${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim();
+        }
+        case 'activity': {
+          const e = event as ActivityEvent;
+          return `${e.title || 'Activity'} - ${e.activityType || ''}`.replace(/ - $/, '');
         }
         default:
           return 'Event';
@@ -1135,6 +1135,16 @@ const TripDetails: React.FC = () => {
                                 `<div>Arrival: ${e.arrivalTime ? `${e.arrivalTime} at ` : ''}${e.arrivalStation || 'Station'}</div>` : ''}
                               ${e.seatNumber ? `<div>Seat: ${e.seatNumber}</div>` : ''}
                               ${e.bookingReference ? `<div>Booking Reference: ${e.bookingReference}</div>` : ''}
+                            </div>
+                          `;
+                        }
+                        case 'activity': {
+                          const e = event as ActivityEvent;
+                          return `
+                            <div class="event-details">
+                              <p>Type: ${e.activityType}</p>
+                              ${e.address && `<p>Address: ${e.address}</p>`}
+                              ${e.description && `<p>Description: ${e.description}</p>`}
                             </div>
                           `;
                         }
@@ -1565,6 +1575,14 @@ const TripDetails: React.FC = () => {
           seatNumber: eventData.seatNumber || '',
           bookingReference: eventData.bookingReference || ''
         } as BusEvent;
+      } else if (eventData.type === 'activity') {
+        newEvent = {
+          ...baseEvent,
+          title: eventData.title || '',
+          activityType: eventData.activityType || '',
+          address: eventData.address || '',
+          description: eventData.description || ''
+        } as ActivityEvent;
       } else {
         newEvent = {
           ...baseEvent,
@@ -2487,6 +2505,61 @@ const TripDetails: React.FC = () => {
             </div>
           </>
         );
+      case 'activity':
+        return (
+          <>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Title</label>
+              <input
+                type="text"
+                value={eventData.title || ''}
+                onChange={(e) =>
+                  setEventData({ ...eventData, title: e.target.value })
+                }
+                className="input"
+                placeholder="Enter activity title"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Activity Type</label>
+              <input
+                type="text"
+                value={eventData.activityType || ''}
+                onChange={(e) =>
+                  setEventData({ ...eventData, activityType: e.target.value })
+                }
+                className="input"
+                placeholder="Enter activity type"
+                required
+              />
+            </div>
+            {commonFields}
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Address (optional)</label>
+              <input
+                type="text"
+                value={eventData.address || ''}
+                onChange={(e) =>
+                  setEventData({ ...eventData, address: e.target.value })
+                }
+                className="input"
+                placeholder="Enter address"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Description (optional)</label>
+              <textarea
+                value={eventData.description || ''}
+                onChange={(e) =>
+                  setEventData({ ...eventData, description: e.target.value })
+                }
+                className="input"
+                placeholder="Enter description"
+              />
+            </div>
+          </>
+        );
       default:
         return null;
     }
@@ -2837,6 +2910,10 @@ const TripDetails: React.FC = () => {
         const e = event as BusEvent;
         return `Bus from ${e.departureStation} to ${e.arrivalStation} on ${new Date(e.date).toLocaleDateString()}${e.busOperator ? ` with ${e.busOperator}` : ''}${e.busNumber ? ` (${e.busNumber})` : ''}`;
       }
+      case 'activity': {
+        const e = event as ActivityEvent;
+        return `${e.title}${e.activityType ? ` (${e.activityType})` : ''} on ${new Date(e.date).toLocaleDateString()}`;
+      }
       default:
         return `${event.type} on ${new Date(event.date).toLocaleDateString()}`;
     }
@@ -2892,7 +2969,13 @@ const TripDetails: React.FC = () => {
         // Single event was returned
         // Set the form data with the parsed event
         setEventType(parsedEvents.type);
-        setEventData(parsedEvents);
+        setEventData({
+          ...parsedEvents,
+          title: parsedEvents.type === 'activity' ? (parsedEvents as ActivityEvent).title : '',
+          activityType: parsedEvents.type === 'activity' ? (parsedEvents as ActivityEvent).activityType : '',
+          address: parsedEvents.type === 'activity' ? (parsedEvents as ActivityEvent).address : '',
+          description: parsedEvents.type === 'activity' ? (parsedEvents as ActivityEvent).description : ''
+        });
         
         // Show a summary of the parsed event
         const eventSummary = formatEventSummary(parsedEvents);
@@ -3020,26 +3103,22 @@ const TripDetails: React.FC = () => {
           return '🚗';
         case 'bus':
           return '🚌';
+        case 'activity':
+          return '🏔️';
         default:
           return '📅';
       }
     };
 
-    const getEventTitle = (event: Event) => {
+    const getEventTitle = (event: Event): string => {
       switch (event.type) {
         case 'arrival':
-        case 'departure': {
-          const e = event as ArrivalDepartureEvent;
-          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${e.airport || 'Airport'}`;
-        }
-        case 'stay': {
-          const e = event as StayEvent;
-          return e.accommodationName || 'Accommodation';
-        }
-        case 'destination': {
-          const e = event as DestinationEvent;
-          return e.placeName || 'Destination';
-        }
+        case 'departure':
+          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport || 'Airport'}`;
+        case 'stay':
+          return (event as StayEvent).accommodationName || 'Accommodation';
+        case 'destination':
+          return (event as DestinationEvent).placeName || 'Destination';
         case 'flight': {
           const e = event as FlightEvent;
           return `${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim();
@@ -3055,6 +3134,10 @@ const TripDetails: React.FC = () => {
         case 'bus': {
           const e = event as BusEvent;
           return `${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim();
+        }
+        case 'activity': {
+          const activityEvent = event as ActivityEvent;
+          return `${activityEvent.title || 'Activity'} - ${activityEvent.activityType || ''}`.replace(/ - $/, '');
         }
         default:
           return 'Event';
@@ -3149,6 +3232,16 @@ const TripDetails: React.FC = () => {
           </div>
         );
       }
+      case 'activity': {
+        const activityEvent = event as ActivityEvent;
+        return (
+          <div className="text-sm text-gray-600">
+            <p>Type: {activityEvent.activityType}</p>
+            {activityEvent.address && <p>Address: {activityEvent.address}</p>}
+            {activityEvent.description && <p>Description: {activityEvent.description}</p>}
+          </div>
+        );
+      }
       default:
         return null;
     }
@@ -3172,7 +3265,8 @@ const TripDetails: React.FC = () => {
     flight: '✈️',
     train: '🚂',
     rental_car: '🚗',
-    bus: '🚌'
+    bus: '🚌',
+    activity: '🏔️'
   } as const;
 
   const eventTypeToLabel = {
@@ -3183,7 +3277,8 @@ const TripDetails: React.FC = () => {
     flight: 'Flight',
     train: 'Train',
     rental_car: 'Rental Car',
-    bus: 'Bus'
+    bus: 'Bus',
+    activity: 'Activity'
   } as const;
 
   const handleTripEdit = () => {
@@ -3249,6 +3344,10 @@ const TripDetails: React.FC = () => {
       status: event.status || 'confirmed',
       source: event.source || 'manual',
       location: event.location,
+      title: event.type === 'activity' ? (event as ActivityEvent).title || '' : '',
+      activityType: event.type === 'activity' ? (event as ActivityEvent).activityType || '' : '',
+      address: event.type === 'activity' ? (event as ActivityEvent).address || '' : '',
+      description: event.type === 'activity' ? (event as ActivityEvent).description || '' : '',
       ...(event.type === 'arrival' || event.type === 'departure'
         ? {
             time: (event as ArrivalDepartureEvent).time || '',
@@ -3648,6 +3747,8 @@ const TripDetails: React.FC = () => {
                                             return <span className="text-2xl">✈️</span>;
                                           case 'stay':
                                             return <span className="text-2xl">🏨</span>;
+                                          case 'activity':
+                                            return <span className="text-2xl">🏔️</span>;
                                           case 'destination':
                                             return <span className="text-2xl">📍</span>;
                                           case 'flight':
@@ -3724,26 +3825,30 @@ const TripDetails: React.FC = () => {
                                       switch (event.type) {
                                           case 'arrival':
                                           case 'departure':
-                                            return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport}`;
+                                            return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport || 'Airport'}`;
                                           case 'stay':
-                                            return (event as StayEvent).accommodationName;
+                                            return (event as StayEvent).accommodationName || 'Accommodation';
                                           case 'destination':
-                                            return (event as DestinationEvent).placeName;
+                                            return (event as DestinationEvent).placeName || 'Destination';
                                           case 'flight': {
                                             const e = event as FlightEvent;
-                                            return `${e.departureAirport || ''} to ${e.arrivalAirport || ''}`;
+                                            return `${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim();
                                           }
                                           case 'train': {
                                             const e = event as TrainEvent;
-                                            return `${e.departureStation || ''} to ${e.arrivalStation || ''}`;
+                                            return `${e.trainOperator || ''} ${e.trainNumber || 'Train'}`.trim();
                                           }
                                           case 'rental_car': {
                                             const e = event as RentalCarEvent;
-                                            return `${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`;
+                                            return `${e.carCompany || 'Car'} Rental`;
                                           }
                                           case 'bus': {
                                             const e = event as BusEvent;
-                                            return `${e.departureStation || ''} to ${e.arrivalStation || ''}`;
+                                            return `${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim();
+                                          }
+                                          case 'activity': {
+                                            const e = event as ActivityEvent;
+                                            return `${e.title || 'Activity'} - ${e.activityType || ''}`.replace(/ - $/, '');
                                           }
                                           default:
                                             return 'Event';
@@ -3841,6 +3946,17 @@ const TripDetails: React.FC = () => {
                                               <div className="mt-2 space-y-1 text-sm text-gray-600">
                                                 {e.address && <p>Address: {e.address}</p>}
                                                 {e.description && <p>{e.description}</p>}
+                                              </div>
+                                            );
+                                          }
+                                          case 'activity': {
+                                            const e = event as ActivityEvent;
+                                            return (
+                                              <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                <p>Title: {e.title}</p>
+                                                <p>Type: {e.activityType}</p>
+                                                {e.address && <p>Address: {e.address}</p>}
+                                                {e.description && <p>Description: {e.description}</p>}
                                               </div>
                                             );
                                           }
@@ -4111,14 +4227,15 @@ const TripDetails: React.FC = () => {
                   onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
                   className="input"
                 >
-                  <option value="arrival">Arrival</option>
-                  <option value="departure">Departure</option>
-                  <option value="stay">Stay</option>
-                  <option value="destination">Destination</option>
-                  <option value="flight">Flight</option>
-                  <option value="train">Train</option>
-                  <option value="rental_car">Rental Car</option>
-                  <option value="bus">Bus</option>
+                  <option value="arrival">✈️ Arrival</option>
+                  <option value="departure">✈️ Departure</option>
+                  <option value="stay">🏨 Stay</option>
+                  <option value="destination">📍 Destination</option>
+                  <option value="flight">✈️ Flight</option>
+                  <option value="train">🚂 Train</option>
+                  <option value="rental_car">🚗 Rental Car</option>
+                  <option value="bus">🚌 Bus</option>
+                  <option value="activity">🏔️ Activity</option>
                 </select>
               </div>
 

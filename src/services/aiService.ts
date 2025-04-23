@@ -584,6 +584,15 @@ Possible Event Types and Their Required Fields:
    - seatNumber (string)
    - bookingReference (string)
 
+9. activity:
+   Required:
+   - date (YYYY-MM-DD format)
+   - title (string)
+   - activityType (string)
+   Optional:
+   - description (string)
+   - address (string)
+
 Common fields for all events:
 - status: 'confirmed' | 'exploring'
 - source: 'manual' | 'google_places' | 'google_flights' | 'booking.com' | 'airbnb' | 'expedia' | 'tripadvisor' | 'other'
@@ -642,7 +651,7 @@ Return the response in this exact JSON format:
     }
 
     // Log the raw response
-    //console.log('Raw AI response:', text);
+    console.log('Raw AI response:', text);
 
     // Clean up the response text
     let cleanText = text

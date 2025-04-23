@@ -56,6 +56,8 @@ const getEventName = (event) => {
       return 'Rental Car';
     case 'bus':
       return 'Bus';
+    case 'activity':
+      return event.title || 'Activity';
     default:
       return event.type.charAt(0).toUpperCase() + event.type.slice(1);
   }
@@ -741,6 +743,12 @@ app.put('/api/trips/:id', auth, async (req, res) => {
               gate: newEvent.gate || '',
               time: newEvent.time || '',
               bookingReference: newEvent.bookingReference || ''
+            } : {}),
+            ...(newEvent.type === 'activity' ? {
+              title: newEvent.title || '',
+              activityType: newEvent.activityType || '',
+              address: newEvent.address || '',
+              description: newEvent.description || ''
             } : {})
           }
         }).catch(err => console.error('Error logging event creation activity:', err));

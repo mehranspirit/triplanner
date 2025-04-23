@@ -1,4 +1,4 @@
-export type EventType = 'arrival' | 'departure' | 'stay' | 'destination' | 'flight' | 'train' | 'rental_car' | 'bus';
+export type EventType = 'arrival' | 'departure' | 'stay' | 'destination' | 'flight' | 'train' | 'rental_car' | 'bus' | 'activity';
 
 export interface User {
   _id: string;
@@ -196,6 +196,8 @@ export interface EventFormData {
   licensePlate?: string;
   busOperator?: string;
   busNumber?: string;
+  title?: string;
+  activityType?: string;
 }
 
 export interface FlightEvent extends Event {
@@ -247,6 +249,14 @@ export interface BusEvent extends Event {
   arrivalTime?: string;
   seatNumber?: string;
   bookingReference?: string;
+}
+
+export interface ActivityEvent extends Event {
+  type: 'activity';
+  title: string;
+  activityType: string;
+  address?: string;
+  description?: string;
 }
 
 export interface AISuggestionHistory {

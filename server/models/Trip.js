@@ -4,9 +4,12 @@ const eventSchema = new mongoose.Schema({
   id: String,
   type: {
     type: String,
-    enum: ['arrival', 'stay', 'destination', 'departure', 'flight', 'train', 'rental_car', 'bus'],
+    enum: ['arrival', 'stay', 'destination', 'departure', 'flight', 'train', 'rental_car', 'bus', 'activity'],
     required: true
   },
+  // Activity fields
+  title: String,
+  activityType: String,
   thumbnailUrl: String,
   date: String,
   location: {
@@ -23,6 +26,9 @@ const eventSchema = new mongoose.Schema({
   likes: [String], // User IDs of users who liked this event
   dislikes: [String], // User IDs of users who disliked this event
   source: String,
+  // Shared fields used by multiple event types (stay, destination, activity)
+  address: String,
+  description: String,
   // Arrival/Departure fields
   flightNumber: String,
   airline: String,
@@ -33,14 +39,12 @@ const eventSchema = new mongoose.Schema({
   bookingReference: String,
   // Stay fields
   accommodationName: String,
-  address: String,
   checkIn: String,
   checkOut: String,
   reservationNumber: String,
   contactInfo: String,
   // Destination fields
   placeName: String,
-  description: String,
   openingHours: String,
   // Flight fields
   departureAirport: String,
