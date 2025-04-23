@@ -8,7 +8,8 @@ import {
   TrainEvent,
   RentalCarEvent,
   BusEvent,
-  EventType
+  EventType,
+  ActivityEvent
 } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -300,19 +301,14 @@ export const generateDestinationSuggestions = async (
   allEvents: Event[],
   tripDates: { startDate: string; endDate: string },
   user: { _id: string; name: string; email: string; photoUrl: string | null; }
-): Promise<DestinationEvent[]> => {
-  //console.log('\n=== AI SERVICE: STARTING DESTINATION GENERATION ===');
-  //console.log('Trip dates:', tripDates);
-  //console.log('Total events:', allEvents.length);
-  
-  // Get existing AI-suggested events (from both confirmed and exploring)
+): Promise<(DestinationEvent | ActivityEvent)[]> => {
   const aiSuggestions = allEvents.filter(e => {
     const isAISuggestion = e.source === 'other' && e.notes?.includes('AI-Generated Suggestion');
     if (isAISuggestion) {
       console.log('Found existing AI suggestion:', {
         id: e.id,
         type: e.type,
-        name: (e as any).placeName || 'N/A',
+        name: (e as any).placeName || (e as any).title || 'N/A',
         date: e.date,
         status: e.status
       });
@@ -320,23 +316,15 @@ export const generateDestinationSuggestions = async (
     return isAISuggestion;
   });
 
-  //console.log('\nTotal existing AI suggestions:', aiSuggestions.length);
-  
   const existingAISuggestions = aiSuggestions.map(e => {
     const formatted = formatEventForPrompt(e);
-    //console.log('Formatted existing suggestion:', formatted);
     return formatted;
   });
 
-  // Separate confirmed and exploring events for the prompt
   const confirmedEvents = allEvents.filter(e => e.status === 'confirmed');
   const exploringEvents = allEvents.filter(e => e.status === 'exploring' && !aiSuggestions.includes(e));
-
-  //console.log('\n=== PREPARING AI PROMPT ===');
-  //console.log('Confirmed events:', confirmedEvents.length);
-  //console.log('Exploring events:', exploringEvents.length);
   
-  const prompt = `Based on the following events in our trip from ${tripDates.startDate} to ${tripDates.endDate}, suggest 3 new and diverse destinations to visit.
+  const prompt = `Based on the following events in our trip from ${tripDates.startDate} to ${tripDates.endDate}, suggest 3 new and diverse experiences to enhance the trip.
 
 Confirmed Events (in chronological order):
 ${confirmedEvents.map(e => formatEventForPrompt(e)).join('\n')}
@@ -347,16 +335,16 @@ ${exploringEvents.map(e => formatEventForPrompt(e)).join('\n')}
 ` : ''}
 
 ${existingAISuggestions.length > 0 ? `
-=== IMPORTANT: Previously AI-Generated Destinations ===
+=== IMPORTANT: Previously AI-Generated Suggestions ===
 ${existingAISuggestions.join('\n')}
 
-IMPORTANT: You must NOT suggest any destinations already in the trip. Ensure your new suggestions are possibly in different areas and offer different types of experiences.
+IMPORTANT: You must NOT suggest any destinations or activities already in the trip. Ensure your new suggestions are possibly in different areas and offer different types of experiences.
 ` : ''}
 
 You must provide exactly 3 NEW suggestions in this specific order:
-1. A cultural attraction (museum, historical site, theater, etc.) - MUST be different from any existing suggestions
-2. An outdoor activity or location (hiking trail, viewpoint, etc.) - MUST be different from any existing suggestions
-3. A local experience (neighborhood, food destination, market, etc.) - MUST be different from any existing suggestions
+1. A cultural destination (museum, historical site, theater, etc.) - MUST be different from any existing suggestions
+2. An outdoor activity (hiking, kayaking, biking, etc.) - MUST be different from any existing suggestions
+3. A local experience (either a destination or an activity e.g. food tour, cooking class, artisan workshop, etc.) - MUST be different from any existing suggestions
 
 For each suggestion, consider:
 - Ensure timing doesn't conflict with existing events
@@ -364,22 +352,22 @@ For each suggestion, consider:
 
 For each suggestion, use exactly this format with no deviations:
 SUGGESTION_START
-PLACE_NAME: [Full name of the place]
+TYPE: [Either 'destination' or 'activity']
+NAME: [Full name of the place or activity]
 ADDRESS: [Complete address]
 SUGGESTED_DATE: [YYYY-MM-DD format - Choose a logical date based on the schedule]
 DESCRIPTION: [Rich description including historical/cultural context]
-HOURS: [Opening hours]
+HOURS: [Opening hours or duration]
+ACTIVITY_TYPE: [Only for activities: type of activity e.g., "Hiking", "Food Tour", "Workshop"]
 TIPS: [Practical visitor information]
 NOTES: [Cost information and booking requirements]
 SUGGESTION_END
 
 Ensure each suggestion is wrapped with SUGGESTION_START and SUGGESTION_END markers.
-Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existing schedule.`;
-
-  //('\nPrompt preview (first 500 chars):', prompt.substring(0, 500) + '...');
+Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existing schedule.
+For activities, make sure to include the ACTIVITY_TYPE field.`;
 
   try {
-    //console.log('\n=== GENERATING NEW SUGGESTIONS ===');
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
@@ -393,23 +381,19 @@ Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existi
     const response = await result.response;
     const text = response.text();
     
-    // Parse the response using the explicit markers
     const suggestionMatches = text.match(/SUGGESTION_START([\s\S]*?)SUGGESTION_END/g);
     
     if (!suggestionMatches || suggestionMatches.length !== 3) {
       console.error('Invalid number of suggestions:', suggestionMatches?.length);
-      //console.log('Raw response:', text);
       throw new Error('Failed to generate exactly 3 suggestions. Retrying...');
     }
 
     const suggestions = suggestionMatches.map((suggestionText, index) => {
-      // Remove the markers
       const cleanText = suggestionText
         .replace('SUGGESTION_START', '')
         .replace('SUGGESTION_END', '')
         .trim();
 
-      // Parse fields
       const fields: Record<string, string> = {};
       const lines = cleanText.split('\n');
       
@@ -424,32 +408,24 @@ Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existi
         }
       }
 
-      // Determine category based on index
-      const categories = ['Cultural Attraction', 'Outdoor Activity', 'Local Experience'];
+      const categories = ['Cultural Destination', 'Outdoor Activity', 'Local Experience'];
       const categoryNote = `Category: ${categories[index]}\n\n`;
 
-      // Validate and format the suggested date
       let suggestedDate = fields.SUGGESTED_DATE || '';
       if (!suggestedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // If date is invalid, use trip start date as fallback
         console.warn('Invalid suggested date format:', suggestedDate);
         suggestedDate = tripDates.startDate;
       }
 
-      const event: DestinationEvent = {
+      const baseEvent = {
         id: uuidv4(),
-        type: 'destination',
         date: suggestedDate,
-        placeName: fields.PLACE_NAME || 'Suggested Destination',
-        address: fields.ADDRESS || '',
-        description: fields.DESCRIPTION || '',
-        openingHours: fields.HOURS || '',
         notes: `✨ AI-Generated Suggestion\n${categoryNote}${fields.TIPS || ''}\n\n${fields.NOTES || ''}`,
-        status: 'exploring',
-        source: 'other',
+        status: 'exploring' as const,
+        source: 'other' as const,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        location: { lat: 0, lng: 0 }, // Will be set by geocoding
+        location: { lat: 0, lng: 0 },
         createdBy: {
           _id: user._id,
           name: user.name,
@@ -464,13 +440,34 @@ Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existi
         }
       };
 
-      return event;
+      // Create either a destination or activity event based on the TYPE field
+      if (fields.TYPE?.toLowerCase() === 'activity') {
+        const activityEvent: ActivityEvent = {
+          ...baseEvent,
+          type: 'activity',
+          title: fields.NAME || 'Suggested Activity',
+          activityType: fields.ACTIVITY_TYPE || 'Activity',
+          address: fields.ADDRESS || '',
+          description: fields.DESCRIPTION || ''
+        };
+        return activityEvent;
+      } else {
+        const destinationEvent: DestinationEvent = {
+          ...baseEvent,
+          type: 'destination',
+          placeName: fields.NAME || 'Suggested Destination',
+          address: fields.ADDRESS || '',
+          description: fields.DESCRIPTION || '',
+          openingHours: fields.HOURS || ''
+        };
+        return destinationEvent;
+      }
     });
 
     return suggestions;
   } catch (error) {
-    console.error('Error generating destination suggestions:', error);
-    throw new Error('Failed to generate destination suggestions. Please try again.');
+    console.error('Error generating suggestions:', error);
+    throw new Error('Failed to generate suggestions. Please try again.');
   }
 };
 
@@ -534,7 +531,7 @@ Possible Event Types and Their Required Fields:
    - reservationNumber (string)
    - contactInfo (string)
 
-5. destination:
+5. destination (places or spots to visit)
    Required:
    - date (YYYY-MM-DD format)
    - placeName (string)
@@ -584,7 +581,7 @@ Possible Event Types and Their Required Fields:
    - seatNumber (string)
    - bookingReference (string)
 
-9. activity:
+9. activity: (things to do or activities to participate in e.g. hiking, biking, tours, etc.)
    Required:
    - date (YYYY-MM-DD format)
    - title (string)
@@ -685,7 +682,7 @@ Return the response in this exact JSON format:
         type: eventData.type,
         date: '', // Will be set based on specific event type
         status: 'confirmed',
-        source: 'other',
+        source: 'other' as const,
         location: { lat: 0, lng: 0 },
         notes: `Parsed from text with ${Math.round(eventData.confidence * 100)}% confidence\n\nReasoning: ${eventData.reasoning}`,
         createdBy: {

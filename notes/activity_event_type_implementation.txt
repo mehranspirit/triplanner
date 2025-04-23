@@ -138,6 +138,33 @@ case 'activity': {
 }
 ```
 
+3. Updated generateDestinationSuggestions to handle both destinations and activities:
+   - Modified return type to include both: `Promise<(DestinationEvent | ActivityEvent)[]>`
+   - Updated prompt to suggest both types of experiences
+   - Added activity-specific fields in suggestion format
+   - Added type checking and creation for activity events
+
+4. Updated UI text to reflect combined suggestions:
+```typescript
+// Success message
+setSuccess('Added 3 AI-suggested experiences');
+
+// Button text
+<button>
+  {isGeneratingDestinations ? (
+    <>
+      <SparklesIcon className="animate-spin -ml-1 mr-2 h-5 w-5" />
+      Generating...
+    </>
+  ) : (
+    <>
+      <SparklesIcon className="-ml-1 mr-2 h-5 w-5" />
+      Suggest Experiences
+    </>
+  )}
+</button>
+```
+
 ## Default Values and Thumbnails
 1. Added default thumbnail for activity events:
 ```typescript

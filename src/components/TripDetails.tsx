@@ -2869,11 +2869,11 @@ const TripDetails: React.FC = () => {
 
       await handleTripUpdate(updatedTrip);
       //console.log('=== AI GENERATION COMPLETE ===');
-      setSuccess('Added 3 AI-suggested destinations');
+      setSuccess('Added 3 AI-suggested experiences');
     } catch (error) {
       //console.error('=== AI GENERATION ERROR ===');
       //console.error('Error details:', error);
-      setError('Failed to generate destination suggestions');
+      setError('Failed to generate suggestions');
     } finally {
       setIsGeneratingDestinations(false);
     }
@@ -3619,7 +3619,7 @@ const TripDetails: React.FC = () => {
                         ) : (
                           <>
                             <SparklesIcon className="-ml-1 mr-2 h-5 w-5" />
-                            Suggest
+                            Suggest Experiences
                           </>
                         )}
                       </button>
