@@ -651,7 +651,7 @@ Return the response in this exact JSON format:
     console.log('Raw AI response:', text);
 
     // Clean up the response text
-    let cleanText = text
+    const cleanText = text
       // Remove any markdown code block markers
       .replace(/```json\s*/g, '')
       .replace(/```\s*/g, '')

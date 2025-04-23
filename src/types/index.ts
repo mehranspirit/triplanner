@@ -254,4 +254,6 @@ export interface ActivityEvent extends Event {
   type: 'activity';
   title: string;
   activityType: string;
+  address?: string;
+  description?: string;
 } 

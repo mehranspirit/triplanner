@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import type { Map as LeafletMap } from 'leaflet';
-import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent } from '../types';
+import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '../types';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -814,6 +814,21 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           ].filter(Boolean).join(' • ')
         };
       }
+      case 'activity': {
+        const activityEvent = event as ActivityEvent;
+        return {
+          title: activityEvent.title || 'Activity',
+          details: activityEvent.description || '',
+          date: formatDate(event.date),
+          additionalInfo: activityEvent.activityType
+        };
+      }
+      default:
+        return {
+          title: 'Event',
+          details: '',
+          date: formatDate(event.date)
+        };
     }
   };
 
