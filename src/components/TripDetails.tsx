@@ -64,6 +64,14 @@ const PREDEFINED_THUMBNAILS: { [key: string]: string } = {
   japan: 'https://images.pexels.com/photos/590478/pexels-photo-590478.jpeg?auto=compress&cs=tinysrgb&w=800',
   camping: 'https://images.pexels.com/photos/2666598/pexels-photo-2666598.jpeg?auto=compress&cs=tinysrgb&w=800',
   ski: 'https://images.pexels.com/photos/848599/pexels-photo-848599.jpeg?auto=compress&cs=tinysrgb&w=800',
+  hiking: 'https://images.pexels.com/photos/2755/people-hiking-climbing-adventure.jpg?auto=compress&cs=tinysrgb&w=800',
+  biking: 'https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=800',
+  kayaking: 'https://images.pexels.com/photos/1430673/pexels-photo-1430673.jpeg?auto=compress&cs=tinysrgb&w=800',
+  surfing: 'https://images.pexels.com/photos/1654489/pexels-photo-1654489.jpeg?auto=compress&cs=tinysrgb&w=800',
+  cooking: 'https://images.pexels.com/photos/3338497/pexels-photo-3338497.jpeg?auto=compress&cs=tinysrgb&w=800',
+  workshop: 'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=800',
+  tour: 'https://images.pexels.com/photos/2972257/pexels-photo-2972257.jpeg?auto=compress&cs=tinysrgb&w=800',
+  museum: 'https://images.pexels.com/photos/2519376/pexels-photo-2519376.jpeg?auto=compress&cs=tinysrgb&w=800',
   default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
 };
 
@@ -94,6 +102,12 @@ const getEventThumbnail = async (event: Event): Promise<string> => {
     case 'bus':
       searchTerm = (event as BusEvent).departureStation || (event as BusEvent).arrivalStation || 'bus station';
       break;
+    case 'activity': {
+      const activityEvent = event as ActivityEvent;
+      // Use both title and type for better image matching
+      searchTerm = `${activityEvent.activityType} ${activityEvent.title}`.trim() || 'outdoor activity';
+      break;
+    }
   }
 
   // Check cache first
@@ -2532,6 +2546,18 @@ const TripDetails: React.FC = () => {
                 className="input"
                 placeholder="Enter activity type"
                 required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Thumbnail URL (optional)</label>
+              <input
+                type="url"
+                value={eventData.thumbnailUrl || ''}
+                onChange={(e) =>
+                  setEventData({ ...eventData, thumbnailUrl: e.target.value })
+                }
+                className="input"
+                placeholder="Enter image URL or leave empty for automatic thumbnail"
               />
             </div>
             {commonFields}
