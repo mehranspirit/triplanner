@@ -859,62 +859,80 @@ const TripDetails: React.FC = () => {
         case 'arrival':
         case 'departure':
         case 'flight':
-          return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.5 16.5c0 .83-.67 1.5-1.5 1.5H4c-.83 0-1.5-.67-1.5-1.5V7.5C2.5 6.67 3.17 6 4 6h16c.83 0 1.5.67 1.5 1.5v9z"/></svg>';
+          return '✈️';
         case 'stay':
-          return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>';
+          return '🏨';
         case 'destination':
-          return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>';
+          return '📍';
         case 'train':
-          return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2l2-2h4l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-7H6V6h5v4zm5.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-7h-5V6h5v4z"/></svg>';
+          return '🚂';
         case 'rental_car':
-          return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>';
+          return '🚗';
         case 'bus':
-          return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/></svg>';
+          return '🚌';
+        case 'activity':
+          return '🏔️';
         default:
-          return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5zm2 4h10v2H7v-2zm0 4h7v2H7v-2z"/></svg>';
+          return '📅';
       }
     };
 
     const getEventTitle = (event: Event): string => {
+      const encodeText = (text: string | undefined | null) => {
+        if (!text) return '';
+        return text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
+
       switch (event.type) {
         case 'arrival':
-        case 'departure':
-          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport || 'Airport'}`;
-        case 'stay':
-          return (event as StayEvent).accommodationName || 'Accommodation';
-        case 'destination':
-          return (event as DestinationEvent).placeName || 'Destination';
+        case 'departure': {
+          const e = event as ArrivalDepartureEvent;
+          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${encodeText(e.airport || 'Airport')}`;
+        }
+        case 'stay': {
+          const e = event as StayEvent;
+          return encodeText(e.accommodationName || 'Accommodation');
+        }
+        case 'destination': {
+          const e = event as DestinationEvent;
+          return encodeText(e.placeName || 'Destination');
+        }
         case 'flight': {
           const e = event as FlightEvent;
-          return `${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim();
+          return encodeText(`${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim());
         }
         case 'train': {
           const e = event as TrainEvent;
-          return `${e.trainOperator || ''} ${e.trainNumber || 'Train'}`.trim();
+          return encodeText(`${e.trainOperator || ''} ${e.trainNumber || 'Train'}`.trim());
         }
         case 'rental_car': {
           const e = event as RentalCarEvent;
-          return `${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`;
+          return encodeText(`${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`);
         }
         case 'bus': {
           const e = event as BusEvent;
-          return `${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim();
+          return encodeText(`${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim());
         }
         case 'activity': {
           const e = event as ActivityEvent;
-          return `${e.title || 'Activity'} - ${e.activityType || ''}`.replace(/ - $/, '');
+          return encodeText(`${e.title || 'Activity'} - ${e.activityType || ''}`.replace(/ - $/, ''));
         }
         default:
           return 'Event';
       }
     };
 
-    const confirmedEvents = trip.events.filter(event => event.status === 'confirmed');
+    const confirmedEvents = trip.events.filter((event: Event) => event.status === 'confirmed');
     const sortedEvents = sortEvents(confirmedEvents);
     
     // Group events by date
     const eventsByDate: Record<string, Event[]> = {};
-    sortedEvents.forEach(event => {
+    sortedEvents.forEach((event: Event) => {
       const dateString = event.date.split('T')[0];
       if (!eventsByDate[dateString]) {
         eventsByDate[dateString] = [];
@@ -937,6 +955,8 @@ const TripDetails: React.FC = () => {
       <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>${trip.name || 'Trip'} - Itinerary</title>
           <style>
             body {
@@ -958,9 +978,26 @@ const TripDetails: React.FC = () => {
             .event-card {
               border: 1px solid #E5E7EB;
               border-radius: 8px;
-              padding: 15px;
+              padding: 0;
               margin-bottom: 15px;
               background-color: white;
+              overflow: hidden;
+              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+              position: relative;
+            }
+            .event-thumbnail {
+              position: absolute;
+              top: 15px;
+              right: 15px;
+              width: 100px;
+              height: 100px;
+              object-fit: cover;
+              border-radius: 6px;
+              border: 1px solid #E5E7EB;
+            }
+            .event-content {
+              padding: 15px;
+              padding-right: 130px;
             }
             .event-header {
               display: flex;
@@ -987,14 +1024,24 @@ const TripDetails: React.FC = () => {
               font-weight: 600;
               color: #111827;
               margin: 5px 0;
+              font-size: 1.1em;
             }
             .event-details {
               color: #6B7280;
               font-size: 0.9em;
+              margin-top: 10px;
             }
-            .event-time {
+            .event-detail-item {
+              display: flex;
+              margin-bottom: 4px;
+            }
+            .event-detail-label {
+              font-weight: 500;
+              min-width: 100px;
               color: #4B5563;
-              font-size: 0.9em;
+            }
+            .event-detail-value {
+              color: #6B7280;
             }
             .event-notes {
               margin-top: 10px;
@@ -1002,6 +1049,8 @@ const TripDetails: React.FC = () => {
               border-top: 1px solid #E5E7EB;
               color: #6B7280;
               font-style: italic;
+              font-size: 0.85em;
+              line-height: 1.4;
             }
             @media print {
               body {
@@ -1016,18 +1065,6 @@ const TripDetails: React.FC = () => {
                 page-break-inside: avoid;
               }
             }
-            .ai-generated {
-              display: inline-flex;
-              align-items: center;
-              gap: 0.5rem;
-              color: #4F46E5;
-              font-size: 0.875rem;
-              margin-bottom: 0.5rem;
-            }
-            .ai-generated svg {
-              width: 1rem;
-              height: 1rem;
-            }
           </style>
         </head>
         <body>
@@ -1040,135 +1077,161 @@ const TripDetails: React.FC = () => {
                 <div class="date-header">
                   ${formatDateForExport(dateString)}
                 </div>
-                ${events.map(event => `
-                  <div class="event-card">
-                    <div class="event-header">
-                      <span class="event-icon">${getEventIcon(event.type)}</span>
-                      <span class="event-type">${event.type}</span>
-                    </div>
-                    ${event.source === 'other' && event.notes?.includes('✨ AI-Generated Suggestion') ? `
-                      <div class="ai-generated">
-                        <svg viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" />
-                        </svg>
-                        <span>AI Suggested</span>
-                      </div>
-                    ` : ''}
-                    <div class="event-title">${getEventTitle(event)}</div>
-                    ${(() => {
-                      switch (event.type) {
-                        case 'arrival':
-                        case 'departure': {
-                          const e = event as ArrivalDepartureEvent;
-                          return `
-                            <div class="event-details">
-                              ${e.airline ? `<div>Airline: ${e.airline}</div>` : ''}
-                              ${e.flightNumber ? `<div>Flight: ${e.flightNumber}</div>` : ''}
-                              ${e.terminal ? `<div>Terminal: ${e.terminal}</div>` : ''}
-                              ${e.gate ? `<div>Gate: ${e.gate}</div>` : ''}
-                              ${e.bookingReference ? `<div>Booking Reference: ${e.bookingReference}</div>` : ''}
-                            </div>
-                          `;
-                        }
-                        case 'stay': {
-                          const e = event as StayEvent;
-                          return `
-                            <div class="event-details">
-                              ${e.accommodationName ? `<div>Accommodation: ${e.accommodationName}</div>` : ''}
-                              ${e.address ? `<div>Address: ${e.address}</div>` : ''}
-                              ${e.checkIn ? `<div>Check-in: ${formatDateForExport(e.checkIn)}</div>` : ''}
-                              ${e.checkOut ? `<div>Check-out: ${formatDateForExport(e.checkOut)}</div>` : ''}
-                              ${e.reservationNumber ? `<div>Reservation: ${e.reservationNumber}</div>` : ''}
-                              ${e.contactInfo ? `<div>Contact: ${e.contactInfo}</div>` : ''}
-                            </div>
-                          `;
-                        }
-                        case 'destination': {
-                          const e = event as DestinationEvent;
-                          return `
-                            <div class="event-details">
-                              ${e.placeName ? `<div>Place: ${e.placeName}</div>` : ''}
-                              ${e.address ? `<div>Address: ${e.address}</div>` : ''}
-                              ${e.description ? `<div>Description: ${e.description}</div>` : ''}
-                              ${e.openingHours ? `<div>Hours: ${e.openingHours}</div>` : ''}
-                            </div>
-                          `;
-                        }
-                        case 'flight': {
-                          const e = event as FlightEvent;
-                          return `
-                            <div class="event-details">
-                              ${e.airline && `<div>Airline: ${e.airline}</div>`}
-                              ${e.flightNumber && `<div>Flight: ${e.flightNumber}</div>`}
-                              ${e.terminal && `<div>Terminal: ${e.terminal}</div>`}
-                              ${e.gate && `<div>Gate: ${e.gate}</div>`}
-                            </div>
-                          `;
-                        }
-                        case 'train': {
-                          const e = event as TrainEvent;
-                          return `
-                            <div class="event-details">
-                              ${e.trainOperator ? `<div>Operator: ${e.trainOperator}</div>` : ''}
-                              ${e.trainNumber ? `<div>Train: ${e.trainNumber}</div>` : ''}
-                              ${e.departureStation || e.departureTime ? 
-                                `<div>Departure: ${e.departureTime ? `${e.departureTime} from ` : ''}${e.departureStation || 'Station'}</div>` : ''}
-                              ${e.arrivalStation || e.arrivalTime ? 
-                                `<div>Arrival: ${e.arrivalTime ? `${e.arrivalTime} at ` : ''}${e.arrivalStation || 'Station'}</div>` : ''}
-                              ${e.carriageNumber ? `<div>Carriage: ${e.carriageNumber}</div>` : ''}
-                              ${e.seatNumber ? `<div>Seat: ${e.seatNumber}</div>` : ''}
-                              ${e.bookingReference ? `<div>Booking Reference: ${e.bookingReference}</div>` : ''}
-                            </div>
-                          `;
-                        }
-                        case 'rental_car': {
-                          const e = event as RentalCarEvent;
-                          return `
-                            <div class="mt-2 space-y-1 text-sm text-gray-600">
-                              ${e.carCompany ? `<div>Car Company: ${e.carCompany}</div>` : ''}
-                              ${e.carType ? `<div>Car Type: ${e.carType}</div>` : ''}
-                              ${e.pickupLocation ? `<div>Pickup Location: ${e.pickupLocation}</div>` : ''}
-                              ${e.pickupTime ? `<div>Pickup Time: ${e.pickupTime}</div>` : ''}
-                              ${e.dropoffLocation ? `<div>Dropoff Location: ${e.dropoffLocation}</div>` : ''}
-                              ${e.dropoffDate ? `<div>Dropoff Date: ${e.dropoffDate}</div>` : ''}
-                              ${e.dropoffTime ? `<div>Dropoff Time: ${e.dropoffTime}</div>` : ''}
-                              ${e.licensePlate ? `<div>License Plate: ${e.licensePlate}</div>` : ''}
-                              ${e.bookingReference ? `<div>Booking Reference: ${e.bookingReference}</div>` : ''}
-                            </div>
-                          `;
-                        }
-                        case 'bus': {
-                          const e = event as BusEvent;
-                          return `
-                            <div class="event-details">
-                              ${e.busOperator ? `<div>Operator: ${e.busOperator}</div>` : ''}
-                              ${e.busNumber ? `<div>Bus: ${e.busNumber}</div>` : ''}
-                              ${e.departureStation || e.departureTime ? 
-                                `<div>Departure: ${e.departureTime ? `${e.departureTime} from ` : ''}${e.departureStation || 'Station'}</div>` : ''}
-                              ${e.arrivalStation || e.arrivalTime ? 
-                                `<div>Arrival: ${e.arrivalTime ? `${e.arrivalTime} at ` : ''}${e.arrivalStation || 'Station'}</div>` : ''}
-                              ${e.seatNumber ? `<div>Seat: ${e.seatNumber}</div>` : ''}
-                              ${e.bookingReference ? `<div>Booking Reference: ${e.bookingReference}</div>` : ''}
-                            </div>
-                          `;
-                        }
-                        case 'activity': {
-                          const e = event as ActivityEvent;
-                          return `
-                            <div class="event-details">
-                              <p>Type: ${e.activityType}</p>
-                              ${e.address && `<p>Address: ${e.address}</p>`}
-                              ${e.description && `<p>Description: ${e.description}</p>`}
-                            </div>
-                          `;
-                        }
-                        default:
-                          return 'Event';
+                ${events.map(event => {
+                  // Get event thumbnail
+                  const thumbnail = event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type];
+                  
+                  // Process text to make links clickable and properly decode content
+                  const processText = (text: string) => {
+                    if (!text) return '';
+                    try {
+                      // First decode any URL-encoded content
+                      const decodedText = decodeURIComponent(text);
+                      // Then handle HTML entities and links
+                      return decodedText
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;')
+                        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+                        // Convert line breaks to HTML
+                        .replace(/\n/g, '<br>');
+                    } catch (e) {
+                      // If decoding fails, return the original text
+                      return text;
+                    }
+                  };
+
+                  // Get event details based on type
+                  const getEventDetails = (event: Event) => {
+                    switch (event.type) {
+                      case 'arrival':
+                      case 'departure': {
+                        const e = event as ArrivalDepartureEvent;
+                        return [
+                          ['Time', e.time],
+                          ['Airport', e.airport],
+                          ['Airline', e.airline],
+                          ['Flight', e.flightNumber],
+                          ['Terminal', e.terminal],
+                          ['Gate', e.gate],
+                          ['Booking Ref', e.bookingReference]
+                        ].filter(([_, value]) => value);
                       }
-                    })()}
-                    ${event.notes && `<div class="event-notes">${event.notes}</div>`}
-                  </div>
-                `).join('')}
+                      case 'stay': {
+                        const e = event as StayEvent;
+                        return [
+                          ['Accommodation', e.accommodationName],
+                          ['Check-in', e.checkIn],
+                          ['Check-out', e.checkOut],
+                          ['Address', e.address],
+                          ['Reservation', e.reservationNumber],
+                          ['Contact', e.contactInfo]
+                        ].filter(([_, value]) => value);
+                      }
+                      case 'destination': {
+                        const e = event as DestinationEvent;
+                        return [
+                          ['Place', e.placeName],
+                          ['Address', e.address],
+                          ['Description', e.description],
+                          ['Opening Hours', e.openingHours]
+                        ].filter(([_, value]) => value);
+                      }
+                      case 'flight': {
+                        const e = event as FlightEvent;
+                        return [
+                          ['Airline', e.airline],
+                          ['Flight', e.flightNumber],
+                          ['Departure Airport', e.departureAirport],
+                          ['Departure Time', e.departureTime],
+                          ['Arrival Airport', e.arrivalAirport],
+                          ['Arrival Time', e.arrivalTime],
+                          ['Terminal', e.terminal],
+                          ['Gate', e.gate],
+                          ['Booking Ref', e.bookingReference]
+                        ].filter(([_, value]) => value);
+                      }
+                      case 'train': {
+                        const e = event as TrainEvent;
+                        return [
+                          ['Operator', e.trainOperator],
+                          ['Train Number', e.trainNumber],
+                          ['Departure Station', e.departureStation],
+                          ['Departure Time', e.departureTime],
+                          ['Arrival Station', e.arrivalStation],
+                          ['Arrival Time', e.arrivalTime],
+                          ['Carriage', e.carriageNumber],
+                          ['Seat', e.seatNumber],
+                          ['Booking Ref', e.bookingReference]
+                        ].filter(([_, value]) => value);
+                      }
+                      case 'rental_car': {
+                        const e = event as RentalCarEvent;
+                        return [
+                          ['Company', e.carCompany],
+                          ['Car Type', e.carType],
+                          ['Pickup Location', e.pickupLocation],
+                          ['Pickup Time', e.pickupTime],
+                          ['Dropoff Location', e.dropoffLocation],
+                          ['Dropoff Time', e.dropoffTime],
+                          ['Dropoff Date', e.dropoffDate],
+                          ['License Plate', e.licensePlate],
+                          ['Booking Ref', e.bookingReference]
+                        ].filter(([_, value]) => value);
+                      }
+                      case 'bus': {
+                        const e = event as BusEvent;
+                        return [
+                          ['Operator', e.busOperator],
+                          ['Bus Number', e.busNumber],
+                          ['Departure Station', e.departureStation],
+                          ['Departure Time', e.departureTime],
+                          ['Arrival Station', e.arrivalStation],
+                          ['Arrival Time', e.arrivalTime],
+                          ['Seat', e.seatNumber],
+                          ['Booking Ref', e.bookingReference]
+                        ].filter(([_, value]) => value);
+                      }
+                      case 'activity': {
+                        const e = event as ActivityEvent;
+                        return [
+                          ['Title', e.title],
+                          ['Type', e.activityType],
+                          ['Address', e.address],
+                          ['Description', e.description]
+                        ].filter(([_, value]) => value);
+                      }
+                      default:
+                        return [];
+                    }
+                  };
+
+                  return `
+                    <div class="event-card">
+                      <div class="event-content">
+                        <img src="${thumbnail}" alt="${event.type}" class="event-thumbnail">
+                        <div class="event-header">
+                          <span class="event-icon" style="font-size: 24px;">${getEventIcon(event.type)}</span>
+                          <span class="event-type">${event.type.replace('_', ' ')}</span>
+                        </div>
+                        <div class="event-title">${getEventTitle(event)}</div>
+                        ${event.type === 'destination' && (event as DestinationEvent).description ? 
+                          `<div class="event-details truncate-text">${processText((event as DestinationEvent).description || '')}</div>` : ''}
+                        <div class="event-details">
+                          ${getEventDetails(event)?.map(([label, value]) => 
+                            `<div class="event-detail-item">
+                              <span class="event-detail-label">${label}:</span>
+                              <span class="event-detail-value">${processText(value || '')}</span>
+                            </div>`
+                          ).join('')}
+                        </div>
+                        ${event.notes ? `<div class="event-notes">${processText(event.notes)}</div>` : ''}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
               `;
             }).join('')}
         </body>
@@ -3137,33 +3200,49 @@ const TripDetails: React.FC = () => {
     };
 
     const getEventTitle = (event: Event): string => {
+      const encodeText = (text: string | undefined | null) => {
+        if (!text) return '';
+        return text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
+
       switch (event.type) {
         case 'arrival':
-        case 'departure':
-          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${(event as ArrivalDepartureEvent).airport || 'Airport'}`;
-        case 'stay':
-          return (event as StayEvent).accommodationName || 'Accommodation';
-        case 'destination':
-          return (event as DestinationEvent).placeName || 'Destination';
+        case 'departure': {
+          const e = event as ArrivalDepartureEvent;
+          return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${encodeText(e.airport || 'Airport')}`;
+        }
+        case 'stay': {
+          const e = event as StayEvent;
+          return encodeText(e.accommodationName || 'Accommodation');
+        }
+        case 'destination': {
+          const e = event as DestinationEvent;
+          return encodeText(e.placeName || 'Destination');
+        }
         case 'flight': {
           const e = event as FlightEvent;
-          return `${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim();
+          return encodeText(`${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim());
         }
         case 'train': {
           const e = event as TrainEvent;
-          return `${e.trainOperator || ''} ${e.trainNumber || 'Train'}`.trim();
+          return encodeText(`${e.trainOperator || ''} ${e.trainNumber || 'Train'}`.trim());
         }
         case 'rental_car': {
           const e = event as RentalCarEvent;
-          return `${e.carCompany || 'Car'} Rental`;
+          return encodeText(`${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`);
         }
         case 'bus': {
           const e = event as BusEvent;
-          return `${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim();
+          return encodeText(`${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim());
         }
         case 'activity': {
           const activityEvent = event as ActivityEvent;
-          return `${activityEvent.title || 'Activity'} - ${activityEvent.activityType || ''}`.replace(/ - $/, '');
+          return encodeText(`${activityEvent.title || 'Activity'} - ${activityEvent.activityType || ''}`.replace(/ - $/, ''));
         }
         default:
           return 'Event';
@@ -3697,7 +3776,7 @@ const TripDetails: React.FC = () => {
                 // Group events by date
                 const eventsByDate: Record<string, Event[]> = {};
                 
-                sortedEvents.forEach(event => {
+                sortedEvents.forEach((event: Event) => {
                   // Get the date string (YYYY-MM-DD) for grouping
                   const eventDate = getEventDate(event);
                   const dateString = event.date.split('T')[0];
