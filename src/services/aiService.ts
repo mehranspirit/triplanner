@@ -59,7 +59,7 @@ interface ParsedResponse {
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 export const generateAISuggestions = async (request: AISuggestionRequest): Promise<string> => {
   const prompt = `Generate travel suggestions for a trip from ${request.tripDates.startDate} to ${request.tripDates.endDate}.
@@ -702,10 +702,26 @@ Return the response in this exact JSON format:
       };
 
       // Merge the AI-parsed fields with the base event
-      const event = {
-        ...baseEvent,
-        ...eventData.fields,
-      } as Event;
+      let event: Event;
+      
+      if (eventData.type === 'stay') {
+        const address = eventData.fields.address || '';
+        event = {
+          ...baseEvent,
+          ...eventData.fields,
+          address: address,
+          location: address ? {
+            lat: 0, // These will be updated by geocoding
+            lng: 0,
+            address: address
+          } : undefined
+        } as StayEvent;
+      } else {
+        event = {
+          ...baseEvent,
+          ...eventData.fields,
+        } as Event;
+      }
 
       return event;
     });
