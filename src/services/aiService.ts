@@ -684,7 +684,8 @@ Return the response in this exact JSON format:
         status: 'confirmed',
         source: 'other' as const,
         location: { lat: 0, lng: 0 },
-        notes: `Parsed from text with ${Math.round(eventData.confidence * 100)}% confidence\n\nReasoning: ${eventData.reasoning}`,
+        //notes: `Parsed from text with ${Math.round(eventData.confidence * 100)}% confidence\n\nReasoning: ${eventData.reasoning}`,
+        notes: 'Parsed from text',
         createdBy: {
           _id: request.user._id,
           name: request.user.name,
