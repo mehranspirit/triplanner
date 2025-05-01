@@ -77,6 +77,58 @@ interface API {
   updateTripNotes: (tripId: string, content: string) => Promise<TripNote>;
 }
 
+// Add helper after imports near top
+// ---------------- Legacy date normalization ----------------
+// Convert old `date` + `time` style events to new startDate / endDate ISO strings.
+const normalizeEventDates = (events: any[] = []) => {
+  return events.map((ev) => {
+    if (!ev || ev.startDate) return ev;
+
+    // Arrival / departure / point events with date + time
+    if (ev.date) {
+      const legacyTime = ev.time || ev.departureTime || ev.arrivalTime || ev.pickupTime || ev.dropoffTime || '00:00';
+      try {
+        const iso = new Date(`${ev.date}T${legacyTime}:00Z`).toISOString();
+        ev.startDate = iso;
+        ev.endDate = iso;
+      } catch (_) {}
+    }
+
+    // Stay events with checkIn / checkOut (date only)
+    if (ev.type === 'stay') {
+      if (!ev.startDate && ev.checkIn) {
+        try {
+          ev.startDate = new Date(`${ev.checkIn}T00:00:00Z`).toISOString();
+        } catch (_) { console.error(`Stay Norm: Bad checkIn date format: ${ev.checkIn}`); }
+      }
+      if (!ev.endDate && ev.checkOut) {
+        try {
+          ev.endDate = new Date(`${ev.checkOut}T00:00:00Z`).toISOString();
+        } catch (_) { console.error(`Stay Norm: Bad checkOut date format: ${ev.checkOut}`); }
+      }
+    }
+
+    // Rental car events: use date + pickupTime for start, dropoffDate + dropoffTime for end
+    if (ev.type === 'rental_car') {
+      if (!ev.startDate && ev.date) {
+        const pt = ev.pickupTime || '00:00';
+        try {
+          ev.startDate = new Date(`${ev.date}T${pt}:00Z`).toISOString();
+        } catch (_) {}
+      }
+      if (!ev.endDate && (ev.dropoffDate || ev.date)) {
+        const dd = ev.dropoffDate || ev.date;
+        const dt = ev.dropoffTime || '00:00';
+        try {
+          ev.endDate = new Date(`${dd}T${dt}:00Z`).toISOString();
+        } catch (_) {}
+      }
+    }
+
+    return ev;
+  });
+};
+
 export const api: API = {
   // Get all users
   getUsers: async (): Promise<User[]> => {
@@ -141,7 +193,7 @@ export const api: API = {
         thumbnailUrl: trip.thumbnailUrl,
         startDate: trip.startDate,
         endDate: trip.endDate,
-        events: trip.events || [],
+        events: normalizeEventDates(trip.events),
         owner: {
           _id: trip.owner._id,
           name: trip.owner.name,
@@ -191,7 +243,7 @@ export const api: API = {
       thumbnailUrl: trip.thumbnailUrl,
       startDate: trip.startDate,
       endDate: trip.endDate,
-      events: trip.events || [],
+      events: normalizeEventDates(trip.events),
       owner: {
         _id: trip.owner._id,
         name: trip.owner.name,

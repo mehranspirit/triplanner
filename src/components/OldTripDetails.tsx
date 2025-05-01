@@ -1105,10 +1105,10 @@ const TripDetails: React.FC = () => {
 
                   // Get event details based on type
                   const getEventDetails = (event: Event) => {
-                    switch (event.type) {
-                      case 'arrival':
-                      case 'departure': {
-                        const e = event as ArrivalDepartureEvent;
+                      switch (event.type) {
+                        case 'arrival':
+                        case 'departure': {
+                          const e = event as ArrivalDepartureEvent;
                         return [
                           ['Time', e.time],
                           ['Airport', e.airport],
@@ -1118,9 +1118,9 @@ const TripDetails: React.FC = () => {
                           ['Gate', e.gate],
                           ['Booking Ref', e.bookingReference]
                         ].filter(([_, value]) => value);
-                      }
-                      case 'stay': {
-                        const e = event as StayEvent;
+                        }
+                        case 'stay': {
+                          const e = event as StayEvent;
                         return [
                           ['Accommodation', e.accommodationName],
                           ['Check-in', e.checkIn],
@@ -1129,18 +1129,18 @@ const TripDetails: React.FC = () => {
                           ['Reservation', e.reservationNumber],
                           ['Contact', e.contactInfo]
                         ].filter(([_, value]) => value);
-                      }
-                      case 'destination': {
-                        const e = event as DestinationEvent;
+                        }
+                        case 'destination': {
+                          const e = event as DestinationEvent;
                         return [
                           ['Place', e.placeName],
                           ['Address', e.address],
                           ['Description', e.description],
                           ['Opening Hours', e.openingHours]
                         ].filter(([_, value]) => value);
-                      }
-                      case 'flight': {
-                        const e = event as FlightEvent;
+                        }
+                        case 'flight': {
+                          const e = event as FlightEvent;
                         return [
                           ['Airline', e.airline],
                           ['Flight', e.flightNumber],
@@ -1152,9 +1152,9 @@ const TripDetails: React.FC = () => {
                           ['Gate', e.gate],
                           ['Booking Ref', e.bookingReference]
                         ].filter(([_, value]) => value);
-                      }
-                      case 'train': {
-                        const e = event as TrainEvent;
+                        }
+                        case 'train': {
+                          const e = event as TrainEvent;
                         return [
                           ['Operator', e.trainOperator],
                           ['Train Number', e.trainNumber],
@@ -1166,9 +1166,9 @@ const TripDetails: React.FC = () => {
                           ['Seat', e.seatNumber],
                           ['Booking Ref', e.bookingReference]
                         ].filter(([_, value]) => value);
-                      }
-                      case 'rental_car': {
-                        const e = event as RentalCarEvent;
+                        }
+                        case 'rental_car': {
+                          const e = event as RentalCarEvent;
                         return [
                           ['Company', e.carCompany],
                           ['Car Type', e.carType],
@@ -1180,9 +1180,9 @@ const TripDetails: React.FC = () => {
                           ['License Plate', e.licensePlate],
                           ['Booking Ref', e.bookingReference]
                         ].filter(([_, value]) => value);
-                      }
-                      case 'bus': {
-                        const e = event as BusEvent;
+                        }
+                        case 'bus': {
+                          const e = event as BusEvent;
                         return [
                           ['Operator', e.busOperator],
                           ['Bus Number', e.busNumber],
@@ -1193,19 +1193,19 @@ const TripDetails: React.FC = () => {
                           ['Seat', e.seatNumber],
                           ['Booking Ref', e.bookingReference]
                         ].filter(([_, value]) => value);
-                      }
-                      case 'activity': {
-                        const e = event as ActivityEvent;
+                        }
+                        case 'activity': {
+                          const e = event as ActivityEvent;
                         return [
                           ['Title', e.title],
                           ['Type', e.activityType],
                           ['Address', e.address],
                           ['Description', e.description]
                         ].filter(([_, value]) => value);
-                      }
-                      default:
+                        }
+                        default:
                         return [];
-                    }
+                      }
                   };
 
                   return `
@@ -1215,7 +1215,7 @@ const TripDetails: React.FC = () => {
                         <div class="event-header">
                           <span class="event-icon" style="font-size: 24px;">${getEventIcon(event.type)}</span>
                           <span class="event-type">${event.type.replace('_', ' ')}</span>
-                        </div>
+                  </div>
                         <div class="event-title">${getEventTitle(event)}</div>
                         ${event.type === 'destination' && (event as DestinationEvent).description ? 
                           `<div class="event-details truncate-text">${processText((event as DestinationEvent).description || '')}</div>` : ''}

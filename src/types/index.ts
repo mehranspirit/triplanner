@@ -244,6 +244,8 @@ export interface BusEvent extends Event {
   busOperator?: string;
   departureStation?: string;
   arrivalStation?: string;
+  departureDate?: string;
+  arrivalDate?: string;
   departureTime?: string;
   arrivalTime?: string;
   seatNumber?: string;

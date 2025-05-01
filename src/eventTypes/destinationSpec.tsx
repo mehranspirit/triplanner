@@ -1,0 +1,303 @@
+import { z } from 'zod';
+import { registerEvent, EventSpec } from './registry';
+import { DestinationEvent } from '@/types/eventTypes';
+import DestinationEventCard from '../components/TripDetails/EventCards/DestinationEventCard';
+import React from 'react';
+import { UseFormReturn } from 'react-hook-form';
+import { format, setHours, setMinutes, setSeconds, parse } from 'date-fns';
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { 
+    Form, 
+    FormControl, 
+    FormField, 
+    FormItem, 
+    FormLabel, 
+    FormMessage 
+} from "@/components/ui/form";
+import { 
+    Popover, 
+    PopoverContent, 
+    PopoverTrigger 
+} from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CalendarIcon } from 'lucide-react';
+
+// Zod Schema for DestinationEvent
+export const destinationEventSchema = z.object({
+  id: z.string().optional(),
+  type: z.literal('destination'),
+  startDate: z.string().datetime().optional(), // Combined start
+  endDate: z.string().datetime().optional(),   // Combined end
+  destStartDate: z.string({ required_error: "Start date is required." })
+                  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+  destStartTime: z.string({ required_error: "Start time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  destEndDate: z.string({ required_error: "End date is required." })
+                .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+  destEndTime: z.string({ required_error: "End time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  location: z.object({ 
+    lat: z.number(),
+    lng: z.number(),
+    address: z.string().optional(),
+  }).optional(),
+  notes: z.string().optional(),
+  status: z.enum(['confirmed', 'exploring']).default('exploring'),
+  thumbnailUrl: z.string().optional(),
+  source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
+  placeName: z.string().min(1, { message: "Place name is required" }),
+  address: z.string().optional(),
+  description: z.string().optional(),
+  openingHours: z.string().optional(),
+}).refine(data => {
+  if (!data.destStartDate || !data.destStartTime || !data.destEndDate || !data.destEndTime) return false;
+  const startString = `${data.destStartDate}T${data.destStartTime}`;
+  const endString = `${data.destEndDate}T${data.destEndTime}`;
+  return startString <= endString; // Allow start and end to be same
+}, {
+    message: "Start must be before or same as end time",
+    path: ["destEndDate"],
+});
+
+export type DestinationFormData = z.infer<typeof destinationEventSchema>;
+
+// Function to render form fields
+const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): React.ReactNode => {
+  const { control } = form;
+  return (
+    <div className="space-y-4">
+         <FormField
+            control={control}
+            name="placeName"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Place Name *</FormLabel>
+                <FormControl>
+                    <Input placeholder="e.g., Eiffel Tower" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        {/* Start Date/Time */} 
+        <div className="grid grid-cols-2 gap-4">
+             <FormField
+                control={control}
+                name="destStartDate"
+                render={({ field }) => {
+                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  return (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>Start Date *</FormLabel>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                            <FormControl>
+                                <Button
+                                variant={"outline"}
+                                className={cn("w-full pl-3 text-left font-normal", !selectedDate && "text-muted-foreground")}
+                                >
+                                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                            </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar 
+                              mode="single" 
+                              selected={selectedDate}
+                              onSelect={(date) => {
+                                field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
+                              }}
+                              initialFocus 
+                            />
+                            </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                  );
+                }}
+                />
+            <FormField
+                control={control}
+                name="destStartTime"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Start Time *</FormLabel>
+                        <FormControl>
+                            <Input type="time" {...field} value={field.value ?? ''} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+        </div>
+         {/* End Date/Time */} 
+         <div className="grid grid-cols-2 gap-4">
+             <FormField
+                control={control}
+                name="destEndDate"
+                render={({ field }) => {
+                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  return (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>End Date *</FormLabel>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                            <FormControl>
+                                <Button
+                                variant={"outline"}
+                                className={cn("w-full pl-3 text-left font-normal", !selectedDate && "text-muted-foreground")}
+                                >
+                                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                            </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar 
+                              mode="single" 
+                              selected={selectedDate}
+                              onSelect={(date) => {
+                                field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
+                              }}
+                              initialFocus 
+                            />
+                            </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                  );
+                }}
+                />
+            <FormField
+                control={control}
+                name="destEndTime"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>End Time *</FormLabel>
+                        <FormControl>
+                            <Input type="time" {...field} value={field.value ?? ''} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+        </div>
+         <FormField
+            control={control}
+            name="address"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Address</FormLabel>
+                <FormControl>
+                    <Input placeholder="Optional" {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+         <FormField
+            control={control}
+            name="openingHours"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Opening Hours</FormLabel>
+                <FormControl>
+                    <Input placeholder="e.g., 9am - 5pm" {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        <FormField
+            control={control}
+            name="description"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                    <Textarea placeholder="Optional description..." {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+       {/* Notes */} 
+        <FormField
+            control={control}
+            name="notes"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Notes</FormLabel>
+                <FormControl>
+                    <Textarea placeholder="Optional notes..." {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        {/* Status */} 
+         <FormField
+            control={control}
+            name="status"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Status</FormLabel>
+                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                         <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value="exploring">Exploring</SelectItem>
+                            <SelectItem value="confirmed">Confirmed</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+    </div>
+  );
+};
+
+// Helper to format date/time for display
+const formatDateTime = (isoString: string): string => {
+  if (!isoString) return 'N/A';
+  try {
+    return format(new Date(isoString), 'MMM d, yyyy h:mm a');
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return 'Invalid Date';
+  }
+};
+
+// Event Specification for Destinations
+const destinationSpec: EventSpec<DestinationEvent> = {
+  type: 'destination',
+  icon: '📍',
+  defaultThumbnail: '/placeholders/destination-thumbnail.jpg',
+  zodSchema: destinationEventSchema,
+  formFields: renderDestinationFormFields,
+  listSummary: (event) => `${event.placeName} on ${format(new Date(event.startDate), 'MMM d')}`,
+  detailRows: (event) => {
+    const isSinglePointInTime = event.startDate === event.endDate;
+    const rows: [string, string][] = [
+        ['Place', event.placeName],
+        ['Time', isSinglePointInTime ? formatDateTime(event.startDate) : `${formatDateTime(event.startDate)} - ${formatDateTime(event.endDate)}`],
+        ['Address', event.address || event.location?.address || 'N/A'],
+        ['Hours', event.openingHours || 'N/A'],
+        ['Description', event.description || 'N/A'],
+        ['Status', event.status],
+    ];
+    return rows;
+  },
+  cardComponent: DestinationEventCard,
+};
+
+// Register the specification
+registerEvent(destinationSpec); 

@@ -60,7 +60,9 @@ const eventSchema = new mongoose.Schema({
   accommodationName: String,
   address: String,
   checkIn: String,
+  checkInTime: String, // HH:mm format
   checkOut: String,
+  checkOutTime: String, // HH:mm format
   reservationNumber: String,
   contactInfo: String,
   // Fields for destination events

@@ -11,7 +11,6 @@ import Register from './components/auth/Register';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ResetPassword from './components/auth/ResetPassword';
 import TripList from './components/TripList';
-import TripDetails from './components/TripDetails';
 import UserProfile from './components/UserProfile';
 import { UserList } from './components/UserList';
 import Calendar from './components/Calendar';
@@ -21,6 +20,21 @@ import AuthCallback from './components/auth/AuthCallback';
 import ExpensesPage from './pages/ExpensesPage';
 import { DreamTripsPage } from './pages/DreamTripsPage';
 import DreamTripDetails from './components/DreamTripDetails';
+import NewTripDetails from './components/TripDetails/NewTripDetails';
+
+// Import the registry first
+import './eventTypes/registry';
+
+// Then import all specific event type specs to trigger registration
+import './eventTypes/flightSpec';
+import './eventTypes/staySpec';
+import './eventTypes/activitySpec';
+import './eventTypes/trainSpec';
+import './eventTypes/busSpec';
+import './eventTypes/rentalCarSpec';
+import './eventTypes/destinationSpec';
+import './eventTypes/arrivalSpec';
+import './eventTypes/departureSpec';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -71,7 +85,7 @@ const App: React.FC = () => {
               element={
                 <ProtectedRoute>
                   <AuthenticatedLayout>
-                    <TripDetails />
+                    <NewTripDetails />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }

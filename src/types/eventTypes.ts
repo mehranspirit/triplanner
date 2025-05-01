@@ -11,7 +11,8 @@ export interface Event {
   id: string;
   type: EventType;
   thumbnailUrl?: string;
-  date: string; // YYYY-MM-DD format
+  startDate: string; // ISO 8601 format (e.g., "2024-07-28T10:00:00Z")
+  endDate: string;   // ISO 8601 format (e.g., "2024-07-28T12:00:00Z")
   location?: {
     lat: number;
     lng: number;
@@ -32,11 +33,16 @@ export interface ArrivalDepartureEvent extends Event {
   type: 'arrival' | 'departure';
   flightNumber?: string;
   airline?: string;
+  date: string; // YYYY-MM-DD format
   time: string; // HH:mm format
   airport: string;
   terminal?: string;
   gate?: string;
   bookingReference?: string;
+  departureDate?: string; // YYYY-MM-DD format
+  departureTime?: string; // HH:mm format
+  arrivalDate?: string; // YYYY-MM-DD format
+  arrivalTime?: string; // HH:mm format
 }
 
 export interface StayEvent extends Event {
@@ -44,7 +50,9 @@ export interface StayEvent extends Event {
   accommodationName: string;
   address?: string;
   checkIn: string; // YYYY-MM-DD format
+  checkInTime: string; // HH:mm format
   checkOut: string; // YYYY-MM-DD format
+  checkOutTime: string; // HH:mm format
   reservationNumber?: string;
   contactInfo?: string;
 }
@@ -245,6 +253,8 @@ export interface BusEvent extends Event {
   busOperator?: string;
   departureStation?: string;
   arrivalStation?: string;
+  departureDate?: string;
+  arrivalDate?: string;
   departureTime?: string;
   arrivalTime?: string;
   seatNumber?: string;
