@@ -99,7 +99,12 @@ const eventSchema = new mongoose.Schema({
   },
   updatedAt: {
     type: Date
-  }
+  },
+  // Activity fields
+  startDate: String, // YYYY-MM-DD
+  startTime: String, // HH:mm
+  endDate: String,   // YYYY-MM-DD
+  endTime: String,   // HH:mm
 });
 
 const noteEditSchema = new mongoose.Schema({

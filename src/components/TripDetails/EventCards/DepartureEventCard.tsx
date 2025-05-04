@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { ArrivalDepartureEvent } from '@/types/eventTypes'; // Use common type
 import { format, parse } from 'date-fns';
-import { PlaneTakeoff, Clock, MapPin, Edit, Trash2, Ticket } from 'lucide-react'; // Use appropriate icon
+import { PlaneTakeoff, Clock, MapPin, Edit, Trash2, Ticket, Info } from 'lucide-react'; // Use appropriate icon
 
 interface DepartureEventCardProps {
   event: ArrivalDepartureEvent; // Use common type
@@ -84,7 +84,11 @@ const DepartureEventCard: React.FC<DepartureEventCardProps> = ({ event, thumbnai
   return (
     <Card className="overflow-hidden flex flex-col h-full">
       <CardHeader className="p-0 relative">
-        <img src={thumbnail} alt={`Departure from ${event.airport}`} className="w-full h-32 object-cover" />
+        <img 
+          src={thumbnail || 'https://images.pexels.com/photos/723240/pexels-photo-723240.jpeg?auto=compress&cs=tinysrgb&w=300'} 
+          alt={`Departure from ${event.airport}`} 
+          className="w-full h-32 object-cover"
+        />
       </CardHeader>
       <CardContent className="p-4 flex-grow space-y-2">
         <CardTitle className="text-lg font-semibold flex items-center">
@@ -97,19 +101,38 @@ const DepartureEventCard: React.FC<DepartureEventCardProps> = ({ event, thumbnai
         
         <div className="flex items-center text-sm space-x-2">
           <Clock className="h-4 w-4 text-gray-500" />
-          <span>Departs: {departureTimeDisplay()}</span> 
+          <span><span className="font-semibold">Departs:</span> {departureTimeDisplay()}</span>
         </div>
         
         {(event.terminal || event.gate) && (
-            <p className="text-sm">Terminal: {event.terminal || 'N/A'}, Gate: {event.gate || 'N/A'}</p>
+          <div className="flex items-center text-sm space-x-2">
+            <Info className="h-4 w-4 text-gray-500" />
+            <span>
+              {event.terminal && <span><span className="font-semibold">Terminal:</span> {event.terminal}</span>}
+              {event.terminal && event.gate && <span className="mx-1">•</span>}
+              {event.gate && <span><span className="font-semibold">Gate:</span> {event.gate}</span>}
+            </span>
+          </div>
         )}
-         {event.bookingReference && (
-             <div className="flex items-center text-sm space-x-2 pt-2 border-t mt-2">
-                 <Ticket className="h-4 w-4 text-gray-500"/>
-                 <span>Booking Ref: {event.bookingReference}</span>
-             </div>
-         )}
-        {event.notes && <p className="text-sm mt-2 border-t pt-2">Notes: {event.notes}</p>}
+        
+        {event.bookingReference && (
+          <div className="flex items-center text-sm space-x-2">
+            <Ticket className="h-4 w-4 text-gray-500"/>
+            <span><span className="font-semibold">Booking Ref:</span> {event.bookingReference}</span>
+          </div>
+        )}
+        {event.location?.address && (
+          <div className="flex items-center text-sm space-x-2">
+            <MapPin className="h-4 w-4 text-gray-500" />
+            <span><span className="font-semibold">Location:</span> {event.location.address}</span>
+          </div>
+        )}
+        {event.notes && (
+          <div className="flex items-start text-sm space-x-2 pt-2 border-t mt-2">
+            <Info className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
+            <p><span className="font-semibold">Notes:</span> {event.notes}</p>
+          </div>
+        )}
       </CardContent>
       {(onEdit || onDelete) && (
         <CardFooter className="p-2 bg-gray-50 border-t flex justify-end space-x-2">

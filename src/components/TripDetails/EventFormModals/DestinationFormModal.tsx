@@ -19,74 +19,29 @@ const DestinationFormModal: React.FC<DestinationFormModalProps> = ({ isOpen, onC
     resolver: zodResolver(destinationEventSchema as z.ZodType<DestinationFormData>),
     defaultValues: eventToEdit ? {
         ...eventToEdit,
-        destStartDate: eventToEdit.startDate?.substring(0, 10) || '',
-        destStartTime: eventToEdit.startDate?.substring(11, 16) || '',
-        destEndDate: eventToEdit.endDate?.substring(0, 10) || '',
-        destEndTime: eventToEdit.endDate?.substring(11, 16) || '',
+        startDate: eventToEdit.startDate || '',
+        endDate: eventToEdit.endDate || '',
     } : {
         type: 'destination',
-        destStartDate: '',
-        destStartTime: '',
-        destEndDate: '',
-        destEndTime: '',
+        startDate: '',
+        endDate: '',
     },
   });
 
   useEffect(() => {
     if (eventToEdit) {
-      const startDatePart = eventToEdit.startDate?.substring(0, 10) || '';
-      const startTimePart = eventToEdit.startDate?.substring(11, 16) || '';
-      const endDatePart = eventToEdit.endDate?.substring(0, 10) || '';
-      const endTimePart = eventToEdit.endDate?.substring(11, 16) || '';
-      console.log('DestinationFormModal: Directly parsed values:', { startDatePart, startTimePart, endDatePart, endTimePart });
       form.reset({
         ...eventToEdit,
-        destStartDate: startDatePart,
-        destStartTime: startTimePart,
-        destEndDate: endDatePart,
-        destEndTime: endTimePart,
-      });
-    } else {
-      form.reset({
-        type: 'destination',
-        placeName: '',
-        address: '',
-        description: '',
-        openingHours: '',
-        destStartDate: '',
-        destStartTime: '',
-        destEndDate: '',
-        destEndTime: '',
-        notes: '',
-        status: 'exploring',
+        startDate: eventToEdit.startDate || '',
+        endDate: eventToEdit.endDate || '',
       });
     }
-  }, [eventToEdit, form, isOpen]);
+  }, [eventToEdit, form]);
 
   const onSubmit = (data: DestinationFormData) => {
-    console.log("Raw Destination form data (strings):", data);
-    let processedData: any = { ...data };
-
-    if (data.destStartDate && data.destStartTime) {
-      processedData.startDate = `${data.destStartDate}T${data.destStartTime}:00`;
-      console.log("DestinationFormModal: Constructed naive ISO for startDate:", processedData.startDate);
-    } else {
-      processedData.startDate = undefined;
-    }
-    if (data.destEndDate && data.destEndTime) {
-      processedData.endDate = `${data.destEndDate}T${data.destEndTime}:00`;
-      console.log("DestinationFormModal: Constructed naive ISO for endDate:", processedData.endDate);
-    } else {
-      processedData.endDate = undefined;
-    }
-
-    delete processedData.destStartDate;
-    delete processedData.destStartTime;
-    delete processedData.destEndDate;
-    delete processedData.destEndTime;
-
-    console.log("Processed Destination data to save (naive ISO):", processedData);
-    onSave(processedData as Event);
+    const processedData = { ...data };
+    console.log("Processed Destination data to save:", processedData);
+    onSave(processedData as unknown as Event);
     onClose();
   };
 

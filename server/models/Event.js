@@ -92,7 +92,12 @@ const eventSchema = new mongoose.Schema({
   licensePlate: String,
   // Fields for bus events
   busNumber: String,
-  busOperator: String
+  busOperator: String,
+  // Activity event fields
+  startDate: String, // YYYY-MM-DD
+  startTime: String, // HH:mm
+  endDate: String,   // YYYY-MM-DD
+  endTime: String,   // HH:mm
 }, {
   timestamps: true
 });

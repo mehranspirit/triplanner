@@ -31,14 +31,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export const activityEventSchema = z.object({
   id: z.string().optional(),
   type: z.literal('activity'),
-  startDate: z.string().datetime().optional(), // Combined start
-  endDate: z.string().datetime().optional(),   // Combined end
-  activityStartDate: z.string({ required_error: "Start date is required." })
-                      .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
-  activityStartTime: z.string({ required_error: "Start time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
-  activityEndDate: z.string({ required_error: "End date is required." })
-                    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
-  activityEndTime: z.string({ required_error: "End time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  title: z.string().min(1, { message: "Activity title is required" }),
+  activityType: z.string().min(1, { message: "Activity type is required" }),
+  startDate: z.string({ required_error: "Start date is required." })
+              .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+  startTime: z.string({ required_error: "Start time is required." })
+              .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  endDate: z.string({ required_error: "End date is required." })
+            .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+  endTime: z.string({ required_error: "End time is required." })
+            .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   location: z.object({ 
     lat: z.number(),
     lng: z.number(),
@@ -48,18 +50,14 @@ export const activityEventSchema = z.object({
   status: z.enum(['confirmed', 'exploring']).default('exploring'),
   thumbnailUrl: z.string().optional(),
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
-  title: z.string().min(1, { message: "Activity title is required" }),
-  activityType: z.string().min(1, { message: "Activity type is required" }),
   address: z.string().optional(),
   description: z.string().optional(),
 }).refine(data => {
-  if (!data.activityStartDate || !data.activityStartTime || !data.activityEndDate || !data.activityEndTime) return false;
-  const startString = `${data.activityStartDate}T${data.activityStartTime}`;
-  const endString = `${data.activityEndDate}T${data.activityEndTime}`;
+  const startString = `${data.startDate}T${data.startTime}`;
+  const endString = `${data.endDate}T${data.endTime}`;
   return startString <= endString; // Allow start and end to be the same
 }, {
-    message: "Start must be before or same as end time",
-    path: ["activityEndDate"],
+  message: "Start must be before or same as end time",
 });
 
 export type ActivityFormData = z.infer<typeof activityEventSchema>;
@@ -101,9 +99,15 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
         <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}
-                name="activityStartDate"
+                name="startDate"
                 render={({ field }) => {
-                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    const parsed = parse(field.value, 'yyyy-MM-dd', new Date());
+                    if (!isNaN(parsed.getTime())) {
+                      selectedDate = parsed;
+                    }
+                  }
                   return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Start Date *</FormLabel>
@@ -137,7 +141,7 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
                 />
             <FormField
                 control={control}
-                name="activityStartTime"
+                name="startTime"
                 render={({ field }) => (
                     <FormItem>
                         <FormLabel>Start Time *</FormLabel>
@@ -153,9 +157,15 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
          <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}
-                name="activityEndDate"
+                name="endDate"
                 render={({ field }) => {
-                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    const parsed = parse(field.value, 'yyyy-MM-dd', new Date());
+                    if (!isNaN(parsed.getTime())) {
+                      selectedDate = parsed;
+                    }
+                  }
                   return (
                     <FormItem className="flex flex-col">
                         <FormLabel>End Date *</FormLabel>
@@ -189,7 +199,7 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
                 />
             <FormField
                 control={control}
-                name="activityEndTime"
+                name="endTime"
                 render={({ field }) => (
                     <FormItem>
                         <FormLabel>End Time *</FormLabel>
@@ -285,7 +295,7 @@ const formatDateTime = (isoString: string): string => {
 const activitySpec: EventSpec<ActivityEvent> = {
   type: 'activity',
   icon: '🎉',
-  defaultThumbnail: '/placeholders/activity-thumbnail.jpg',
+  defaultThumbnail: 'https://images.pexels.com/photos/1659438/pexels-photo-1659438.jpeg?auto=compress&cs=tinysrgb&w=300',
   zodSchema: activityEventSchema,
   formFields: renderActivityFormFields,
   listSummary: (event) => `${event.title} (${event.activityType}) on ${format(new Date(event.startDate), 'MMM d')}`,

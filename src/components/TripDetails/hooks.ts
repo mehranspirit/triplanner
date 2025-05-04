@@ -114,6 +114,7 @@ export const useTripDetails = () => {
     await handleTripUpdate(updatedTrip);
     const thumb = await getEventThumbnail(newEventWithMeta);
     setEventThumbnails(prev => ({ ...prev, [newEventWithMeta.id]: thumb }));
+    return newEventWithMeta;
   }, [trip, user, handleTripUpdate]);
 
   const updateEvent = useCallback(async (eventToUpdate: Event) => {
@@ -139,10 +140,12 @@ export const useTripDetails = () => {
       
       // Update the backend without triggering a refresh
       await handleTripUpdate(updatedTrip);
+      return eventWithMeta;
     } catch (error) {
       console.error('Error updating event:', error);
       // Only refresh from server on error
       await fetchTrip();
+      throw error;
     }
   }, [trip, user, handleTripUpdate, fetchTrip]);
 

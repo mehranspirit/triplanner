@@ -20,36 +20,23 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
 
   const form = useForm<ArrivalFormData>({
     resolver: zodResolver(arrivalEventSchema as z.ZodType<ArrivalFormData>),
-    defaultValues: eventToEdit ? {
-        ...eventToEdit,
-        // Map database date/time to form fields
-        arrivalDate: eventToEdit.date || '',
-        arrivalTime: eventToEdit.time || '',
-    } : {
-        type: 'arrival',
-        arrivalDate: '',
-        arrivalTime: '',
-        status: 'exploring',
+    defaultValues: {
+      type: 'arrival',
+      arrivalDate: '',
+      arrivalTime: '',
+      status: 'exploring',
     },
   });
 
   useEffect(() => {
-    // Log inside useEffect before processing
-    console.log('ArrivalFormModal useEffect, eventToEdit:', eventToEdit);
-    if (eventToEdit) {
-      // Use the arrivalDate and arrivalTime directly from the database
-      console.log('Using database date/time fields:', {
-        date: eventToEdit.date || '',
-        time: eventToEdit.time || '',
-      });
-      
+    if (isOpen && eventToEdit) {
+      console.log('ArrivalFormModal: Resetting form with event data:', eventToEdit);
       form.reset({
         ...eventToEdit,
-        // Map database date/time to form fields
         arrivalDate: eventToEdit.date || '',
         arrivalTime: eventToEdit.time || '',
       });
-    } else {
+    } else if (isOpen) {
       form.reset({
         type: 'arrival',
         airport: '',
@@ -64,54 +51,60 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
         bookingReference: '',
       });
     }
-  }, [eventToEdit, form, isOpen]);
+  }, [isOpen, eventToEdit?.id]); // Only reset when modal opens or eventToEdit changes
 
   const onSubmit = (data: ArrivalFormData) => {
-    console.log("Raw Arrival form data (strings):", JSON.stringify(data));
+    console.log("ArrivalFormModal onSubmit called with data:", data);
     
     // Create a copy of the form data
-    let processedData: any = { ...data };
+    const processedData: any = { ...data };
     
-    // Map form fields to database fields
-    processedData.date = data.arrivalDate || '';
-    processedData.time = data.arrivalTime || '';
+    // Map form fields to database fields - ensure these match the ArrivalDepartureEvent type
+    processedData.date = data.arrivalDate;
+    processedData.time = data.arrivalTime;
     
     // Set startDate and endDate for calendar and timeline view compatibility
     if (data.arrivalDate && data.arrivalTime) {
+      // Ensure proper format for ISO string
       const naiveISOString = `${data.arrivalDate}T${data.arrivalTime}:00`;
       processedData.startDate = naiveISOString;
       processedData.endDate = naiveISOString;
+      console.log("Created ISO strings:", { 
+        startDate: processedData.startDate, 
+        endDate: processedData.endDate 
+      });
     } else {
-      processedData.startDate = '';
-      processedData.endDate = '';
-    }
-
-    // Preserve all other fields
-    processedData.airport = data.airport || '';
-    processedData.flightNumber = data.flightNumber || '';
-    processedData.airline = data.airline || '';
-    processedData.terminal = data.terminal || '';
-    processedData.gate = data.gate || '';
-    processedData.bookingReference = data.bookingReference || '';
-    processedData.notes = data.notes || '';
-    processedData.status = data.status;
-    if (data.location) {
-      processedData.location = data.location;
-    }
-    if (data.thumbnailUrl) {
-      processedData.thumbnailUrl = data.thumbnailUrl;
-    }
-    if (data.source) {
-      processedData.source = data.source;
+      // Provide fallback empty strings to avoid validation issues
+      processedData.startDate = "";
+      processedData.endDate = "";
     }
 
     // Remove the UI-specific fields that aren't in the database schema
     delete processedData.arrivalDate;
     delete processedData.arrivalTime;
 
-    console.log("Final processed data to save:", JSON.stringify(processedData));
-    onSave(processedData as Event);
-    onClose();
+    // If editing, preserve the event ID and other metadata
+    if (eventToEdit) {
+      processedData.id = eventToEdit.id;
+      // Preserve timestamps and user data
+      processedData.createdAt = eventToEdit.createdAt;
+      processedData.createdBy = eventToEdit.createdBy;
+      processedData.updatedAt = new Date().toISOString();
+      processedData.updatedBy = eventToEdit.updatedBy;
+      processedData.likes = eventToEdit.likes || [];
+      processedData.dislikes = eventToEdit.dislikes || [];
+    }
+
+    console.log("Final processed data to save:", processedData);
+    
+    try {
+      onSave(processedData);
+      console.log("ArrivalFormModal: onSave called successfully");
+      onClose();
+      console.log("ArrivalFormModal: onClose called");
+    } catch (error) {
+      console.error("ArrivalFormModal: Error in onSave/onClose:", error);
+    }
   };
 
   const eventSpec = EVENT_TYPES['arrival'];

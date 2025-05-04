@@ -31,19 +31,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export const rentalCarEventSchema = z.object({
   id: z.string().optional(),
   type: z.literal('rental_car'),
-  startDate: z.string().datetime().optional(), // Combined pickup
-  endDate: z.string().datetime().optional(),   // Combined dropoff
-  pickupDate: z.string({ required_error: "Pickup date is required." })
-               .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
-  pickupTime: z.string({ required_error: "Pickup time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  date: z.string({ required_error: "Pickup date is required." })
+         .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+  pickupTime: z.string({ required_error: "Pickup time is required." })
+               .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   dropoffDate: z.string({ required_error: "Dropoff date is required." })
                 .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
-  dropoffTime: z.string({ required_error: "Dropoff time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  dropoffTime: z.string({ required_error: "Dropoff time is required." })
+                .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   location: z.object({ 
     lat: z.number(),
     lng: z.number(),
     address: z.string().optional(),
-  }).optional(), // Maybe pickup location?
+  }).optional(),
   notes: z.string().optional(),
   status: z.enum(['confirmed', 'exploring']).default('exploring'),
   thumbnailUrl: z.string().optional(),
@@ -55,8 +55,8 @@ export const rentalCarEventSchema = z.object({
   bookingReference: z.string().optional(),
   licensePlate: z.string().optional(),
 }).refine(data => {
-  if (!data.pickupDate || !data.pickupTime || !data.dropoffDate || !data.dropoffTime) return false;
-  const startString = `${data.pickupDate}T${data.pickupTime}`;
+  if (!data.date || !data.pickupTime || !data.dropoffDate || !data.dropoffTime) return false;
+  const startString = `${data.date}T${data.pickupTime}`;
   const endString = `${data.dropoffDate}T${data.dropoffTime}`;
   return startString < endString;
 }, {
@@ -117,7 +117,7 @@ const renderRentalCarFormFields = (form: UseFormReturn<RentalCarFormData>): Reac
         <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}
-                name="pickupDate"
+                name="date"
                 render={({ field }) => {
                   const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
                   return (
@@ -317,11 +317,11 @@ const rentalCarSpec: EventSpec<RentalCarEvent> = {
   defaultThumbnail: '/placeholders/car-thumbnail.jpg',
   zodSchema: rentalCarEventSchema,
   formFields: renderRentalCarFormFields,
-  listSummary: (event) => `${event.carCompany || 'Rental Car'} (${format(new Date(event.startDate), 'MMM d')} - ${format(new Date(event.endDate), 'MMM d')})`,
+  listSummary: (event) => `${event.carCompany || 'Rental Car'} (${format(new Date(event.date), 'MMM d')} - ${format(new Date(event.dropoffDate), 'MMM d')})`,
   detailRows: (event) => [
     ['Company', `${event.carCompany || 'N/A'} ${event.carType ? `(${event.carType})` : ''}`],
-    ['Pickup', `${event.pickupLocation} at ${formatDateTime(event.startDate)}`],
-    ['Dropoff', `${event.dropoffLocation} at ${formatDateTime(event.endDate)}`],
+    ['Pickup', `${event.pickupLocation} at ${formatDateTime(event.date)}`],
+    ['Dropoff', `${event.dropoffLocation} at ${formatDateTime(event.dropoffDate)}`],
     ['License Plate', event.licensePlate || 'N/A'],
     ['Booking Ref', event.bookingReference || 'N/A'],
     ['Status', event.status],

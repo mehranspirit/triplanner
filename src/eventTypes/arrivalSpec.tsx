@@ -46,8 +46,8 @@ const combineDateAndTime = (date: Date | undefined, time: string | undefined): s
 export const arrivalEventSchema = z.object({
   id: z.string().optional(),
   type: z.literal('arrival'),
-  startDate: z.string().datetime().optional(), // Combined arrival time
-  endDate: z.string().datetime().optional(),   // Often same as startDate
+  startDate: z.string().optional(), // Remove datetime() validation
+  endDate: z.string().optional(),   // Remove datetime() validation
   arrivalDate: z.string({ required_error: "Arrival date is required." })
                 .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   arrivalTime: z.string({ required_error: "Arrival time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),

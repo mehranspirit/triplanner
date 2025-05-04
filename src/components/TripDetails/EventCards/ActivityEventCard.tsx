@@ -2,8 +2,9 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ActivityEvent } from '@/types/eventTypes';
-import { format } from 'date-fns';
-import { CalendarClock, MapPin, Edit, Trash2, Info, Activity } from 'lucide-react';
+import { format, parse } from 'date-fns';
+import { Clock, MapPin, Edit, Trash2, Info } from 'lucide-react';
+import { FaMountain } from 'react-icons/fa';
 
 interface ActivityEventCardProps {
   event: ActivityEvent;
@@ -13,57 +14,52 @@ interface ActivityEventCardProps {
 }
 
 const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail, onEdit, onDelete }) => {
-
-  const formatDateTime = (isoString: string) => {
-    if (!isoString) return 'N/A';
-    try {
-      return format(new Date(isoString), 'MMM d, yyyy h:mm a');
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return 'Invalid Date';
-    }
+  const formatDateTime = (date: string, time: string) => {
+    if (!date) return '';
+    // Parse as local date, not UTC, to avoid timezone shift
+    const parsed = parse(date, 'yyyy-MM-dd', new Date());
+    if (isNaN(parsed.getTime())) return date + (time ? ` at ${time}` : '');
+    return `${format(parsed, 'MMM d, yyyy')}${time ? ` at ${time}` : ''}`;
   };
 
   return (
     <Card className="overflow-hidden flex flex-col h-full">
       <CardHeader className="p-0 relative">
-        <img src={thumbnail} alt={event.title} className="w-full h-32 object-cover" />
+        <img 
+          src={thumbnail || 'https://images.pexels.com/photos/1659438/pexels-photo-1659438.jpeg?auto=compress&cs=tinysrgb&w=300'} 
+          alt={event.title} 
+          className="w-full h-32 object-cover"
+        />
       </CardHeader>
       <CardContent className="p-4 flex-grow space-y-2">
         <CardTitle className="text-lg font-semibold flex items-center">
-          <Activity className="h-5 w-5 mr-2 text-green-600" />
+          <FaMountain className="h-5 w-5 mr-2 text-indigo-600" />
           {event.title}
         </CardTitle>
         <CardDescription className="text-sm text-gray-600">
-          {event.activityType || 'Activity'}
+          {event.activityType}
         </CardDescription>
         
         <div className="flex items-center text-sm space-x-2">
-          <CalendarClock className="h-4 w-4 text-gray-500" />
-          <span>Starts: {formatDateTime(event.startDate)}</span>
+          <Clock className="h-4 w-4 text-gray-500" />
+          <span><span className="font-semibold">Start:</span> {formatDateTime(event.startDate, event.startTime)}</span>
         </div>
-        {/* Assuming endDate might be relevant for activities */} 
         <div className="flex items-center text-sm space-x-2">
-           <CalendarClock className="h-4 w-4 text-gray-500" />
-           <span>Ends: {formatDateTime(event.endDate)}</span>
+          <Clock className="h-4 w-4 text-gray-500" />
+          <span><span className="font-semibold">End:</span> {formatDateTime(event.endDate, event.endTime)}</span>
         </div>
-
-        {(event.address || event.location?.address) && (
+        {event.address && (
           <div className="flex items-center text-sm space-x-2">
             <MapPin className="h-4 w-4 text-gray-500" />
-            <span>{event.address || event.location?.address}</span>
+            <span><span className="font-semibold">Location:</span> {event.address}</span>
           </div>
         )}
-
         {event.description && (
-           <div className="flex items-start text-sm space-x-2 pt-2 border-t mt-2">
-             <Info className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
-             <p>{event.description}</p>
-           </div>
+          <div className="flex items-start text-sm space-x-2 pt-2 border-t mt-2">
+            <Info className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
+            <p><span className="font-semibold">Description:</span> {event.description}</p>
+          </div>
         )}
-        {event.notes && (
-             <p className="text-sm mt-2 border-t pt-2">Notes: {event.notes}</p>
-         )}
       </CardContent>
       {(onEdit || onDelete) && (
         <CardFooter className="p-2 bg-gray-50 border-t flex justify-end space-x-2">

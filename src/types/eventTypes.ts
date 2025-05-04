@@ -60,6 +60,10 @@ export interface StayEvent extends Event {
 export interface DestinationEvent extends Event {
   type: 'destination';
   placeName: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
   address?: string;
   description?: string;
   openingHours?: string;
@@ -239,9 +243,10 @@ export interface RentalCarEvent extends Event {
   carCompany?: string;
   pickupLocation?: string;
   dropoffLocation?: string;
-  pickupTime?: string;
-  dropoffTime?: string;
-  dropoffDate?: string; // YYYY-MM-DD format
+  date: string; // YYYY-MM-DD format for pickup date
+  pickupTime: string; // HH:mm format
+  dropoffDate: string; // YYYY-MM-DD format
+  dropoffTime: string; // HH:mm format
   carType?: string;
   bookingReference?: string;
   licensePlate?: string;
@@ -267,6 +272,10 @@ export interface ActivityEvent extends Event {
   activityType: string;
   address?: string;
   description?: string;
+  startDate: string;  // YYYY-MM-DD format
+  startTime: string;  // HH:mm format
+  endDate: string;    // YYYY-MM-DD format
+  endTime: string;    // HH:mm format
 }
 
 export interface AISuggestionHistory {

@@ -18,18 +18,8 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
   const formatCarDateTime = (dateSource: string | undefined, timeString: string | undefined) => {
     if (!dateSource || !timeString) return 'N/A';
     try {
-      let datePart: string;
-      // Check if dateSource is likely an ISO string (contains T) or YYYY-MM-DD
-      if (dateSource.includes('T')) {
-        // Extract YYYY-MM-DD from ISO string
-        datePart = formatISO(new Date(dateSource), { representation: 'date' });
-      } else {
-        // Assume it's already YYYY-MM-DD
-        datePart = dateSource;
-      }
-
       // Parse YYYY-MM-DD and HH:mm
-      const dateObj = parse(`${datePart} ${timeString}`, 'yyyy-MM-dd HH:mm', new Date());
+      const dateObj = parse(`${dateSource} ${timeString}`, 'yyyy-MM-dd HH:mm', new Date());
       // Format as desired
       return format(dateObj, 'MMM d, yyyy h:mm a');
     } catch (error) {
@@ -39,13 +29,17 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
   };
 
   // Use specific fields/dates for display
-  const pickupDisplayDateTime = formatCarDateTime(event.startDate, event.pickupTime);
-  const dropoffDisplayDateTime = formatCarDateTime(event.dropoffDate || event.endDate, event.dropoffTime);
+  const pickupDisplayDateTime = formatCarDateTime(event.date, event.pickupTime);
+  const dropoffDisplayDateTime = formatCarDateTime(event.dropoffDate, event.dropoffTime);
 
   return (
     <Card className="overflow-hidden flex flex-col h-full">
       <CardHeader className="p-0 relative">
-        <img src={thumbnail} alt={event.carCompany || 'Rental Car'} className="w-full h-32 object-cover" />
+        <img 
+          src={thumbnail || 'https://images.pexels.com/photos/30292047/pexels-photo-30292047.jpeg?auto=compress&cs=tinysrgb&w=300'} 
+          alt={event.carCompany || 'Rental Car'} 
+          className="w-full h-32 object-cover"
+        />
       </CardHeader>
       <CardContent className="p-4 flex-grow space-y-2">
         <CardTitle className="text-lg font-semibold flex items-center">
@@ -58,33 +52,33 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
         
         <div className="flex items-center text-sm space-x-2">
           <MapPin className="h-4 w-4 text-gray-500" />
-          <span>Pickup: {event.pickupLocation || 'N/A'}</span>
+          <span><span className="font-semibold">Pickup:</span> {event.pickupLocation || 'N/A'}</span>
         </div>
         <div className="flex items-center text-sm space-x-2">
           <Clock className="h-4 w-4 text-gray-500" />
-          <span>Time: {pickupDisplayDateTime}</span>
+          <span><span className="font-semibold">Time:</span> {pickupDisplayDateTime}</span>
         </div>
         <div className="flex items-center text-sm space-x-2 mt-1">
           <MapPin className="h-4 w-4 text-gray-500" />
-          <span>Dropoff: {event.dropoffLocation || 'N/A'}</span>
+          <span><span className="font-semibold">Dropoff:</span> {event.dropoffLocation || 'N/A'}</span>
         </div>
         <div className="flex items-center text-sm space-x-2">
           <Clock className="h-4 w-4 text-gray-500" />
-          <span>Time: {dropoffDisplayDateTime}</span>
+          <span><span className="font-semibold">Time:</span> {dropoffDisplayDateTime}</span>
         </div>
         {event.licensePlate && (
              <div className="flex items-center text-sm space-x-2">
                 <SquareAsterisk className="h-4 w-4 text-gray-500"/>
-                <span>License Plate: {event.licensePlate}</span>
+                <span><span className="font-semibold">License Plate:</span> {event.licensePlate}</span>
             </div>
         )}
         {event.bookingReference && (
             <div className="flex items-center text-sm space-x-2 pt-2 border-t mt-2">
                 <Ticket className="h-4 w-4 text-gray-500"/>
-                <span>Booking Ref: {event.bookingReference}</span>
+                <span><span className="font-semibold">Booking Ref:</span> {event.bookingReference}</span>
             </div>
         )}
-        {event.notes && <p className="text-sm mt-2 border-t pt-2">Notes: {event.notes}</p>}
+        {event.notes && <p className="text-sm mt-2 border-t pt-2"><span className="font-semibold">Notes:</span> {event.notes}</p>}
       </CardContent>
       {(onEdit || onDelete) && (
         <CardFooter className="p-2 bg-gray-50 border-t flex justify-end space-x-2">

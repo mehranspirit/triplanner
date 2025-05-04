@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { BusEvent } from '@/types/eventTypes';
 import { format } from 'date-fns';
-import { Bus, Clock, MapPin, Edit, Trash2, Ticket } from 'lucide-react';
+import { Bus, Clock, MapPin, Edit, Trash2, Ticket, Info } from 'lucide-react';
 
 interface BusEventCardProps {
   event: BusEvent;
@@ -27,7 +27,11 @@ const BusEventCard: React.FC<BusEventCardProps> = ({ event, thumbnail, onEdit, o
   return (
     <Card className="overflow-hidden flex flex-col h-full">
       <CardHeader className="p-0 relative">
-        <img src={thumbnail} alt={event.busOperator || 'Bus'} className="w-full h-32 object-cover" />
+        <img 
+          src={thumbnail || 'https://images.pexels.com/photos/3608967/pexels-photo-3608967.jpeg?auto=compress&cs=tinysrgb&w=300'} 
+          alt={event.busOperator || 'Bus'} 
+          className="w-full h-32 object-cover"
+        />
       </CardHeader>
       <CardContent className="p-4 flex-grow space-y-2">
         <CardTitle className="text-lg font-semibold flex items-center">
@@ -40,15 +44,15 @@ const BusEventCard: React.FC<BusEventCardProps> = ({ event, thumbnail, onEdit, o
         
         <div className="flex items-center text-sm space-x-2">
           <MapPin className="h-4 w-4 text-gray-500" />
-          <span>From: {event.departureStation || 'N/A'}</span>
+          <span><span className="font-semibold">From:</span> {event.departureStation || 'N/A'}</span>
         </div>
         <div className="flex items-center text-sm space-x-2">
           <Clock className="h-4 w-4 text-gray-500" />
-          <span>Departs: {formatDateTime(event.startDate)}</span>
+          <span><span className="font-semibold">Departs:</span> {formatDateTime(event.startDate)}</span>
         </div>
-        <div className="flex items-center text-sm space-x-2 mt-1">
+        <div className="flex items-center text-sm space-x-2">
           <MapPin className="h-4 w-4 text-gray-500" />
-          <span>To: {event.arrivalStation || 'N/A'}</span>
+          <span><span className="font-semibold">To:</span> {event.arrivalStation || 'N/A'}</span>
         </div>
         <div className="flex items-center text-sm space-x-2">
           <Clock className="h-4 w-4 text-gray-500" />

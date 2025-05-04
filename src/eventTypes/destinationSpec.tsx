@@ -24,21 +24,22 @@ import {
     PopoverContent, 
     PopoverTrigger 
 } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Zod Schema for DestinationEvent
 export const destinationEventSchema = z.object({
   id: z.string().optional(),
   type: z.literal('destination'),
-  startDate: z.string().datetime().optional(), // Combined start
-  endDate: z.string().datetime().optional(),   // Combined end
-  destStartDate: z.string({ required_error: "Start date is required." })
-                  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
-  destStartTime: z.string({ required_error: "Start time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
-  destEndDate: z.string({ required_error: "End date is required." })
-                .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
-  destEndTime: z.string({ required_error: "End time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  placeName: z.string().min(1, { message: "Place name is required" }),
+  startDate: z.string({ required_error: "Start date is required." })
+              .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+  startTime: z.string({ required_error: "Start time is required." })
+              .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
+  endDate: z.string({ required_error: "End date is required." })
+            .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+  endTime: z.string({ required_error: "End time is required." })
+            .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   location: z.object({ 
     lat: z.number(),
     lng: z.number(),
@@ -48,18 +49,14 @@ export const destinationEventSchema = z.object({
   status: z.enum(['confirmed', 'exploring']).default('exploring'),
   thumbnailUrl: z.string().optional(),
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
-  placeName: z.string().min(1, { message: "Place name is required" }),
   address: z.string().optional(),
   description: z.string().optional(),
-  openingHours: z.string().optional(),
 }).refine(data => {
-  if (!data.destStartDate || !data.destStartTime || !data.destEndDate || !data.destEndTime) return false;
-  const startString = `${data.destStartDate}T${data.destStartTime}`;
-  const endString = `${data.destEndDate}T${data.destEndTime}`;
-  return startString <= endString; // Allow start and end to be same
+  const startString = `${data.startDate}T${data.startTime}`;
+  const endString = `${data.endDate}T${data.endTime}`;
+  return startString <= endString; // Allow start and end to be the same
 }, {
-    message: "Start must be before or same as end time",
-    path: ["destEndDate"],
+  message: "Start must be before or same as end time",
 });
 
 export type DestinationFormData = z.infer<typeof destinationEventSchema>;
@@ -69,26 +66,33 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
   const { control } = form;
   return (
     <div className="space-y-4">
-         <FormField
+        <FormField
             control={control}
             name="placeName"
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Place Name *</FormLabel>
                 <FormControl>
-                    <Input placeholder="e.g., Eiffel Tower" {...field} />
+                    <Input placeholder="e.g., Museum, Park" {...field} />
                 </FormControl>
                 <FormMessage />
                 </FormItem>
             )}
             />
+
         {/* Start Date/Time */} 
         <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}
-                name="destStartDate"
+                name="startDate"
                 render={({ field }) => {
-                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    const parsed = parse(field.value, 'yyyy-MM-dd', new Date());
+                    if (!isNaN(parsed.getTime())) {
+                      selectedDate = parsed;
+                    }
+                  }
                   return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Start Date *</FormLabel>
@@ -118,11 +122,11 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
                         <FormMessage />
                     </FormItem>
                   );
-                }}
+                 }}
                 />
             <FormField
                 control={control}
-                name="destStartTime"
+                name="startTime"
                 render={({ field }) => (
                     <FormItem>
                         <FormLabel>Start Time *</FormLabel>
@@ -138,9 +142,15 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
          <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}
-                name="destEndDate"
+                name="endDate"
                 render={({ field }) => {
-                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    const parsed = parse(field.value, 'yyyy-MM-dd', new Date());
+                    if (!isNaN(parsed.getTime())) {
+                      selectedDate = parsed;
+                    }
+                  }
                   return (
                     <FormItem className="flex flex-col">
                         <FormLabel>End Date *</FormLabel>
@@ -174,7 +184,7 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
                 />
             <FormField
                 control={control}
-                name="destEndTime"
+                name="endTime"
                 render={({ field }) => (
                     <FormItem>
                         <FormLabel>End Time *</FormLabel>
@@ -186,12 +196,13 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
                 )}
             />
         </div>
-         <FormField
+
+        <FormField
             control={control}
             name="address"
             render={({ field }) => (
                 <FormItem>
-                <FormLabel>Address</FormLabel>
+                <FormLabel>Address / Location</FormLabel>
                 <FormControl>
                     <Input placeholder="Optional" {...field} value={field.value ?? ''} />
                 </FormControl>
@@ -199,19 +210,7 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
                 </FormItem>
             )}
             />
-         <FormField
-            control={control}
-            name="openingHours"
-            render={({ field }) => (
-                <FormItem>
-                <FormLabel>Opening Hours</FormLabel>
-                <FormControl>
-                    <Input placeholder="e.g., 9am - 5pm" {...field} value={field.value ?? ''} />
-                </FormControl>
-                <FormMessage />
-                </FormItem>
-            )}
-            />
+
         <FormField
             control={control}
             name="description"
@@ -225,6 +224,7 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
                 </FormItem>
             )}
             />
+
        {/* Notes */} 
         <FormField
             control={control}
@@ -239,35 +239,12 @@ const renderDestinationFormFields = (form: UseFormReturn<DestinationFormData>): 
                 </FormItem>
             )}
             />
-        {/* Status */} 
-         <FormField
-            control={control}
-            name="status"
-            render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Status</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                         <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            <SelectItem value="exploring">Exploring</SelectItem>
-                            <SelectItem value="confirmed">Confirmed</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-            )}
-        />
     </div>
   );
 };
 
-// Helper to format date/time for display
+// Add the missing formatDateTime function
 const formatDateTime = (isoString: string): string => {
-  if (!isoString) return 'N/A';
   try {
     return format(new Date(isoString), 'MMM d, yyyy h:mm a');
   } catch (error) {
@@ -280,7 +257,7 @@ const formatDateTime = (isoString: string): string => {
 const destinationSpec: EventSpec<DestinationEvent> = {
   type: 'destination',
   icon: '📍',
-  defaultThumbnail: '/placeholders/destination-thumbnail.jpg',
+  defaultThumbnail: 'https://images.pexels.com/photos/1483053/pexels-photo-1483053.jpeg?auto=compress&cs=tinysrgb&w=300',
   zodSchema: destinationEventSchema,
   formFields: renderDestinationFormFields,
   listSummary: (event) => `${event.placeName} on ${format(new Date(event.startDate), 'MMM d')}`,
@@ -290,7 +267,6 @@ const destinationSpec: EventSpec<DestinationEvent> = {
         ['Place', event.placeName],
         ['Time', isSinglePointInTime ? formatDateTime(event.startDate) : `${formatDateTime(event.startDate)} - ${formatDateTime(event.endDate)}`],
         ['Address', event.address || event.location?.address || 'N/A'],
-        ['Hours', event.openingHours || 'N/A'],
         ['Description', event.description || 'N/A'],
         ['Status', event.status],
     ];

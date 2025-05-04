@@ -19,13 +19,13 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
     resolver: zodResolver(rentalCarEventSchema as z.ZodType<RentalCarFormData>),
     defaultValues: eventToEdit ? {
         ...eventToEdit,
-        pickupDate: eventToEdit.startDate?.substring(0, 10) || '',
-        pickupTime: eventToEdit.startDate?.substring(11, 16) || '',
-        dropoffDate: eventToEdit.endDate?.substring(0, 10) || '',
-        dropoffTime: eventToEdit.endDate?.substring(11, 16) || '',
+        date: eventToEdit.date || '',
+        pickupTime: eventToEdit.pickupTime || '',
+        dropoffDate: eventToEdit.dropoffDate || '',
+        dropoffTime: eventToEdit.dropoffTime || '',
     } : {
         type: 'rental_car',
-        pickupDate: '',
+        date: '',
         pickupTime: '',
         dropoffDate: '',
         dropoffTime: '',
@@ -34,14 +34,22 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
 
   useEffect(() => {
     if (eventToEdit) {
-      const pickupDatePart = eventToEdit.startDate?.substring(0, 10) || '';
-      const pickupTimePart = eventToEdit.startDate?.substring(11, 16) || '';
-      const dropoffDatePart = eventToEdit.endDate?.substring(0, 10) || '';
-      const dropoffTimePart = eventToEdit.endDate?.substring(11, 16) || '';
-      console.log('RentalCarFormModal: Directly parsed values:', { pickupDatePart, pickupTimePart, dropoffDatePart, dropoffTimePart });
+      const datePart = eventToEdit.date || '';
+      const pickupTimePart = eventToEdit.pickupTime || '';
+      const dropoffDatePart = eventToEdit.dropoffDate || '';
+      const dropoffTimePart = eventToEdit.dropoffTime || '';
+      
+      console.log('RentalCarFormModal: Parsed values:', { 
+        datePart, 
+        pickupTimePart, 
+        dropoffDatePart, 
+        dropoffTimePart,
+        eventToEdit 
+      });
+      
       form.reset({
         ...eventToEdit,
-        pickupDate: pickupDatePart,
+        date: datePart,
         pickupTime: pickupTimePart,
         dropoffDate: dropoffDatePart,
         dropoffTime: dropoffTimePart,
@@ -54,7 +62,7 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
         carType: '',
         pickupLocation: '',
         dropoffLocation: '',
-        pickupDate: '',
+        date: '',
         pickupTime: '',
         dropoffDate: '',
         dropoffTime: '',
@@ -70,30 +78,13 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
     console.log("Raw RentalCar form data (strings):", data);
     let processedData: any = { ...data };
 
-    // Construct naive ISO-like strings
-    if (data.pickupDate && data.pickupTime) {
-      processedData.startDate = `${data.pickupDate}T${data.pickupTime}:00`;
-      console.log("RentalCarFormModal: Constructed naive ISO for startDate:", processedData.startDate);
-    } else {
-      processedData.startDate = undefined;
-    }
-    if (data.dropoffDate && data.dropoffTime) {
-      processedData.endDate = `${data.dropoffDate}T${data.dropoffTime}:00`;
-      console.log("RentalCarFormModal: Constructed naive ISO for endDate:", processedData.endDate);
-    } else {
-      processedData.endDate = undefined;
-    }
+    // Map form fields to database fields
+    processedData.date = data.date;
+    processedData.pickupTime = data.pickupTime;
+    processedData.dropoffDate = data.dropoffDate;
+    processedData.dropoffTime = data.dropoffTime;
 
-    // Remove form-specific fields
-    delete processedData.pickupDate;
-    delete processedData.pickupTime;
-    delete processedData.dropoffDate;
-    delete processedData.dropoffTime;
-
-    // Remove legacy fields if they existed
-    // delete processedData.date;
-
-    console.log("Processed RentalCar data to save (naive ISO):", processedData);
+    console.log("Processed RentalCar data to save:", processedData);
     onSave(processedData as Event);
     onClose();
   };
