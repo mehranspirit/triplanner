@@ -79,8 +79,8 @@ export const CollaboratorManagementModal: React.FC<CollaboratorManagementModalPr
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{ zIndex: 99999 }}>
+      <div className="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col shadow-xl relative">
         {/* Fixed Header */}
         <div className="p-6 border-b flex-shrink-0">
           <div className="flex justify-between items-center">

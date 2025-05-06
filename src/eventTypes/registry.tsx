@@ -11,7 +11,13 @@ export interface EventSpec<T extends Event = Event> {
   formFields: (form: UseFormReturn<any>) => React.ReactNode; // Function to render form fields
   listSummary: (event: T) => string; // Function to generate a summary string for lists
   detailRows: (event: T) => [string, string][]; // Function to generate label/value pairs for details view
-  cardComponent: React.FC<{ event: T; thumbnail: string; onEdit?: () => void; onDelete?: () => void }>; // Component to render the event card
+  cardComponent: React.FC<{
+    event: T;
+    thumbnail: string;
+    onEdit?: () => void;
+    onDelete?: () => void;
+    onStatusChange?: (status: 'confirmed' | 'exploring') => void;
+  }>;
 }
 
 // Global registry for event specifications

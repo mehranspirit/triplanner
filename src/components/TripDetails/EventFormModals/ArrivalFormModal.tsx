@@ -21,10 +21,10 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
   const form = useForm<ArrivalFormData>({
     resolver: zodResolver(arrivalEventSchema as z.ZodType<ArrivalFormData>),
     defaultValues: {
-      type: 'arrival',
-      arrivalDate: '',
-      arrivalTime: '',
-      status: 'exploring',
+        type: 'arrival',
+        arrivalDate: '',
+        arrivalTime: '',
+        status: 'exploring',
     },
   });
 
@@ -100,7 +100,7 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
     try {
       onSave(processedData);
       console.log("ArrivalFormModal: onSave called successfully");
-      onClose();
+    onClose();
       console.log("ArrivalFormModal: onClose called");
     } catch (error) {
       console.error("ArrivalFormModal: Error in onSave/onClose:", error);

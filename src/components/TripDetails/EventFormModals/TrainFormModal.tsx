@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Event, EventType, TrainEvent } from '@/types/eventTypes';
+import { Event, TrainEvent } from '@/types/eventTypes';
 import { trainEventSchema, TrainFormData } from '@/eventTypes/trainSpec';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import BaseEventFormModal from './BaseEventFormModal';
@@ -29,6 +29,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
         departureTime: '',
         arrivalDate: '',
         arrivalTime: '',
+        status: 'exploring',
     },
   });
 
@@ -38,7 +39,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
       const departureTimePart = eventToEdit.startDate?.substring(11, 16) || '';
       const arrivalDatePart = eventToEdit.endDate?.substring(0, 10) || '';
       const arrivalTimePart = eventToEdit.endDate?.substring(11, 16) || '';
-      console.log('TrainFormModal: Directly parsed values:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
+      console.log('TrainFormModal: Directly parsed values for form reset:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
       form.reset({
         ...eventToEdit,
         departureDate: departureDatePart,
@@ -47,6 +48,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
         arrivalTime: arrivalTimePart,
       });
     } else {
+      // Reset with empty strings and defaults for new event
       form.reset({
         type: 'train',
         trainOperator: '',
@@ -70,6 +72,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
     console.log("Raw Train form data (strings):", data);
     let processedData: any = { ...data };
 
+    // Construct naive ISO-like strings
     if (data.departureDate && data.departureTime) {
       processedData.startDate = `${data.departureDate}T${data.departureTime}:00`;
       console.log("TrainFormModal: Constructed naive ISO for startDate:", processedData.startDate);
@@ -83,6 +86,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
       processedData.endDate = undefined;
     }
 
+    // Remove form-specific fields
     delete processedData.departureDate;
     delete processedData.departureTime;
     delete processedData.arrivalDate;

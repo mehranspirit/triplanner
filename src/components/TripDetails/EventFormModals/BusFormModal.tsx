@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Event, EventType, BusEvent } from '@/types/eventTypes';
+import { Event, BusEvent } from '@/types/eventTypes';
 import { busEventSchema, BusFormData } from '@/eventTypes/busSpec';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import BaseEventFormModal from './BaseEventFormModal';
@@ -15,6 +15,8 @@ interface BusFormModalProps {
 }
 
 const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, eventToEdit }) => {
+  console.log('BusFormModal rendering, isOpen:', isOpen, 'eventToEdit:', eventToEdit);
+  
   const form = useForm<BusFormData>({
     resolver: zodResolver(busEventSchema as z.ZodType<BusFormData>),
     defaultValues: eventToEdit ? {
@@ -29,6 +31,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
         departureTime: '',
         arrivalDate: '',
         arrivalTime: '',
+        status: 'exploring',
     },
   });
 
@@ -38,7 +41,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
       const departureTimePart = eventToEdit.startDate?.substring(11, 16) || '';
       const arrivalDatePart = eventToEdit.endDate?.substring(0, 10) || '';
       const arrivalTimePart = eventToEdit.endDate?.substring(11, 16) || '';
-      console.log('BusFormModal: Directly parsed values:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
+      console.log('BusFormModal: Directly parsed values for form reset:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
       form.reset({
         ...eventToEdit,
         departureDate: departureDatePart,
@@ -47,6 +50,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
         arrivalTime: arrivalTimePart,
       });
     } else {
+      // Reset with empty strings and defaults for new event
       form.reset({
         type: 'bus',
         busOperator: '',
@@ -66,9 +70,10 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
   }, [eventToEdit, form, isOpen]);
 
   const onSubmit = (data: BusFormData) => {
-    console.log("Raw Bus form data (strings):", data);
+    console.log("BusFormModal: Raw Bus form data being submitted:", data);
     let processedData: any = { ...data };
 
+    // Construct naive ISO-like strings
     if (data.departureDate && data.departureTime) {
       processedData.startDate = `${data.departureDate}T${data.departureTime}:00`;
       console.log("BusFormModal: Constructed naive ISO for startDate:", processedData.startDate);
@@ -82,14 +87,22 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
       processedData.endDate = undefined;
     }
 
+    // Remove form-specific fields
     delete processedData.departureDate;
     delete processedData.departureTime;
     delete processedData.arrivalDate;
     delete processedData.arrivalTime;
 
-    console.log("Processed Bus data to save (naive ISO):", processedData);
-    onSave(processedData as Event);
-    onClose();
+    console.log("BusFormModal: Final processed data before calling onSave:", processedData);
+    
+    try {
+      onSave(processedData as Event);
+      console.log("BusFormModal: onSave completed successfully");
+      onClose();
+      console.log("BusFormModal: Modal closed after save");
+    } catch (error) {
+      console.error("BusFormModal: Error during save:", error);
+    }
   };
 
   const eventSpec = EVENT_TYPES['bus'];

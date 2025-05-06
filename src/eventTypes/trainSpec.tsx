@@ -4,8 +4,8 @@ import { TrainEvent } from '@/types/eventTypes';
 import TrainEventCard from '../components/TripDetails/EventCards/TrainEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
-import { format, setHours, setMinutes, setSeconds, parse } from 'date-fns';
-import { cn } from "@/lib/utils";
+import { format, parse, setHours, setMinutes, setSeconds } from 'date-fns';
+import { cn } from "@/lib/utils"; 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
     Form, 
     FormControl, 
+    FormDescription, 
     FormField, 
     FormItem, 
     FormLabel, 
@@ -24,22 +25,22 @@ import {
     PopoverContent, 
     PopoverTrigger 
 } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Zod Schema for TrainEvent
+// Zod Schema for TrainEvent validation
 export const trainEventSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().optional(), 
   type: z.literal('train'),
-  startDate: z.string().datetime().optional(), // Combined departure
-  endDate: z.string().datetime().optional(),   // Combined arrival
+  startDate: z.string().optional(), // Will be populated by form logic
+  endDate: z.string().optional(),   // Will be populated by form logic
   departureDate: z.string({ required_error: "Departure date is required." })
-                  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+                    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   departureTime: z.string({ required_error: "Departure time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   arrivalDate: z.string({ required_error: "Arrival date is required." })
-                .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+                  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   arrivalTime: z.string({ required_error: "Arrival time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
-  location: z.object({ 
+  location: z.object({
     lat: z.number(),
     lng: z.number(),
     address: z.string().optional(),
@@ -48,68 +49,72 @@ export const trainEventSchema = z.object({
   status: z.enum(['confirmed', 'exploring']).default('exploring'),
   thumbnailUrl: z.string().optional(),
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
-  trainNumber: z.string().optional(),
   trainOperator: z.string().optional(),
-  departureStation: z.string().min(1, { message: "Departure station is required" }),
-  arrivalStation: z.string().min(1, { message: "Arrival station is required" }),
+  trainNumber: z.string().optional(),
+  departureStation: z.string().min(2, { message: "Departure station required" }),
+  arrivalStation: z.string().min(2, { message: "Arrival station required" }),
   carriageNumber: z.string().optional(),
   seatNumber: z.string().optional(),
   bookingReference: z.string().optional(),
 }).refine(data => {
+  // Refine based on the string date/time parts
   if (!data.departureDate || !data.departureTime || !data.arrivalDate || !data.arrivalTime) return false;
   const startString = `${data.departureDate}T${data.departureTime}`;
   const endString = `${data.arrivalDate}T${data.arrivalTime}`;
+  // Simple string comparison works for YYYY-MM-DDTHH:mm format
   return startString < endString;
 }, {
     message: "Departure must be before arrival",
-    path: ["arrivalDate"],
+    path: ["arrivalDate"], // Attach error to arrival date
 });
 
+// Type for the form data based on the schema
 export type TrainFormData = z.infer<typeof trainEventSchema>;
 
 // Function to render form fields
 const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactNode => {
-  const { control } = form;
+    const { control } = form;
   return (
     <div className="space-y-4">
-        {/* Operator & Number */} 
+        {/* Train Operator & Train Number */} 
         <div className="grid grid-cols-2 gap-4">
-             <FormField
-                control={control}
-                name="trainOperator"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Train Operator</FormLabel>
-                        <FormControl>
-                            <Input placeholder="e.g., Amtrak" {...field} value={field.value ?? ''} />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-                />
-             <FormField
-                control={control}
-                name="trainNumber"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Train Number</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Optional" {...field} value={field.value ?? ''} />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-                />
-        </div>
-         {/* Departure Station & DateTime */} 
-         <FormField
+            <FormField
+            control={control}
+            name="trainOperator"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Train Operator</FormLabel>
+                <FormControl>
+                    <Input placeholder="e.g., Amtrak" {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+            <FormField
+            control={control}
+            name="trainNumber"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Train Number</FormLabel>
+                <FormControl>
+                    <Input placeholder="e.g., 123" {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+      </div>
+
+        {/* Departure Station & DateTime */} 
+        <FormField
             control={control}
             name="departureStation"
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Departure Station *</FormLabel>
                 <FormControl>
-                    <Input placeholder="e.g., Penn Station" {...field} />
+                    <Input placeholder="e.g., Union Station" {...field} />
                 </FormControl>
                 <FormMessage />
                 </FormItem>
@@ -166,15 +171,16 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
                 )}
             />
         </div>
-         {/* Arrival Station & DateTime */} 
-          <FormField
+
+        {/* Arrival Station & DateTime */} 
+        <FormField
             control={control}
             name="arrivalStation"
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Arrival Station *</FormLabel>
                 <FormControl>
-                    <Input placeholder="e.g., Union Station" {...field} />
+                    <Input placeholder="e.g., Penn Station" {...field} />
                 </FormControl>
                 <FormMessage />
                 </FormItem>
@@ -185,8 +191,8 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
                 control={control}
                 name="arrivalDate"
                 render={({ field }) => {
-                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
-                  return (
+                   const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                   return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Arrival Date *</FormLabel>
                         <Popover>
@@ -202,13 +208,13 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
                             </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar 
-                              mode="single" 
+                            <Calendar
+                              mode="single"
                               selected={selectedDate}
                               onSelect={(date) => {
                                 field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
                               }}
-                              initialFocus 
+                              initialFocus
                             />
                             </PopoverContent>
                         </Popover>
@@ -231,37 +237,39 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
                 )}
             />
         </div>
-         {/* Carriage & Seat */} 
+
+        {/* Carriage & Seat */} 
         <div className="grid grid-cols-2 gap-4">
-             <FormField
-                control={control}
-                name="carriageNumber"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Carriage Number</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Optional" {...field} value={field.value ?? ''} />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-                />
-             <FormField
-                control={control}
-                name="seatNumber"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Seat Number</FormLabel>
-                        <FormControl>
-                            <Input placeholder="Optional" {...field} value={field.value ?? ''} />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-                />
+            <FormField
+            control={control}
+            name="carriageNumber"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Carriage/Car Number</FormLabel>
+                <FormControl>
+                    <Input placeholder="Optional" {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+            <FormField
+            control={control}
+            name="seatNumber"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Seat Number</FormLabel>
+                <FormControl>
+                    <Input placeholder="Optional" {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
         </div>
-         {/* Booking Reference */} 
-          <FormField
+
+        {/* Booking Reference */} 
+        <FormField
             control={control}
             name="bookingReference"
             render={({ field }) => (
@@ -274,7 +282,8 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
                 </FormItem>
             )}
             />
-       {/* Notes */} 
+
+        {/* Notes */} 
         <FormField
             control={control}
             name="notes"
@@ -288,8 +297,9 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
                 </FormItem>
             )}
             />
+
         {/* Status */} 
-         <FormField
+        <FormField
             control={control}
             name="status"
             render={({ field }) => (
@@ -314,6 +324,17 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
   );
 };
 
+// Helper to format date/time for display
+const formatDateTime = (isoString: string): string => {
+  if (!isoString) return 'N/A';
+  try {
+    return format(new Date(isoString), 'MMM d, yyyy h:mm a');
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return 'Invalid Date';
+  }
+};
+
 // Simple helper to format naive YYYY-MM-DDTHH:mm:ss string for display
 const formatNaiveDateTime = (naiveIsoString: string | undefined): string => {
   if (!naiveIsoString) return 'N/A';
@@ -327,7 +348,7 @@ const formatNaiveDateTime = (naiveIsoString: string | undefined): string => {
   }
 };
 
-// Optional: Helper for just the date part
+// Helper for just the date part
 const formatNaiveDate = (naiveIsoString: string | undefined): string => {
   if (!naiveIsoString) return 'N/A';
   try {
@@ -340,15 +361,18 @@ const formatNaiveDate = (naiveIsoString: string | undefined): string => {
 // Event Specification for Trains
 const trainSpec: EventSpec<TrainEvent> = {
   type: 'train',
-  icon: '🚂', 
-  defaultThumbnail: '/placeholders/train-thumbnail.jpg',
+  icon: '🚆',
+  defaultThumbnail: 'https://images.pexels.com/photos/302428/pexels-photo-302428.jpeg?auto=compress&cs=tinysrgb&w=300',
   zodSchema: trainEventSchema,
   formFields: renderTrainFormFields,
-  listSummary: (event) => `${event.trainOperator || 'Train'} (${event.departureStation} -> ${event.arrivalStation}) on ${formatNaiveDate(event.startDate)}`,
+  listSummary: (event) => `Train ${event.trainNumber ? `#${event.trainNumber}` : ''} from ${event.departureStation} to ${event.arrivalStation}`,
   detailRows: (event) => [
-    ['Operator', `${event.trainOperator || 'N/A'} ${event.trainNumber || ''}`],
-    ['Departure', `${event.departureStation} at ${formatNaiveDateTime(event.startDate)}`],
-    ['Arrival', `${event.arrivalStation} at ${formatNaiveDateTime(event.endDate)}`],
+    ['Operator', event.trainOperator || 'N/A'],
+    ['Train Number', event.trainNumber || 'N/A'],
+    ['From', event.departureStation || 'N/A'],
+    ['To', event.arrivalStation || 'N/A'],
+    ['Departure', formatNaiveDateTime(event.startDate)],
+    ['Arrival', formatNaiveDateTime(event.endDate)],
     ['Carriage/Seat', `${event.carriageNumber || 'N/A'} / ${event.seatNumber || 'N/A'}`],
     ['Booking Ref', event.bookingReference || 'N/A'],
     ['Status', event.status],

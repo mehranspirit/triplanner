@@ -13,11 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useInView } from 'react-intersection-observer';
 import { parse, format } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { getDefaultThumbnail } from './thumbnailHelpers';
 
 // Import icons
 import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
@@ -34,139 +34,8 @@ import TrainFormModal from './EventFormModals/TrainFormModal';
 import DestinationFormModal from './EventFormModals/DestinationFormModal';
 import DepartureFormModal from './EventFormModals/DepartureFormModal';
 
-const EventIcon: React.FC<{ type: EventType }> = ({ type }) => {
-  const { ref, inView, entry } = useInView({
-    threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-    trackVisibility: true,
-    delay: 100,
-    rootMargin: '-15% 0px -15% 0px', // Increased the center trigger area
-  });
-
-  const getIcon = () => {
-    switch (type) {
-      case 'flight':
-        return <FaPlane className="w-8 h-8 text-blue-500 transform rotate-0" />;
-      case 'arrival':
-        return <FaPlane className="w-8 h-8 text-green-500 transform rotate-45" />;
-      case 'departure':
-        return <FaPlane className="w-8 h-8 text-red-500 transform -rotate-45" />;
-      case 'train':
-        return <FaTrain className="w-8 h-8 text-green-500" />;
-      case 'bus':
-        return <FaBus className="w-8 h-8 text-purple-500" />;
-      case 'rental_car':
-        return <FaCar className="w-8 h-8 text-red-500" />;
-      case 'stay':
-        return <FaHotel className="w-8 h-8 text-yellow-500" />;
-      case 'destination':
-        return <FaMapMarkerAlt className="w-8 h-8 text-pink-500" />;
-      case 'activity':
-        return <FaMountain className="w-8 h-8 text-indigo-500" />;
-      default:
-        return <FaMapMarkerAlt className="w-8 h-8 text-gray-500" />;
-    }
-  };
-
-  // Calculate animation state based on intersection ratio and viewport position
-  const getAnimationState = () => {
-    if (!entry) return { opacity: 0, translateX: -48, scale: 0.75 };
-    
-    const viewportHeight = window.innerHeight;
-    const elementTop = entry.boundingClientRect.top;
-    const elementHeight = entry.boundingClientRect.height;
-    const elementCenter = elementTop + (elementHeight / 2);
-    const viewportCenter = viewportHeight / 2;
-    const distanceFromCenter = Math.abs(elementCenter - viewportCenter);
-    const maxDistance = viewportHeight * 0.4;
-    
-    // Calculate progress based on distance from center
-    const centerProgress = Math.max(0, 1 - (distanceFromCenter / maxDistance));
-    
-    const isScrollingDown = entry.boundingClientRect.top < 0;
-    
-    if (isScrollingDown) {
-      // Scrolling down: fade in, move right, then fade out
-      if (centerProgress < 0.2) {
-        // Initial fade in
-        const fadeInProgress = centerProgress / 0.2;
-        return { 
-          opacity: fadeInProgress, 
-          translateX: -48, 
-          scale: 0.75 + (0.25 * fadeInProgress)
-        };
-      } else if (centerProgress < 0.8) {
-        // Full opacity movement
-        const moveProgress = (centerProgress - 0.2) / 0.6;
-        return { 
-          opacity: 1, 
-          translateX: -48 + (48 * moveProgress), 
-          scale: 1
-        };
-      } else {
-        // Final fade out
-        const fadeOutProgress = (centerProgress - 0.8) / 0.2;
-        return { 
-          opacity: 1 - fadeOutProgress, 
-          translateX: 0, 
-          scale: 1
-        };
-      }
-    } else {
-      // Scrolling up: reverse animation
-      if (centerProgress > 0.8) {
-        // Initial fade in
-        const fadeInProgress = (centerProgress - 0.8) / 0.2;
-        return { 
-          opacity: fadeInProgress, 
-          translateX: 0, 
-          scale: 1
-        };
-      } else if (centerProgress > 0.2) {
-        // Full opacity movement
-        const moveProgress = (centerProgress - 0.2) / 0.6;
-        return { 
-          opacity: 1, 
-          translateX: -48 * moveProgress, 
-          scale: 1
-        };
-      } else {
-        // Final fade out
-        const fadeOutProgress = centerProgress / 0.2;
-        return { 
-          opacity: 1 - fadeOutProgress, 
-          translateX: -48, 
-          scale: 0.75 + (0.25 * fadeOutProgress)
-        };
-      }
-    }
-  };
-
-  const animationState = getAnimationState();
-
-  return (
-    <div
-      ref={ref}
-      className="absolute -left-24 top-1/2 -translate-y-1/2 w-20 h-20 flex items-center justify-center"
-      style={{
-        opacity: animationState.opacity,
-        transform: `translateX(${animationState.translateX}px) scale(${animationState.scale})`,
-        transition: 'all 0.3s ease-out',
-      }}
-    >
-      <div className="relative">
-        {getIcon()}
-        {/* Glow effect */}
-        <div 
-          className="absolute inset-0 rounded-full bg-current opacity-20 blur-md"
-          style={{ 
-            opacity: animationState.opacity * 0.2,
-            transition: 'opacity 0.3s ease-out'
-          }}
-        ></div>
-      </div>
-    </div>
-  );
-};
+// Import TripActions component
+import TripActions from './TripActions';
 
 const NewTripDetails: React.FC = () => {
   const {
@@ -180,8 +49,9 @@ const NewTripDetails: React.FC = () => {
     deleteEvent, // Function to delete event
     handleExportHTML,
     canEdit,
-    // isOwner, // If needed for more granular control
-    // user, // If needed
+    isOwner, 
+    user,
+    fetchTrip
   } = useTripDetails();
 
   const [modalType, setModalType] = useState<EventType | null>(null); // State to track which modal to show
@@ -205,15 +75,15 @@ const NewTripDetails: React.FC = () => {
   };
 
   const handleSaveEvent = async (eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'> | Event) => {
-    console.log('handleSaveEvent called with data:', eventData);
+    console.log('NewTripDetails handleSaveEvent called with data:', eventData);
     try {
-      if ('id' in eventData && editingEvent && eventData.id === editingEvent.id) {
-        console.log('Updating existing event:', eventData.id);
+    if ('id' in eventData && editingEvent && eventData.id === editingEvent.id) {
+        console.log('NewTripDetails: Updating existing event:', eventData.id);
         // We are editing an existing event
         const eventToUpdate = { ...editingEvent, ...eventData } as Event;
-        console.log('Combined event data for update:', eventToUpdate);
+        console.log('NewTripDetails: Combined event data for update:', eventToUpdate);
         const updatedEvent = await updateEvent(eventToUpdate);
-        console.log('Event updated, result:', updatedEvent);
+        console.log('NewTripDetails: Event updated successfully, result:', updatedEvent);
         
         // Update the local state immediately
         if (trip && updatedEvent) {
@@ -221,26 +91,26 @@ const NewTripDetails: React.FC = () => {
             event.id === updatedEvent.id ? updatedEvent : event
           );
           trip.events = updatedEvents;
-          console.log('Local state updated with event:', updatedEvent.id);
+          console.log('NewTripDetails: Local state updated with updated event:', updatedEvent.id);
         }
-      } else {
-        console.log('Adding new event of type:', eventData.type);
+    } else {
+        console.log('NewTripDetails: Adding new event of type:', eventData.type);
         // We are adding a new event
         const newEvent = await addEvent(eventData as Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>);
-        console.log('New event added, result:', newEvent);
+        console.log('NewTripDetails: New event added successfully, result:', newEvent);
         
         // Update the local state immediately
         if (trip && newEvent) {
           trip.events = [...trip.events, newEvent];
-          console.log('Local state updated with new event:', newEvent.id);
+          console.log('NewTripDetails: Local state updated with new event:', newEvent.id);
         }
       }
       
       // Close the modal
-      console.log('Closing modal after save');
+      console.log('NewTripDetails: Closing modal after successful save');
       handleCloseModal();
     } catch (error) {
-      console.error('Error saving event:', error);
+      console.error('NewTripDetails: Error saving event:', error);
       alert('Failed to save event. Please try again.');
     }
   };
@@ -248,7 +118,7 @@ const NewTripDetails: React.FC = () => {
   const handleDeleteEvent = async (eventId: string) => {
     if (window.confirm('Are you sure you want to delete this event?')) {
       try {
-        await deleteEvent(eventId);
+      await deleteEvent(eventId);
         // Update the local state immediately
         if (trip) {
           const updatedEvents = trip.events.filter(event => event.id !== eventId);
@@ -261,14 +131,45 @@ const NewTripDetails: React.FC = () => {
     } 
   };
 
+  const handleStatusChange = async (event: Event, newStatus: 'confirmed' | 'exploring') => {
+    try {
+      const updatedEvent = { ...event, status: newStatus };
+      await updateEvent(updatedEvent);
+      
+      // Update the local state immediately
+      if (trip) {
+        const updatedEvents = trip.events.map(e => 
+          e.id === event.id ? { ...e, status: newStatus } : e
+        );
+        trip.events = updatedEvents;
+      }
+    } catch (error) {
+      console.error('Error updating event status:', error);
+      alert('Failed to update event status. Please try again.');
+    }
+  };
+
   if (loading) return <div className="p-4">Loading trip details...</div>; // TODO: Add a proper spinner
   if (error) return <div className="p-4 text-red-600">Error: {error}</div>; // TODO: Add a proper error component
   if (!trip) return <div className="p-4">Trip not found.</div>;
 
   // Sort events by startDate, earliest first
-  const sortedEvents = [...trip.events].sort((a, b) => 
-    new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-  );
+  const sortedEvents = [...trip.events].sort((a, b) => {
+    // First compare by date
+    const dateA = new Date(a.startDate).getTime();
+    const dateB = new Date(b.startDate).getTime();
+    
+    if (dateA !== dateB) {
+      return dateA - dateB;
+    }
+    
+    // If dates are the same, compare by time
+    // Extract time parts for comparison
+    const timeA = a.startDate ? a.startDate.split('T')[1] || '00:00:00' : '00:00:00';
+    const timeB = b.startDate ? b.startDate.split('T')[1] || '00:00:00' : '00:00:00';
+    
+    return timeA.localeCompare(timeB);
+  });
 
   // Define which event types can be added from the dropdown
   // Adjust this array as needed
@@ -284,42 +185,43 @@ const NewTripDetails: React.FC = () => {
     const getEventIcon = () => {
       switch (event.type) {
         case 'flight':
-          return <FaPlane className="w-4 h-4 text-blue-500" />;
+          return <FaPlane className="w-5 h-5 text-blue-500" />;
         case 'arrival':
-          return <FaPlane className="w-4 h-4 text-green-500 transform rotate-45" />;
+          return <FaPlane className="w-5 h-5 text-green-500 transform rotate-45" />;
         case 'departure':
-          return <FaPlane className="w-4 h-4 text-red-500 transform -rotate-45" />;
+          return <FaPlane className="w-5 h-5 text-red-500 transform -rotate-45" />;
         case 'train':
-          return <FaTrain className="w-4 h-4 text-green-500" />;
+          return <FaTrain className="w-5 h-5 text-green-500" />;
         case 'bus':
-          return <FaBus className="w-4 h-4 text-purple-500" />;
+          return <FaBus className="w-5 h-5 text-purple-500" />;
         case 'rental_car':
-          return <FaCar className="w-4 h-4 text-red-500" />;
+          return <FaCar className="w-5 h-5 text-red-500" />;
         case 'stay':
-          return <FaHotel className="w-4 h-4 text-yellow-500" />;
+          return <FaHotel className="w-5 h-5 text-yellow-500" />;
         case 'destination':
-          return <FaMapMarkerAlt className="w-4 h-4 text-pink-500" />;
+          return <FaMapMarkerAlt className="w-5 h-5 text-pink-500" />;
         case 'activity':
-          return <FaMountain className="w-4 h-4 text-indigo-500" />;
+          return <FaMountain className="w-5 h-5 text-indigo-500" />;
         default:
-          return <FaMapMarkerAlt className="w-4 h-4 text-gray-500" />;
+          return <FaMapMarkerAlt className="w-5 h-5 text-gray-500" />;
       }
     };
 
     return (
       <div className="flex items-center space-x-3 p-1.5 hover:bg-gray-50 rounded-lg transition-colors">
-        <div className="w-12 h-12 flex-shrink-0 relative">
+        <div className="w-16 h-16 flex-shrink-0 relative">
           <img 
             src={thumbnail} 
             alt={event.type} 
             className="w-full h-full object-cover rounded-md"
           />
-          <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-500/10 to-gray-900/50 rounded-md"></div>
+          <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-2 shadow-md">
             {getEventIcon()}
           </div>
         </div>
         <div className="flex-grow min-w-0">
-          <h3 className="text-sm font-medium truncate">
+          <h3 className="text-sm font-medium line-clamp-1">
             {(() => {
               switch (event.type) {
                 case 'activity':
@@ -345,128 +247,120 @@ const NewTripDetails: React.FC = () => {
               }
             })()}
           </h3>
-          <p className="text-xs text-gray-500 truncate">
-            {format(new Date(event.startDate), 'MMM d, yyyy')}
-          </p>
+          <div className="text-xs text-gray-500 mt-0.5">
+            {(() => {
+              try {
+                // Handle different date fields based on event type
+                let dateToFormat = '';
+                let timeToShow = '';
+                switch (event.type) {
+                  case 'bus':
+                  case 'train':
+                    dateToFormat = event.startDate?.split('T')[0] || '';
+                    timeToShow = event.startDate?.split('T')[1]?.substring(0, 5) || '';
+                    break;
+                  case 'arrival':
+                  case 'departure':
+                    dateToFormat = (event as any).date || '';
+                    timeToShow = (event as any).time || '';
+                    break;
+                  case 'stay':
+                    dateToFormat = (event as any).checkIn || '';
+                    timeToShow = (event as any).checkInTime || '';
+                    break;
+                  default: 
+                    dateToFormat = (event.startDate?.split('T')[0]) || '';
+                    timeToShow = event.startDate?.split('T')[1]?.substring(0, 5) || '';
+                }
+                
+                if (!dateToFormat) return 'Date not available';
+                
+                const date = parse(dateToFormat, 'yyyy-MM-dd', new Date());
+                const formattedDate = !isNaN(date.getTime()) ? format(date, 'MMM d, yyyy') : 'Invalid date';
+                
+                // Add time if available
+                return timeToShow ? `${formattedDate} at ${timeToShow}` : formattedDate;
+              } catch (error) {
+                console.error('Error formatting date for event:', event.type, error);
+                return 'Date error';
+              }
+            })()}
+          </div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <Card className="overflow-hidden">
-        <CardHeader className="relative p-0 h-48 md:h-64"> {/* Adjust height as needed */}
-          {tripThumbnail && (
-            <img
-              src={tripThumbnail}
-              alt={`${trip.name} cover`}
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      {/* Header with Trip Info and Actions */}
+      <div className="relative">
+        {/* Background Image with Overlay */}
+        <div className="w-full h-[200px] md:h-[250px] relative rounded-lg overflow-hidden">
+          <img
+            src={trip.thumbnailUrl || tripThumbnail}
+            alt={trip.name}
               className="w-full h-full object-cover"
             />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-          <div className="absolute bottom-0 left-0 p-4 md:p-6">
-            <CardTitle className="text-2xl md:text-3xl font-bold text-white">{trip.name}</CardTitle>
-            <CardDescription className="text-gray-200">{trip.description}</CardDescription>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent"></div>
+          
+          {/* Trip Actions */}
+          <div className="absolute top-4 right-4 z-10">
+            <TripActions
+              trip={trip}
+              isOwner={isOwner}
+              canEdit={canEdit}
+              onExport={handleExportHTML}
+              onTripUpdate={async (updatedTrip) => {
+                try {
+                  // Fetch updated trip data to refresh the UI with server data
+                  await fetchTrip();
+                  return Promise.resolve();
+                } catch (error) {
+                  console.error('Error updating trip:', error);
+                  return Promise.reject(error);
+                }
+              }}
+            />
           </div>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6 space-y-4">
-          {/* Display other trip details like dates, collaborators etc. */} 
-          {(() => {
-            // Helper function to parse date string without timezone conversion
-            const parseDateString = (dateStr: string) => {
-              if (!dateStr) return null;
-              const [year, month, day] = dateStr.split('-').map(Number);
-              return new Date(year, month - 1, day);
-            };
-
-            // Calculate trip dates based on events
-            const eventDates = sortedEvents.map(event => {
-              let startDate = '';
-              let endDate = '';
-              
-              switch (event.type) {
-                case 'activity':
-                case 'destination':
-                  startDate = (event as any).startDate;
-                  endDate = (event as any).endDate;
-                  break;
-                case 'arrival':
-                case 'departure':
-                  startDate = (event as any).date;
-                  endDate = (event as any).date;
-                  break;
-                case 'stay':
-                  startDate = (event as any).checkIn;
-                  endDate = (event as any).checkOut;
-                  break;
-                case 'rental_car':
-                  startDate = (event as any).date;
-                  endDate = (event as any).dropoffDate;
-                  break;
-                case 'bus':
-                  startDate = (event as any).departureDate || (event as any).date;
-                  endDate = (event as any).arrivalDate || (event as any).date;
-                  break;
-                default:
-                  startDate = (event as any).startDate || (event as any).date || '';
-                  endDate = (event as any).endDate || (event as any).date || '';
-              }
-              
-              return { startDate, endDate };
-            });
-
-            const validDates = eventDates.filter(d => d.startDate && d.endDate);
-            if (validDates.length === 0) {
-              const tripStartDate = parseDateString(trip.startDate);
-              const tripEndDate = parseDateString(trip.endDate);
-              return (
-                <>
-                  <p><strong>Start Date:</strong> {tripStartDate ? format(tripStartDate, 'MMMM do, yyyy') : 'N/A'}</p>
-                  <p><strong>End Date:</strong> {tripEndDate ? format(tripEndDate, 'MMMM do, yyyy') : 'N/A'}</p>
-                </>
-              );
-            }
-
-            const earliestStartDate = validDates.reduce((earliest, current) => {
-              const currentDate = parseDateString(current.startDate);
-              const earliestDate = parseDateString(earliest.startDate);
-              return currentDate && earliestDate && currentDate < earliestDate ? current : earliest;
-            }).startDate;
-
-            const latestEndDate = validDates.reduce((latest, current) => {
-              const currentDate = parseDateString(current.endDate);
-              const latestDate = parseDateString(latest.endDate);
-              return currentDate && latestDate && currentDate > latestDate ? current : latest;
-            }).endDate;
-
-            const startDate = parseDateString(earliestStartDate);
-            const endDate = parseDateString(latestEndDate);
-
-            return (
-              <>
-                <p><strong>Start Date:</strong> {startDate ? format(startDate, 'MMMM do, yyyy') : 'N/A'}</p>
-                <p><strong>End Date:</strong> {endDate ? format(endDate, 'MMMM do, yyyy') : 'N/A'}</p>
-              </>
-            );
-          })()}
-          {/* TODO: Display Collaborators */} 
-        </CardContent>
-        <CardFooter className="flex justify-between p-4 md:p-6 bg-gray-50">
+          
+          {/* Trip Title */}
+          <div className="absolute bottom-6 left-6 right-6 text-white z-10">
+            <h1 className="text-3xl font-bold text-white drop-shadow-lg">{trip.name}</h1>
+            {trip.description && (
+              <p className="mt-2 text-lg text-white/90 drop-shadow-md">
+                {trip.description}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* Add Event & View Options */}
+      <div className="flex justify-between items-center">
+        <div>
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button>Add Event</Button>
+                <Button variant="outline">
+                  Add Event
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Select Event Type</DropdownMenuLabel>
+                <DropdownMenuLabel>Add New Event</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {addableEventTypes.map((type) => {
-                  const eventSpec = EVENT_TYPES[type];
+                {addableEventTypes.map(type => {
+                  const eventType = EVENT_TYPES[type];
+                  if (!eventType) return null;
                   return (
-                    <DropdownMenuItem key={type} onClick={() => handleAddEventClick(type)}>
-                      {eventSpec?.icon && <span className="mr-2">{eventSpec.icon}</span>}
-                      {/* Capitalize first letter */} 
+                    <DropdownMenuItem 
+                      key={type} 
+                      onClick={() => handleAddEventClick(type)}
+                    >
+                      {eventType.icon && (
+                        <span className="mr-2">{eventType.icon}</span>
+                      )}
+                      {/* Use a simple label or create label from event type */}
                       {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
                     </DropdownMenuItem>
                   );
@@ -474,138 +368,112 @@ const NewTripDetails: React.FC = () => {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button variant="outline" onClick={handleExportHTML}>Export to HTML</Button>
-          {/* Add Export to PDF Button here if needed */}
-        </CardFooter>
-      </Card>
-
-      <div className="flex justify-between items-center mb-4">
-      <h2 className="text-xl md:text-2xl font-semibold">Events</h2>
+        </div>
         <div className="flex items-center space-x-2">
+          <Label htmlFor="condensed-view" className="cursor-pointer">Condensed View</Label>
           <Switch
-            id="view-mode"
+            id="condensed-view"
             checked={isCondensedView}
             onCheckedChange={setIsCondensedView}
           />
-          <Label htmlFor="view-mode">Compact View</Label>
         </div>
       </div>
+
+      {/* Events Timeline */}
+      <div className="bg-white shadow-sm rounded-lg p-4 md:p-6">
+        <h2 className="text-xl font-semibold mb-4">Trip Timeline</h2>
       
-      {sortedEvents.length === 0 ? (
-          <p className="text-gray-500">No events added yet.</p>
-      ) : (
-        <div className="relative">
-          {/* Timeline line - only show in full view */}
-          {!isCondensedView && (
-          <div className="absolute left-32 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-          )}
-          
-          <div className={isCondensedView ? "space-y-1" : "space-y-8"}>
-            {(() => {
-              // Group events by date
-              const groupedEvents = sortedEvents.reduce((groups, event) => {
-                let dateKey = '';
-                switch (event.type) {
-                  case 'activity':
-                    dateKey = (event as any).startDate;
-                    break;
-                  case 'arrival':
-                  case 'departure':
-                    dateKey = (event as any).date;
-                    break;
-                  case 'stay':
-                    dateKey = (event as any).checkIn;
-                    break;
-                  case 'rental_car':
-                    dateKey = (event as any).date;
-                    break;
-                  case 'bus':
-                    dateKey = (event as any).departureDate || (event as any).date;
-                    break;
-                  default:
-                    dateKey = (event as any).startDate || (event as any).date || '';
-                }
-                if (!groups[dateKey]) {
-                  groups[dateKey] = [];
-                }
-                groups[dateKey].push(event);
-                return groups;
-              }, {} as Record<string, typeof sortedEvents>);
+        <div className="mt-4 space-y-6">
+          {sortedEvents.length === 0 ? (
+            <p className="text-gray-500">No events added yet.</p>
+          ) : (
+            <div className="relative">
+              <div className="space-y-6">
+                {(() => {
+                  // Group events by date
+                  const groupedEvents = sortedEvents.reduce((groups, event) => {
+                    let dateKey = '';
+                    switch (event.type) {
+                      case 'activity':
+                        dateKey = (event as any).startDate?.split('T')[0];
+                        break;
+                      case 'arrival':
+                      case 'departure':
+                        dateKey = (event as any).date;
+                        break;
+                      case 'stay':
+                        dateKey = (event as any).checkIn;
+                        break;
+                      case 'rental_car':
+                        dateKey = (event as any).date;
+                        break;
+                      case 'bus':
+                      case 'train':
+                        dateKey = (event as any).startDate?.split('T')[0];
+                        break;
+                      default:
+                        dateKey = ((event as any).startDate?.split('T')[0]) || (event as any).date || '';
+                    }
+                    if (!dateKey) {
+                      console.warn(`No valid date found for event of type ${event.type}`, event);
+                      return groups;
+                    }
+                    if (!groups[dateKey]) {
+                      groups[dateKey] = [];
+                    }
+                    groups[dateKey].push(event);
+                    return groups;
+                  }, {} as Record<string, typeof sortedEvents>);
 
-              return Object.entries(groupedEvents).map(([dateKey, events]) => (
-                <div key={dateKey} className="relative">
-                  {/* Date header - smaller in condensed view */}
-                  <div className={isCondensedView ? "mb-1" : "sticky top-4 left-0 w-28 text-right pr-4 z-10"}>
-                    <div className={cn(
-                      "inline-block bg-white px-2 py-1 rounded border border-gray-200",
-                      isCondensedView ? "text-sm" : "shadow-sm"
-                    )}>
-                      <div className={cn(
-                        "font-semibold text-gray-800",
-                        isCondensedView ? "text-sm" : "text-lg"
-                      )}>
-                        {(() => {
-                          const parsed = parse(dateKey, 'yyyy-MM-dd', new Date());
-                          return !isNaN(parsed.getTime()) ? format(parsed, 'MMM d, yyyy') : dateKey;
-                        })()}
-                      </div>
-                      {!isCondensedView && (
-                      <div className="text-sm font-medium text-gray-500">
-                        {new Date(dateKey).toLocaleDateString(undefined, {
-                          weekday: 'short'
-                        })}
-                      </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Events for this date */}
-                  <div className={isCondensedView ? "ml-0" : "ml-40"}>
-                    {events.map((event) => {
-                      const registryItem = EVENT_TYPES[event.type];
-                      if (!registryItem) return <div key={event.id}>Unknown event type: {event.type}</div>;
-                      
-                      const EventCardComponent = registryItem.cardComponent;
-                      const thumbnail = eventThumbnails[event.id] || registryItem.defaultThumbnail;
-
-                      if (!EventCardComponent) return <div key={event.id}>No card component for {event.type}</div>;
-
-                      return (
-                        <div key={event.id} className={cn(
-                          "relative",
-                          isCondensedView ? "mb-1" : "mb-8 group"
-                        )}>
-                          {/* Animated icon - only show in full view */}
-                          {!isCondensedView && <EventIcon type={event.type} />}
-                          
-                          {/* Timeline dot - only show in full view */}
-                          {!isCondensedView && (
-                          <div className="absolute -left-12 w-8 h-8 flex items-center justify-center">
-                            <div className="w-6 h-6 rounded-full bg-blue-500 border-4 border-white shadow-md group-hover:scale-110 transition-transform duration-300"></div>
-                          </div>
-                          )}
-                          
-                          {/* Event card */}
-                          {isCondensedView ? (
-                            <CondensedEventCard event={event} thumbnail={thumbnail} />
-                          ) : (
-                          <EventCardComponent 
-                            event={event} 
-                            thumbnail={thumbnail}
-                            onEdit={canEdit ? () => handleEditEventClick(event) : undefined}
-                            onDelete={canEdit ? () => handleDeleteEvent(event.id) : undefined}
-                          />
-                          )}
+                  return Object.entries(groupedEvents).map(([dateKey, events]) => (
+                    <div key={dateKey} className="relative">
+                      <div className="sticky top-0 bg-white z-10 py-2 mb-4">
+                        <div className="text-sm font-medium text-gray-500">
+                          {format(parse(dateKey, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d, yyyy')}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ));
-            })()}
-          </div>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        {events
+                          .sort((a, b) => {
+                            const timeA = a.startDate ? a.startDate.split('T')[1] || '00:00:00' : '00:00:00';
+                            const timeB = b.startDate ? b.startDate.split('T')[1] || '00:00:00' : '00:00:00';
+                            return timeA.localeCompare(timeB);
+                          })
+                          .map((event) => {
+                            const registryItem = EVENT_TYPES[event.type];
+                            if (!registryItem) return <div key={event.id}>Unknown event type: {event.type}</div>;
+                            
+                            const EventCardComponent = registryItem.cardComponent;
+                            const thumbnail = eventThumbnails[event.id] || registryItem.defaultThumbnail;
+
+                            if (!EventCardComponent) return <div key={event.id}>No card component for {event.type}</div>;
+
+                            return (
+                              <div key={event.id} className="relative">
+                                {isCondensedView ? (
+                                  <CondensedEventCard event={event} thumbnail={thumbnail} />
+                                ) : (
+                                  <EventCardComponent 
+                                    event={event} 
+                                    thumbnail={thumbnail}
+                                    onEdit={canEdit ? () => handleEditEventClick(event) : undefined}
+                                    onDelete={canEdit ? () => handleDeleteEvent(event.id) : undefined}
+                                    onStatusChange={canEdit ? (newStatus) => handleStatusChange(event, newStatus) : undefined}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Render Specific EventFormModals conditionally */}
       {modalType === 'arrival' && (

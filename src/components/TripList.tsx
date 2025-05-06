@@ -2,11 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
-import { Trip, StayEvent, User } from '../types';
+import { Trip as IndexTrip, StayEvent as IndexStayEvent, User } from '../types';
+import { Trip as EventTypesTrip } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import Avatar from '../components/Avatar';
+
+// Create conversion functions to bridge the type differences
+const convertToIndexTrip = (trip: EventTypesTrip): IndexTrip => {
+  // Create a trip that matches the IndexTrip type
+  return {
+    ...trip,
+    // Ensure events is compatible with IndexTrip.events
+    events: trip.events.map(event => ({
+      ...event,
+      // Add the date field required by IndexTrip.Event
+      date: event.startDate?.split('T')[0] || ''
+    }))
+  } as unknown as IndexTrip;
+};
+
+const convertToEventTypesTrip = (trip: IndexTrip): EventTypesTrip => {
+  // Create a trip that matches the EventTypesTrip type
+  return trip as unknown as EventTypesTrip;
+};
 
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
@@ -86,16 +106,16 @@ interface TripDuration {
 }
 
 interface CategorizedTrips {
-  ongoing: Trip[];
-  upcoming: Trip[];
-  past: Trip[];
+  ongoing: IndexTrip[];
+  upcoming: IndexTrip[];
+  past: IndexTrip[];
 }
 
-const categorizeTripsByDate = (trips: Trip[], durations: { [key: string]: TripDuration }): CategorizedTrips => {
+const categorizeTripsByDate = (trips: IndexTrip[], durations: { [key: string]: TripDuration }): CategorizedTrips => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  return trips.reduce((acc: CategorizedTrips, trip: Trip) => {
+  return trips.reduce((acc: CategorizedTrips, trip: IndexTrip) => {
     const duration = durations[trip._id];
     if (!duration) return acc;
 
@@ -124,14 +144,17 @@ export default function TripList() {
   const [editFormData, setEditFormData] = useState({ name: '', thumbnailUrl: '', description: '' });
   const [tripThumbnails, setTripThumbnails] = useState<{ [key: string]: string }>({});
   const [tripDurations, setTripDurations] = useState<{ [key: string]: TripDuration }>({});
-  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
+  const [tripToDelete, setTripToDelete] = useState<IndexTrip | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Load thumbnails for trips
   useEffect(() => {
     const loadThumbnails = async () => {
       const thumbnails: { [key: string]: string } = {};
-      for (const trip of state.trips) {
+      // Convert state.trips (EventTypesTrip[]) to IndexTrip[]
+      const indexTrips = state.trips.map(convertToIndexTrip);
+      
+      for (const trip of indexTrips) {
         // Only fetch default thumbnail if there's no custom thumbnail
         if (!trip.thumbnailUrl) {
           thumbnails[trip._id] = await getDefaultThumbnail(trip.name);
@@ -150,43 +173,89 @@ export default function TripList() {
     const calculateTripDurations = () => {
       const durations: { [key: string]: TripDuration } = {};
       
-      state.trips.forEach(trip => {
+      // Convert state.trips (EventTypesTrip[]) to IndexTrip[]
+      const indexTrips = state.trips.map(convertToIndexTrip);
+      
+      indexTrips.forEach(trip => {
         let startDate: Date | null = null;
         let endDate: Date | null = null;
 
         // Sort events by date
         const sortedEvents = [...trip.events].sort((a, b) => {
           // Parse dates without timezone conversion
-          const parseDate = (dateStr: string) => {
-            const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+          const parseDate = (dateStr: string | undefined) => {
+            if (!dateStr) return new Date(); // Return current date as fallback
+            
+            try {
+              // Handle both ISO and simple YYYY-MM-DD formats
+              const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+              const [year, month, day] = datePart.split('-').map(Number);
             return new Date(year, month - 1, day);
+            } catch (error) {
+              console.error("Error parsing date:", dateStr, error);
+              return new Date(); // Fallback to current date
+            }
           };
           
-          const dateA = a.type === 'stay' ? parseDate((a as StayEvent).checkIn) : parseDate(a.date);
-          const dateB = b.type === 'stay' ? parseDate((b as StayEvent).checkIn) : parseDate(b.date);
+          // Safely extract dates based on event type
+          const getEventDate = (event: any): string | undefined => {
+            if (event.type === 'stay' && 'checkIn' in event) {
+              return event.checkIn;
+            } else if ('date' in event) {
+              return event.date;
+            } else if ('startDate' in event) {
+              return event.startDate;
+            }
+            return undefined;
+          };
+          
+          const dateA = parseDate(getEventDate(a));
+          const dateB = parseDate(getEventDate(b));
           return dateA.getTime() - dateB.getTime();
         });
 
         sortedEvents.forEach(event => {
           // Parse dates without timezone conversion
-          const parseDate = (dateStr: string) => {
-            const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+          const parseDate = (dateStr: string | undefined) => {
+            if (!dateStr) return new Date(); // Return current date as fallback
+            
+            try {
+              // Handle both ISO and simple YYYY-MM-DD formats
+              const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+              const [year, month, day] = datePart.split('-').map(Number);
             return new Date(year, month - 1, day);
+            } catch (error) {
+              console.error("Error parsing date:", dateStr, error);
+              return new Date(); // Fallback to current date
+            }
           };
-
-          const eventDate = event.type === 'stay' 
-            ? parseDate((event as StayEvent).checkIn)
-            : parseDate(event.date);
+          
+          // Safely extract date based on event type
+          let eventDate: Date;
+          if (event.type === 'stay' && 'checkIn' in event) {
+            eventDate = parseDate((event as any).checkIn);
+          } else if ('date' in event) {
+            eventDate = parseDate((event as any).date);
+          } else if ('startDate' in event) {
+            eventDate = parseDate((event as any).startDate);
+          } else {
+            eventDate = new Date(); // Fallback
+          }
 
           if (!startDate || eventDate < startDate) {
             startDate = eventDate;
           }
 
           // For stay events, use checkout date as potential end date
-          if (event.type === 'stay') {
-            const checkoutDate = parseDate((event as StayEvent).checkOut);
+          if (event.type === 'stay' && 'checkOut' in event) {
+            const checkoutDate = parseDate((event as any).checkOut);
             if (!endDate || checkoutDate > endDate) {
               endDate = checkoutDate;
+            }
+          } else if ('endDate' in event) {
+            const eventEndDate = parseDate((event as any).endDate);
+            if (!endDate || eventEndDate > endDate) {
+              endDate = eventEndDate;
             }
           } else {
             if (!endDate || eventDate > endDate) {
@@ -197,12 +266,26 @@ export default function TripList() {
 
         // If no events, use trip dates if available, otherwise current date
         if (!startDate && trip.startDate) {
-          const [year, month, day] = trip.startDate.split('T')[0].split('-').map(Number);
+          try {
+            // Handle both ISO and simple YYYY-MM-DD formats
+            const datePart = trip.startDate.includes('T') ? trip.startDate.split('T')[0] : trip.startDate;
+            const [year, month, day] = datePart.split('-').map(Number);
           startDate = new Date(year, month - 1, day);
+          } catch (error) {
+            console.error("Error parsing trip start date:", trip.startDate, error);
+            startDate = new Date(); // Fallback to current date
+          }
         }
         if (!endDate && trip.endDate) {
-          const [year, month, day] = trip.endDate.split('T')[0].split('-').map(Number);
+          try {
+            // Handle both ISO and simple YYYY-MM-DD formats
+            const datePart = trip.endDate.includes('T') ? trip.endDate.split('T')[0] : trip.endDate;
+            const [year, month, day] = datePart.split('-').map(Number);
           endDate = new Date(year, month - 1, day);
+          } catch (error) {
+            console.error("Error parsing trip end date:", trip.endDate, error);
+            endDate = new Date(); // Fallback to current date
+          }
         }
         if (!startDate) startDate = new Date();
         if (!endDate) endDate = startDate;
@@ -240,32 +323,36 @@ export default function TripList() {
 
     try {
       console.log('Creating new trip with data:', newTrip);
-      const newTripData: Omit<Trip, '_id' | 'createdAt' | 'updatedAt'> = {
+      
+      // Create a partial trip object without required server-generated fields
+      const newTripData = {
         name: newTrip.name,
         thumbnailUrl: newTrip.thumbnailUrl || undefined,
-        description: newTrip.description || '',
-        startDate: '',
-        endDate: '',
+        description: newTrip.description || undefined,
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0],
         events: [],
         owner: {
           _id: user._id,
           name: user.name,
-          email: user.email
+          email: user.email,
+          photoUrl: user.photoUrl
         },
         collaborators: [],
-        shareableLink: undefined,
         isPublic: false,
-        status: 'planning',
+        status: 'planning' as const,
         tags: []
       };
 
+      // Use the API to create the trip
       const createdTrip = await api.createTrip(newTripData);
-      console.log('Trip created successfully:', createdTrip);
+      
+      // Add the server-created trip to the state
       await addTrip(createdTrip);
-      console.log('Trip added to state');
-      setNewTrip({ name: '', thumbnailUrl: '', description: '' });
-      setIsModalOpen(false);
+      
       setError(null);
+      setIsModalOpen(false);
+      setNewTrip({ name: '', thumbnailUrl: '', description: '' });
     } catch (err) {
       console.error('Error creating trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to create trip');
@@ -273,30 +360,39 @@ export default function TripList() {
   };
 
   const handleEditSubmit = async (tripId: string) => {
-    try {
-      const tripToUpdate = state.trips.find(t => t._id === tripId);
-      if (!tripToUpdate) {
-        setError('Trip not found');
+    if (!tripId) {
+      setError('Trip ID is missing');
         return;
       }
 
-      const updatedTrip = {
-        ...tripToUpdate,
+    try {
+      const updatedData = {
         name: editFormData.name,
         thumbnailUrl: editFormData.thumbnailUrl || undefined,
-        description: editFormData.description || ''
+        description: editFormData.description || undefined
       };
 
-      await updateTrip(updatedTrip);
-      setEditingTripId(null);
+      // Find the original trip data
+      const existingTrip = state.trips.find(t => t._id === tripId);
+      if (!existingTrip) throw new Error('Trip not found');
+
+      // Merge existing trip with updated fields
+      const mergedTrip = {
+        ...existingTrip,
+        ...updatedData
+      };
+
+      // Update the trip
+      await updateTrip(mergedTrip);
       setError(null);
+      setEditingTripId(null);
     } catch (err) {
       console.error('Error updating trip:', err);
       setError(err instanceof Error ? err.message : 'Failed to update trip');
     }
   };
 
-  const startEditing = (trip: Trip) => {
+  const startEditing = (trip: IndexTrip) => {
     setEditFormData({
       name: trip.name,
       thumbnailUrl: trip.thumbnailUrl || '',
@@ -322,12 +418,12 @@ export default function TripList() {
     }
   };
 
-  const openDeleteModal = (trip: Trip) => {
+  const openDeleteModal = (trip: IndexTrip) => {
     setTripToDelete(trip);
     setShowDeleteModal(true);
   };
 
-  const renderTripCard = (trip: Trip) => (
+  const renderTripCard = (trip: IndexTrip) => (
     <div
       key={trip._id}
       className="bg-white overflow-hidden shadow rounded-lg relative group"
@@ -517,7 +613,7 @@ export default function TripList() {
     </div>
   );
 
-  const renderTripSection = (title: string, trips: Trip[]) => (
+  const renderTripSection = (title: string, trips: IndexTrip[]) => (
     trips.length > 0 && (
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-gray-800 mb-4">{title}</h3>
@@ -545,7 +641,11 @@ export default function TripList() {
     );
   }
 
-  const categorizedTrips = categorizeTripsByDate(state.trips, tripDurations);
+  const categorizedTrips = categorizeTripsByDate(
+    // Convert state.trips (EventTypesTrip[]) to IndexTrip[]
+    state.trips.map(convertToIndexTrip),
+    tripDurations
+  );
 
   return (
     <div>
