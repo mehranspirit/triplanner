@@ -79,7 +79,8 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
             )}>
               <FaMountain className={cn(
                 "h-8 w-8 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-indigo-500"
+                "text-indigo-500",
+                isExploring && "filter brightness-90"
               )} />
             </div>
           </div>

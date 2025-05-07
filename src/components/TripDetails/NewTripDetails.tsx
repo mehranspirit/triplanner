@@ -18,9 +18,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { getDefaultThumbnail } from './thumbnailHelpers';
+import { CollaboratorAvatars } from './CollaboratorAvatars';
 
 // Import icons
 import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
+import { Clock, Info, MapPin } from 'lucide-react';
 
 // Import the new specific modals
 import ArrivalFormModal from './EventFormModals/ArrivalFormModal';
@@ -37,6 +39,27 @@ import DepartureFormModal from './EventFormModals/DepartureFormModal';
 // Import TripActions component
 import TripActions from './TripActions';
 
+// Function to process text and make links clickable
+const processText = (text: string | undefined | null): string => {
+  if (!text) return '';
+  try {
+    // First decode any URL-encoded content
+    const decodedText = decodeURIComponent(text);
+    // Then handle HTML entities and links
+    return decodedText
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-200 hover:text-blue-100 underline">$1</a>')
+      .replace(/\n/g, '<br>');
+  } catch (e) {
+    console.warn('Failed to process text:', text, e);
+    return text || '';
+  }
+};
+
 const NewTripDetails: React.FC = () => {
   const {
     trip,
@@ -51,6 +74,7 @@ const NewTripDetails: React.FC = () => {
     canEdit,
     isOwner, 
     user,
+    handleTripUpdate,
     fetchTrip
   } = useTripDetails();
 
@@ -207,50 +231,195 @@ const NewTripDetails: React.FC = () => {
       }
     };
 
+    const formatDate = (dateStr: string, timeStr?: string) => {
+      if (!dateStr) return '';
+      try {
+        const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+        const formattedDate = format(date, 'MMM d');
+        return timeStr ? `${formattedDate} ${timeStr}` : formattedDate;
+      } catch (error) {
+        return dateStr;
+      }
+    };
+
     return (
-      <div className="flex items-center space-x-3 p-1.5 hover:bg-gray-50 rounded-lg transition-colors">
+      <div className={cn(
+        "flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-all duration-200",
+        event.status === 'exploring' && "bg-white border-2 border-gray-300 border-dashed"
+      )}>
         <div className="w-16 h-16 flex-shrink-0 relative">
           <img 
             src={thumbnail} 
             alt={event.type} 
-            className="w-full h-full object-cover rounded-md"
+            className={cn(
+              "w-full h-full object-cover rounded-md transition-all duration-200",
+              event.status === 'exploring' && "grayscale opacity-70"
+            )}
           />
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-500/10 to-gray-900/50 rounded-md"></div>
-          <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-2 shadow-md">
-            {getEventIcon()}
+          <div className={cn(
+            "absolute inset-0 bg-gradient-to-br rounded-md transition-all duration-200",
+            event.status === 'exploring' 
+              ? "from-gray-500/5 to-gray-700/30" 
+              : "from-gray-500/10 to-gray-900/50"
+          )}></div>
+          <div className={cn(
+            "absolute -bottom-2 -right-2 rounded-full p-2 transition-all duration-200",
+            event.status === 'exploring'
+              ? "bg-white border border-gray-200 shadow-sm"
+              : "bg-white shadow-md"
+          )}>
+            <div className={cn(
+              "transition-all duration-200",
+              event.status === 'exploring' && "filter saturate-150"
+            )}>
+              {getEventIcon()}
+            </div>
           </div>
         </div>
         <div className="flex-grow min-w-0">
-          <h3 className="text-sm font-medium line-clamp-1">
+          <div className="flex items-center justify-between">
+            <h3 className={cn(
+              "text-sm font-medium line-clamp-1 transition-all duration-200",
+              event.status === 'exploring' && "text-gray-600"
+            )}>
+              {(() => {
+                switch (event.type) {
+                  case 'activity':
+                    return (event as any).title;
+                  case 'destination':
+                    return (event as any).placeName;
+                  case 'stay':
+                    return (event as any).accommodationName;
+                  case 'flight':
+                    return `${(event as any).airline || 'Flight'} ${(event as any).flightNumber || ''}`;
+                  case 'train':
+                    return `${(event as any).trainOperator || 'Train'} ${(event as any).trainNumber || ''}`;
+                  case 'bus':
+                    return `${(event as any).busOperator || 'Bus'} ${(event as any).busNumber || ''}`;
+                  case 'rental_car':
+                    return `${(event as any).carCompany || 'Rental Car'}`;
+                  case 'arrival':
+                    return `Arrival at ${(event as any).airport}`;
+                  case 'departure':
+                    return `Departure from ${(event as any).airport}`;
+                  default:
+                    return event.type;
+                }
+              })()}
+            </h3>
             {(() => {
               switch (event.type) {
-                case 'activity':
-                  return (event as any).title;
-                case 'destination':
-                  return (event as any).placeName;
                 case 'stay':
-                  return (event as any).accommodationName;
-                case 'flight':
-                  return `${(event as any).airline || 'Flight'} ${(event as any).flightNumber || ''}`;
-                case 'train':
-                  return `${(event as any).trainOperator || 'Train'} ${(event as any).trainNumber || ''}`;
-                case 'bus':
-                  return `${(event as any).busOperator || 'Bus'} ${(event as any).busNumber || ''}`;
+                  return (
+                    <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                      {formatDate((event as any).checkIn)} - {formatDate((event as any).checkOut)}
+                    </span>
+                  );
+                case 'activity':
+                  return (
+                    <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800">
+                      {formatDate((event as any).startDate)} - {formatDate((event as any).endDate)}
+                    </span>
+                  );
                 case 'rental_car':
-                  return `${(event as any).carCompany || 'Rental Car'}`;
-                case 'arrival':
-                  return `Arrival at ${(event as any).airport}`;
-                case 'departure':
-                  return `Departure from ${(event as any).airport}`;
+                  return (
+                    <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-800">
+                      {formatDate((event as any).date)} - {formatDate((event as any).dropoffDate)}
+                    </span>
+                  );
+                case 'destination':
+                  return (
+                    <span className="text-xs px-2 py-1 rounded-full bg-pink-100 text-pink-800">
+                      {formatDate((event as any).startDate)} - {formatDate((event as any).endDate)}
+                    </span>
+                  );
+                case 'flight':
+                case 'train':
+                case 'bus':
+                  const startDate = event.startDate?.split('T')[0];
+                  const endDate = event.endDate?.split('T')[0];
+                  if (startDate && endDate && startDate !== endDate) {
+                    return (
+                      <span className={cn("text-xs px-2 py-1 rounded-full", {
+                        'bg-blue-100 text-blue-800': event.type === 'flight',
+                        'bg-green-100 text-green-800': event.type === 'train',
+                        'bg-purple-100 text-purple-800': event.type === 'bus',
+                      })}>
+                        {formatDate(startDate)} - {formatDate(endDate)}
+                      </span>
+                    );
+                  }
+                  return null;
                 default:
-                  return event.type;
+                  return null;
               }
             })()}
-          </h3>
-          <div className="text-xs text-gray-500 mt-0.5">
+          </div>
+          <div className="text-xs text-gray-500 mt-1 space-y-0.5">
             {(() => {
+              if (event.type === 'stay') {
+                const stayEvent = event as any;
+                return (
+                  <>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Check-in: {formatDate(stayEvent.checkIn, stayEvent.checkInTime)}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Check-out: {formatDate(stayEvent.checkOut, stayEvent.checkOutTime)}</span>
+                    </div>
+                    {stayEvent.reservationNumber && (
+                      <div className="flex items-center space-x-1">
+                        <Info className="w-3 h-3" />
+                        <span>Reservation: {stayEvent.reservationNumber}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              } else if (event.type === 'rental_car') {
+                const carEvent = event as any;
+                return (
+                  <>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Pickup: {formatDate(carEvent.date, carEvent.pickupTime)}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Dropoff: {formatDate(carEvent.dropoffDate, carEvent.dropoffTime)}</span>
+                    </div>
+                    {carEvent.bookingReference && (
+                      <div className="flex items-center space-x-1">
+                        <Info className="w-3 h-3" />
+                        <span>Booking: {carEvent.bookingReference}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              } else if (event.type === 'destination') {
+                const destEvent = event as any;
+                return (
+                  <>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Start: {formatDate(destEvent.startDate, destEvent.startTime)}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>End: {formatDate(destEvent.endDate, destEvent.endTime)}</span>
+                    </div>
+                    {destEvent.address && (
+                      <div className="flex items-center space-x-1">
+                        <MapPin className="w-3 h-3" />
+                        <span>{destEvent.address}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              }
+              
               try {
-                // Handle different date fields based on event type
                 let dateToFormat = '';
                 let timeToShow = '';
                 switch (event.type) {
@@ -264,25 +433,20 @@ const NewTripDetails: React.FC = () => {
                     dateToFormat = (event as any).date || '';
                     timeToShow = (event as any).time || '';
                     break;
-                  case 'stay':
-                    dateToFormat = (event as any).checkIn || '';
-                    timeToShow = (event as any).checkInTime || '';
-                    break;
                   default: 
                     dateToFormat = (event.startDate?.split('T')[0]) || '';
                     timeToShow = event.startDate?.split('T')[1]?.substring(0, 5) || '';
                 }
                 
-                if (!dateToFormat) return 'Date not available';
+                if (!dateToFormat) return null;
                 
                 const date = parse(dateToFormat, 'yyyy-MM-dd', new Date());
                 const formattedDate = !isNaN(date.getTime()) ? format(date, 'MMM d, yyyy') : 'Invalid date';
                 
-                // Add time if available
                 return timeToShow ? `${formattedDate} at ${timeToShow}` : formattedDate;
               } catch (error) {
                 console.error('Error formatting date for event:', event.type, error);
-                return 'Date error';
+                return null;
               }
             })()}
           </div>
@@ -313,8 +477,7 @@ const NewTripDetails: React.FC = () => {
               onExport={handleExportHTML}
               onTripUpdate={async (updatedTrip) => {
                 try {
-                  // Fetch updated trip data to refresh the UI with server data
-                  await fetchTrip();
+                  await handleTripUpdate(updatedTrip);
                   return Promise.resolve();
                 } catch (error) {
                   console.error('Error updating trip:', error);
@@ -326,12 +489,26 @@ const NewTripDetails: React.FC = () => {
           
           {/* Trip Title */}
           <div className="absolute bottom-6 left-6 right-6 text-white z-10">
-            <h1 className="text-3xl font-bold text-white drop-shadow-lg">{trip.name}</h1>
-            {trip.description && (
-              <p className="mt-2 text-lg text-white/90 drop-shadow-md">
-                {trip.description}
-              </p>
-            )}
+            <div className="flex flex-col">
+              <div className="mb-4">
+                <h1 className="text-3xl font-bold text-white drop-shadow-lg">{trip.name}</h1>
+                {trip.description && (
+                  <p 
+                    className="mt-2 text-lg text-white/90 drop-shadow-md"
+                    dangerouslySetInnerHTML={{ __html: processText(trip.description) }}
+                  />
+                )}
+              </div>
+              <div className="flex justify-end">
+                <CollaboratorAvatars
+                  owner={trip.owner}
+                  collaborators={trip.collaborators.filter((c): c is { user: typeof trip.owner; role: 'viewer' | 'editor' } => 
+                    typeof c === 'object' && c !== null && 'user' in c && 'role' in c
+                  )}
+                  currentUserId={user?._id}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -357,10 +534,15 @@ const NewTripDetails: React.FC = () => {
                       key={type} 
                       onClick={() => handleAddEventClick(type)}
                     >
-                      {eventType.icon && (
-                        <span className="mr-2">{eventType.icon}</span>
-                      )}
-                      {/* Use a simple label or create label from event type */}
+                      {type === 'flight' && <FaPlane className="mr-2 h-4 w-4 text-blue-500" />}
+                      {type === 'arrival' && <FaPlane className="mr-2 h-4 w-4 text-green-500 transform rotate-45" />}
+                      {type === 'departure' && <FaPlane className="mr-2 h-4 w-4 text-red-500 transform -rotate-45" />}
+                      {type === 'train' && <FaTrain className="mr-2 h-4 w-4 text-green-500" />}
+                      {type === 'bus' && <FaBus className="mr-2 h-4 w-4 text-purple-500" />}
+                      {type === 'rental_car' && <FaCar className="mr-2 h-4 w-4 text-red-500" />}
+                      {type === 'stay' && <FaHotel className="mr-2 h-4 w-4 text-yellow-500" />}
+                      {type === 'destination' && <FaMapMarkerAlt className="mr-2 h-4 w-4 text-pink-500" />}
+                      {type === 'activity' && <FaMountain className="mr-2 h-4 w-4 text-indigo-500" />}
                       {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
                     </DropdownMenuItem>
                   );
@@ -428,7 +610,7 @@ const NewTripDetails: React.FC = () => {
                   return Object.entries(groupedEvents).map(([dateKey, events]) => (
                     <div key={dateKey} className="relative">
                       <div className="sticky top-0 bg-white z-10 py-2 mb-4">
-                        <div className="text-sm font-medium text-gray-500">
+                        <div className="inline-block px-4 py-2 bg-gray-100 rounded-full text-sm font-semibold text-gray-800 shadow-sm border border-gray-200">
                           {format(parse(dateKey, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d, yyyy')}
                         </div>
                       </div>

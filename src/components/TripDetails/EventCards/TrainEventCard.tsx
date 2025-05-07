@@ -85,7 +85,8 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
             )}>
               <FaTrain className={cn(
                 "h-8 w-8 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-teal-500"
+                "text-teal-500",
+                isExploring && "filter brightness-90"
               )} />
             </div>
           </div>

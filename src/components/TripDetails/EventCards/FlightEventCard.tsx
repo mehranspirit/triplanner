@@ -86,7 +86,8 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
             )}>
               <FaPlane className={cn(
                 "h-8 w-8 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-blue-500"
+                "text-blue-500",
+                isExploring && "filter brightness-90"
               )} />
             </div>
           </div>

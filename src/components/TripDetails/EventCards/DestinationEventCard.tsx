@@ -79,7 +79,8 @@ const DestinationEventCard: React.FC<DestinationEventCardProps> = ({ event, thum
             )}>
               <FaMapMarkerAlt className={cn(
                 "h-8 w-8 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-emerald-500"
+                "text-pink-500",
+                isExploring && "filter brightness-90"
               )} />
             </div>
           </div>

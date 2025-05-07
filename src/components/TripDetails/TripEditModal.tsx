@@ -51,9 +51,9 @@ const TripEditModal: React.FC<TripEditModalProps> = ({ trip, isOpen, onClose, on
     try {
       const updatedTrip = {
         ...trip,
-        name,
-        description: description || undefined,
-        thumbnailUrl: thumbnailUrl || undefined
+        name: name.trim(),
+        description: description.trim() || undefined,
+        thumbnailUrl: thumbnailUrl.trim() || undefined
       };
       
       await onUpdate(updatedTrip);

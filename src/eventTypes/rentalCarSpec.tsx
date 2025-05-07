@@ -17,7 +17,8 @@ import {
     FormField, 
     FormItem, 
     FormLabel, 
-    FormMessage 
+    FormMessage,
+    FormDescription
 } from "@/components/ui/form";
 import { 
     Popover, 
@@ -259,6 +260,26 @@ const renderRentalCarFormFields = (form: UseFormReturn<RentalCarFormData>): Reac
                 )}
                 />
         </div>
+        <FormField
+            control={control}
+            name="thumbnailUrl"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Thumbnail URL</FormLabel>
+                <FormControl>
+                    <Input 
+                        placeholder="Enter image URL or leave empty for automatic thumbnail" 
+                        {...field} 
+                        value={field.value ?? ''} 
+                    />
+                </FormControl>
+                <FormDescription>
+                    If left empty, a relevant image will be automatically selected based on the rental car details.
+                </FormDescription>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
        {/* Notes */} 
         <FormField
             control={control}

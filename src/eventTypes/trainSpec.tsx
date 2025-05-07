@@ -283,6 +283,27 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
             )}
             />
 
+        <FormField
+            control={control}
+            name="thumbnailUrl"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Thumbnail URL</FormLabel>
+                <FormControl>
+                    <Input 
+                        placeholder="Enter image URL or leave empty for automatic thumbnail" 
+                        {...field} 
+                        value={field.value ?? ''} 
+                    />
+                </FormControl>
+                <FormDescription>
+                    If left empty, a relevant image will be automatically selected based on the train journey details.
+                </FormDescription>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+
         {/* Notes */} 
         <FormField
             control={control}

@@ -17,7 +17,8 @@ import {
     FormField, 
     FormItem, 
     FormLabel, 
-    FormMessage 
+    FormMessage,
+    FormDescription
 } from "@/components/ui/form";
 import { 
     Popover, 
@@ -31,8 +32,8 @@ import { CalendarIcon } from 'lucide-react';
 export const stayEventSchema = z.object({
   id: z.string().optional(),
   type: z.literal('stay'),
-  startDate: z.string().datetime().optional(), // Check-in combined
-  endDate: z.string().datetime().optional(),   // Check-out combined
+  startDate: z.string().optional(), // Will be populated by form logic
+  endDate: z.string().optional(),   // Will be populated by form logic
   checkInDate: z.string({ required_error: "Check-in date is required." })
                 .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   checkInTime: z.string({ required_error: "Check-in time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
@@ -230,6 +231,26 @@ const renderStayFormFields = (form: UseFormReturn<StayFormData>): React.ReactNod
                 />
         </div>
        {/* Notes */} 
+        <FormField
+            control={control}
+            name="thumbnailUrl"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Thumbnail URL</FormLabel>
+                <FormControl>
+                    <Input 
+                        placeholder="Enter image URL or leave empty for automatic thumbnail" 
+                        {...field} 
+                        value={field.value ?? ''} 
+                    />
+                </FormControl>
+                <FormDescription>
+                    If left empty, a relevant image will be automatically selected based on the accommodation details.
+                </FormDescription>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
         <FormField
             control={control}
             name="notes"

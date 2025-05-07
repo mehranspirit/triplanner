@@ -17,7 +17,8 @@ import {
     FormField, 
     FormItem, 
     FormLabel, 
-    FormMessage 
+    FormMessage,
+    FormDescription
 } from "@/components/ui/form";
 import { 
     Popover, 
@@ -90,6 +91,27 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
                     <Input placeholder="e.g., Sightseeing, Food, Tour" {...field} />
                      {/* TODO: Consider a predefined list/tags? */} 
                 </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+
+        <FormField
+            control={control}
+            name="thumbnailUrl"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Thumbnail URL</FormLabel>
+                <FormControl>
+                    <Input 
+                        placeholder="Enter image URL or leave empty for automatic thumbnail" 
+                        {...field} 
+                        value={field.value ?? ''} 
+                    />
+                </FormControl>
+                <FormDescription>
+                    If left empty, a relevant image will be automatically selected based on the activity details.
+                </FormDescription>
                 <FormMessage />
                 </FormItem>
             )}

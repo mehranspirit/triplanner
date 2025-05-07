@@ -50,7 +50,7 @@ export const useTripDetails = () => {
       // Load event thumbnails (consider doing this lazily or optimizing)
       const thumbnails: { [key: string]: string } = {};
       await Promise.all(tripData.events.map(async (event) => {
-        thumbnails[event.id] = await getEventThumbnail(event);
+        thumbnails[event.id] = event.thumbnailUrl || await getEventThumbnail(event);
       }));
       setEventThumbnails(thumbnails);
 
@@ -70,32 +70,33 @@ export const useTripDetails = () => {
   // --- Event CRUD Operations ---
   const handleTripUpdate = useCallback(async (updatedTripData: Partial<Trip>) => {
     if (!trip) return;
-    // Use the context update function if available, otherwise use API directly
-    // This assumes the context handles optimistic updates + error handling
-    if (tripContext?.updateTrip) {
-        try {
-            await tripContext.updateTrip({ ...trip, ...updatedTripData });
-            // Refetch might be needed if context doesn't update local state automatically
-            // fetchTrip(); 
-        } catch (err) {
-             console.error('Error updating trip via context:', err);
-             setError(err instanceof Error ? err.message : 'Failed to update trip');
-             // Optionally refetch on context error
-             fetchTrip();
-        }
-    } else {
-        // Fallback to direct API call if context method not available
-        try {
-            const fullUpdatedTrip = { ...trip, ...updatedTripData } as Trip;
-            setTrip(fullUpdatedTrip); // Optimistic UI update
-            await api.updateTrip(fullUpdatedTrip);
-        } catch (err) {
-            console.error('Error updating trip via API:', err);
-            setError(err instanceof Error ? err.message : 'Failed to update trip');
-            fetchTrip(); // Rollback/refetch on API error
-        }
+    
+    try {
+      // Create the full updated trip data
+      const fullUpdatedTrip = { ...trip, ...updatedTripData } as Trip;
+      
+      // Update local state immediately for optimistic UI
+      setTrip(fullUpdatedTrip);
+      
+      // If we have a thumbnail URL change, update it immediately
+      if (updatedTripData.thumbnailUrl !== undefined) {
+        setTripThumbnail(updatedTripData.thumbnailUrl || await getDefaultThumbnail(fullUpdatedTrip.name));
+      }
+      
+      // Update in the backend
+      if (tripContext?.updateTrip) {
+        await tripContext.updateTrip(fullUpdatedTrip);
+      } else {
+        await api.updateTrip(fullUpdatedTrip);
+      }
+    } catch (err) {
+      console.error('Error updating trip:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update trip');
+      // Rollback on error by fetching the latest data
+      await fetchTrip();
+      throw err;
     }
-  }, [trip, fetchTrip, tripContext]);
+  }, [trip, tripContext, fetchTrip]);
 
   const addEvent = useCallback(async (newEventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>) => {
     if (!trip) return;
@@ -124,7 +125,7 @@ export const useTripDetails = () => {
       console.log("hooks.ts addEvent: Backend update completed");
       
       // Update thumbnail
-    const thumb = await getEventThumbnail(newEventWithMeta);
+    const thumb = newEventWithMeta.thumbnailUrl || await getEventThumbnail(newEventWithMeta);
     setEventThumbnails(prev => ({ ...prev, [newEventWithMeta.id]: thumb }));
       console.log("hooks.ts addEvent: Thumbnail added for new event");
       
@@ -157,7 +158,7 @@ export const useTripDetails = () => {
       setTrip(updatedTrip);
       
       // Update thumbnail
-      const thumb = await getEventThumbnail(eventWithMeta);
+      const thumb = eventWithMeta.thumbnailUrl || await getEventThumbnail(eventWithMeta);
       setEventThumbnails(prev => ({ ...prev, [eventWithMeta.id]: thumb }));
       console.log("hooks.ts updateEvent: Thumbnail updated");
       
@@ -219,15 +220,15 @@ export const useTripDetails = () => {
     error,
     tripThumbnail,
     eventThumbnails,
-    fetchTrip, // Expose refetch capability
+    fetchTrip,
     addEvent,
     updateEvent,
     deleteEvent,
     handleExportHTML,
-    // handleExportPDF, // Add similarly if needed
-    canEdit,
-    isOwner,
+    canEdit: !!user && (isOwner || canEdit),
+    isOwner: !!user && isOwner,
     user,
+    handleTripUpdate
   };
 };
 

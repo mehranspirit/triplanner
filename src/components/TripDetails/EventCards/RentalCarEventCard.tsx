@@ -125,8 +125,8 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
                 "text-lg transition-all duration-200",
                 isExploring ? "text-gray-600" : "text-gray-900"
               )}>
-                {event.carCompany || 'Rental Car'} {event.carType ? `(${event.carType})` : ''}
-              </CardTitle>
+          {event.carCompany || 'Rental Car'} {event.carType ? `(${event.carType})` : ''}
+        </CardTitle>
               {(onEdit || onDelete || onStatusChange) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -178,8 +178,8 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
                 </DropdownMenu>
               )}
             </div>
-
-            <div className="flex items-center text-sm space-x-2">
+        
+        <div className="flex items-center text-sm space-x-2">
               <MapPin className={cn(
                 "h-4 w-4 transition-all duration-200",
                 isExploring ? "text-gray-400" : "text-gray-500"
@@ -190,9 +190,9 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
               )}>
                 <span className="font-semibold">Pickup:</span> {event.pickupLocation || 'N/A'}
               </span>
-            </div>
+        </div>
 
-            <div className="flex items-center text-sm space-x-2">
+        <div className="flex items-center text-sm space-x-2">
               <Clock className={cn(
                 "h-4 w-4 transition-all duration-200",
                 isExploring ? "text-gray-400" : "text-gray-500"
@@ -203,9 +203,9 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
               )}>
                 <span className="font-semibold">Time:</span> {pickupDisplayDateTime}
               </span>
-            </div>
+        </div>
 
-            <div className="flex items-center text-sm space-x-2 mt-1">
+        <div className="flex items-center text-sm space-x-2 mt-1">
               <MapPin className={cn(
                 "h-4 w-4 transition-all duration-200",
                 isExploring ? "text-gray-400" : "text-gray-500"
@@ -216,9 +216,9 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
               )}>
                 <span className="font-semibold">Dropoff:</span> {event.dropoffLocation || 'N/A'}
               </span>
-            </div>
+        </div>
 
-            <div className="flex items-center text-sm space-x-2">
+        <div className="flex items-center text-sm space-x-2">
               <Clock className={cn(
                 "h-4 w-4 transition-all duration-200",
                 isExploring ? "text-gray-400" : "text-gray-500"
@@ -229,10 +229,10 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
               )}>
                 <span className="font-semibold">Time:</span> {dropoffDisplayDateTime}
               </span>
-            </div>
+        </div>
             
             <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-2">
-              {event.licensePlate && (
+        {event.licensePlate && (
                 <div className="flex items-center text-xs space-x-1">
                   <SquareAsterisk className={cn(
                     "h-3 w-3 transition-all duration-200",
@@ -244,9 +244,9 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
                   )}>
                     <span className="font-semibold">License Plate:</span> {event.licensePlate}
                   </span>
-                </div>
-              )}
-              {event.bookingReference && (
+            </div>
+        )}
+        {event.bookingReference && (
                 <div className="flex items-center text-xs space-x-1">
                   <Ticket className={cn(
                     "h-3 w-3 transition-all duration-200",
@@ -274,8 +274,8 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
                 )}>
                   <span className="font-semibold">Notes:</span> {event.notes}
                 </p>
-              </div>
-            )}
+            </div>
+        )}
           </div>
         </div>
       </div>

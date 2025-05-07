@@ -82,7 +82,8 @@ const BusEventCard: React.FC<BusEventCardProps> = ({ event, thumbnail, onEdit, o
             )}>
               <FaBus className={cn(
                 "h-8 w-8 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-purple-500"
+                "text-purple-500",
+                isExploring && "filter brightness-90"
               )} />
             </div>
           </div>

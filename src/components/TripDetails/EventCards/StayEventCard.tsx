@@ -98,7 +98,8 @@ const StayEventCard: React.FC<StayEventCardProps> = ({ event, thumbnail, onEdit,
             )}>
               <FaHotel className={cn(
                 "h-8 w-8 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-yellow-500"
+                "text-yellow-500",
+                isExploring && "filter brightness-90"
               )} />
             </div>
           </div>

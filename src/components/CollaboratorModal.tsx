@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trip, User } from '../types/eventTypes';
 import { api } from '../services/api';
 import Avatar from './Avatar';
@@ -24,6 +24,11 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   const [role, setRole] = useState<'editor' | 'viewer'>('viewer');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [localTrip, setLocalTrip] = useState(trip);
+
+  useEffect(() => {
+    setLocalTrip(trip);
+  }, [trip]);
 
   if (!isOpen) return null;
 
@@ -39,13 +44,27 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
+      const optimisticCollaborator = {
+        user: { _id: 'temp', name: 'Adding...', email, photoUrl: null },
+        role
+      };
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: [...localTrip.collaborators, optimisticCollaborator]
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       await api.addCollaborator(trip._id, email, role);
       const serverTrip = await api.getTrip(trip._id);
+      setLocalTrip(serverTrip);
       onUpdate(serverTrip);
       setEmail('');
       setRole('viewer');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add collaborator');
+      setLocalTrip(trip);
+      onUpdate(trip);
     } finally {
       setIsLoading(false);
     }
@@ -54,11 +73,23 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   const handleRemoveCollaborator = async (userId: string) => {
     setIsLoading(true);
     try {
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: localTrip.collaborators.filter(c => 
+          isCollaboratorObject(c) && c.user._id !== userId
+        )
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       await api.removeCollaborator(trip._id, userId);
       const serverTrip = await api.getTrip(trip._id);
+      setLocalTrip(serverTrip);
       onUpdate(serverTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove collaborator');
+      setLocalTrip(trip);
+      onUpdate(trip);
     } finally {
       setIsLoading(false);
     }
@@ -67,11 +98,26 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   const handleRoleChange = async (userId: string, newRole: 'editor' | 'viewer') => {
     setIsLoading(true);
     try {
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: localTrip.collaborators.map(c => {
+          if (isCollaboratorObject(c) && c.user._id === userId) {
+            return { ...c, role: newRole };
+          }
+          return c;
+        })
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       await api.updateCollaboratorRole(trip._id, userId, newRole);
       const serverTrip = await api.getTrip(trip._id);
+      setLocalTrip(serverTrip);
       onUpdate(serverTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update role');
+      setLocalTrip(trip);
+      onUpdate(trip);
     } finally {
       setIsLoading(false);
     }
@@ -137,7 +183,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
           <div className="py-6 px-1">
             <h3 className="text-sm font-medium text-gray-500 mb-4 px-3">Current Collaborators</h3>
             <div className="space-y-3">
-              {trip.collaborators
+              {localTrip.collaborators
                 .filter(isCollaboratorObject)
                 .map((collaborator) => (
                   <div

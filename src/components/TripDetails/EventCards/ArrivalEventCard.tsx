@@ -145,7 +145,8 @@ const ArrivalEventCard: React.FC<ArrivalEventCardProps> = ({ event, thumbnail, o
             )}>
               <FaPlane className={cn(
                 "h-8 w-8 transform rotate-45 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-green-500"
+                "text-green-500",
+                isExploring && "filter brightness-90"
               )} />
             </div>
           </div>

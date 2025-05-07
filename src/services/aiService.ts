@@ -62,7 +62,24 @@ const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 export const generateAISuggestions = async (request: AISuggestionRequest): Promise<string> => {
-  const prompt = `Generate travel suggestions for a trip from ${request.tripDates.startDate} to ${request.tripDates.endDate}.
+  // Format dates for display
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  // Ensure dates are in correct order
+  const startDate = new Date(request.tripDates.startDate);
+  const endDate = new Date(request.tripDates.endDate);
+  const [earlierDate, laterDate] = startDate <= endDate 
+    ? [request.tripDates.startDate, request.tripDates.endDate]
+    : [request.tripDates.endDate, request.tripDates.startDate];
+
+  const prompt = `Generate travel suggestions for a trip from ${formatDate(earlierDate)} to ${formatDate(laterDate)}.
 Places to visit: ${request.places.join(', ')}
 Interested in: ${request.activities.join(', ')}
 
@@ -98,6 +115,17 @@ Please provide detailed suggestions for activities and experiences in a clear, o
 - Money-saving tips
 
 Format the response in clear sections with proper spacing. Use simple dashes (-) for bullet points. Do not use asterisks or other special formatting characters.`;
+
+  // Log the full prompt
+  console.log('AI Suggestion Prompt:', {
+    tripDates: {
+      startDate: formatDate(earlierDate),
+      endDate: formatDate(laterDate)
+    },
+    places: request.places,
+    activities: request.activities,
+    fullPrompt: prompt
+  });
 
   try {
     // Configure generation parameters for cleaner formatting

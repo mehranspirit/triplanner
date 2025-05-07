@@ -287,8 +287,29 @@ const renderFlightFormFields = (form: UseFormReturn<FlightFormData>): React.Reac
                 </FormItem>
             )}
             />
-            
-      {/* Notes */} 
+
+        <FormField
+            control={control}
+            name="thumbnailUrl"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Thumbnail URL</FormLabel>
+                <FormControl>
+                    <Input 
+                        placeholder="Enter image URL or leave empty for automatic thumbnail" 
+                        {...field} 
+                        value={field.value ?? ''} 
+                    />
+                </FormControl>
+                <FormDescription>
+                    If left empty, a relevant image will be automatically selected based on the flight details.
+                </FormDescription>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+
+        {/* Notes */} 
         <FormField
             control={control}
             name="notes"

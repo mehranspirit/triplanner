@@ -24,6 +24,7 @@ import CollaboratorModal from '../CollaboratorModal';
 import TripEditModal from './TripEditModal';
 import AISuggestionsModal from './AISuggestionsModal';
 import { api } from '@/services/api';
+import { cn } from '@/lib/utils';
 
 // Create conversion functions to bridge the type differences
 const convertToIndexTrip = (trip: EventTypesTrip): IndexTrip => {
@@ -33,15 +34,29 @@ const convertToIndexTrip = (trip: EventTypesTrip): IndexTrip => {
     // Ensure events is compatible with IndexTrip.events
     events: trip.events.map(event => ({
       ...event,
-      // Add the date field required by IndexTrip.Event
-      date: event.startDate?.split('T')[0] || ''
+      // Convert startDate to date field
+      date: event.startDate.split('T')[0],
+      // Remove startDate and endDate as they're not in IndexTrip.Event
+      startDate: undefined,
+      endDate: undefined
     }))
   } as unknown as IndexTrip;
 };
 
 const convertToEventTypesTrip = (trip: IndexTrip): EventTypesTrip => {
   // Create a trip that matches the EventTypesTrip type
-  return trip as unknown as EventTypesTrip;
+  return {
+    ...trip,
+    // Ensure events is compatible with EventTypesTrip.events
+    events: trip.events.map(event => ({
+      ...event,
+      // Convert date to startDate and endDate
+      startDate: `${event.date}T00:00:00Z`,
+      endDate: `${event.date}T23:59:59Z`,
+      // Remove date as it's not in EventTypesTrip.Event
+      date: undefined
+    }))
+  } as unknown as EventTypesTrip;
 };
 
 interface TripActionsProps {
@@ -49,7 +64,7 @@ interface TripActionsProps {
   isOwner: boolean;
   canEdit: boolean;
   onExport: () => void;
-  onTripUpdate: (updatedTrip: EventTypesTrip) => Promise<void>;
+  onTripUpdate: (trip: EventTypesTrip) => Promise<void>;
   className?: string;
 }
 
@@ -103,13 +118,12 @@ const TripActions: React.FC<TripActionsProps> = ({
   };
 
   // Handler to bridge the types for CollaboratorModal
-  const handleCollaboratorUpdate = (updatedTrip: IndexTrip) => {
-    // Convert back to EventTypesTrip
-    onTripUpdate(convertToEventTypesTrip(updatedTrip));
+  const handleCollaboratorUpdate = async (updatedTrip: EventTypesTrip) => {
+    await onTripUpdate(updatedTrip);
   };
 
   return (
-    <div className={`flex items-center space-x-2 ${className}`}>
+    <div className={cn("flex items-center gap-2", className)}>
       {/* Mobile view: Dropdown menu */}
       <div className="md:hidden">
         <DropdownMenu>
@@ -290,14 +304,12 @@ const TripActions: React.FC<TripActionsProps> = ({
       </Dialog>
       
       {/* Collaborator Modal */}
-      {isCollaboratorModalOpen && (
-        <CollaboratorModal
-          trip={convertToIndexTrip(trip)}
-          isOpen={isCollaboratorModalOpen}
-          onClose={() => setIsCollaboratorModalOpen(false)}
-          onUpdate={handleCollaboratorUpdate}
-        />
-      )}
+      <CollaboratorModal
+        trip={trip}
+        isOpen={isCollaboratorModalOpen}
+        onClose={() => setIsCollaboratorModalOpen(false)}
+        onUpdate={handleCollaboratorUpdate}
+      />
       
       {/* Trip Edit Modal */}
       {isEditModalOpen && (
