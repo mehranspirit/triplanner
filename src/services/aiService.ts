@@ -500,7 +500,7 @@ For activities, make sure to include the ACTIVITY_TYPE field.`;
 };
 
 export const parseEventFromText = async (request: TextEventParseRequest): Promise<Event | Event[]> => {
-  const prompt = `Parse the following text (I'll tell you when we get to the actual text that needs parsing) and extract travel event details. The text could be either a natural language description or an email containing reservation details. The events is related to this trip wit hthe following info:
+  const prompt = `Parse the following text and extract travel event details. The text could be either a natural language description or an email containing reservation details. The events is related to this trip with the following info:
 
 Trip Context:
 - Name: ${request.trip.name}
@@ -508,13 +508,19 @@ Trip Context:
 - Date Range: ${request.trip.startDate} to ${request.trip.endDate}
 - Current Events: ${request.trip.events.map(formatEventForPrompt).join('\n')}
 
+Important Date/Time Rules:
+1. All dates must be in YYYY-MM-DD format
+2. All times must be in HH:mm format
+3. For single-day events, startDate and endDate should be the same
+4. For multi-day events (like stays), use the appropriate start and end dates
 
 Possible Event Types and Their Required Fields:
-1. arrival: (Use for flights TO the trip destination)
+
+1. arrival:
    Required:
-   - date (YYYY-MM-DD format)
-   - time (HH:mm format)
-   - airport (string) (This is the airport we're flying to)
+   - airport (string)
+   - date (YYYY-MM-DD)
+   - time (HH:mm)
    Optional:
    - flightNumber (string)
    - airline (string)
@@ -522,11 +528,11 @@ Possible Event Types and Their Required Fields:
    - gate (string)
    - bookingReference (string)
 
-2. departure: (Use for flights FROM the trip destination)
+2. departure:
    Required:
-   - date (YYYY-MM-DD format)
-   - time (HH:mm format)
-   - airport (string) (This is the airport we're flying from)
+   - airport (string)
+   - date (YYYY-MM-DD)
+   - time (HH:mm)
    Optional:
    - flightNumber (string)
    - airline (string)
@@ -534,93 +540,102 @@ Possible Event Types and Their Required Fields:
    - gate (string)
    - bookingReference (string)
 
-3. flight: (Use for flights WITHIN the trip)
+3. stay:
    Required:
-   - date (YYYY-MM-DD format)
-   - departureAirport (string)
-   - arrivalAirport (string)
-   Optional:
-   - airline (string)
-   - flightNumber (string)
-   - departureTime (HH:mm format)
-   - arrivalTime (HH:mm format)
-   - terminal (string)
-   - gate (string)
-   - bookingReference (string)
-
-4. stay:
-   Required:
-   - date (YYYY-MM-DD format)
    - accommodationName (string)
-   - checkIn (YYYY-MM-DD format)
-   - checkOut (YYYY-MM-DD format)
+   - checkIn (YYYY-MM-DD)
+   - checkInTime (HH:mm)
+   - checkOut (YYYY-MM-DD)
+   - checkOutTime (HH:mm)
    Optional:
    - address (string)
    - reservationNumber (string)
    - contactInfo (string)
 
-5. destination (places or spots to visit)
+4. destination:
    Required:
-   - date (YYYY-MM-DD format)
    - placeName (string)
+   - startDate (YYYY-MM-DD)
+   - startTime (HH:mm)
+   - endDate (YYYY-MM-DD)
+   - endTime (HH:mm)
    Optional:
    - address (string)
    - description (string)
-   - openingHours (string)
+
+5. flight:
+   Required:
+   - departureAirport (string)
+   - arrivalAirport (string)
+   - departureDate (YYYY-MM-DD)
+   - departureTime (HH:mm)
+   - arrivalDate (YYYY-MM-DD)
+   - arrivalTime (HH:mm)
+   Optional:
+   - airline (string)
+   - flightNumber (string)
+   - terminal (string)
+   - gate (string)
+   - bookingReference (string)
 
 6. train:
    Required:
-   - date (YYYY-MM-DD format)
+   - departureStation (string)
+   - arrivalStation (string)
+   - departureDate (YYYY-MM-DD)
+   - departureTime (HH:mm)
+   - arrivalDate (YYYY-MM-DD)
+   - arrivalTime (HH:mm)
    Optional:
    - trainNumber (string)
    - trainOperator (string)
-   - departureStation (string)
-   - arrivalStation (string)
-   - departureTime (HH:mm format)
-   - arrivalTime (HH:mm format)
    - carriageNumber (string)
    - seatNumber (string)
    - bookingReference (string)
 
 7. rental_car:
    Required:
-   - date (YYYY-MM-DD format)
-   Optional:
-   - carCompany (string)
    - pickupLocation (string)
    - dropoffLocation (string)
-   - pickupTime (HH:mm format)
-   - dropoffTime (HH:mm format)
-   - dropoffDate (YYYY-MM-DD format)
+   - date (YYYY-MM-DD)
+   - pickupTime (HH:mm)
+   - dropoffDate (YYYY-MM-DD)
+   - dropoffTime (HH:mm)
+   Optional:
+   - carCompany (string)
    - carType (string)
-   - bookingReference (string)
    - licensePlate (string)
+   - bookingReference (string)
 
 8. bus:
    Required:
-   - date (YYYY-MM-DD format)
-   Optional:
-   - busNumber (string)
-   - busOperator (string)
    - departureStation (string)
    - arrivalStation (string)
-   - departureTime (HH:mm format)
-   - arrivalTime (HH:mm format)
+   - departureDate (YYYY-MM-DD)
+   - departureTime (HH:mm)
+   - arrivalDate (YYYY-MM-DD)
+   - arrivalTime (HH:mm)
+   Optional:
+   - busOperator (string)
+   - busNumber (string)
    - seatNumber (string)
    - bookingReference (string)
 
-9. activity: (things to do or activities to participate in e.g. hiking, biking, tours, etc.)
+9. activity:
    Required:
-   - date (YYYY-MM-DD format)
    - title (string)
    - activityType (string)
+   - startDate (YYYY-MM-DD)
+   - startTime (HH:mm)
+   - endDate (YYYY-MM-DD)
+   - endTime (HH:mm)
    Optional:
-   - description (string)
    - address (string)
+   - description (string)
 
 Common fields for all events:
-- status: 'confirmed' | 'exploring'
-- source: 'manual' | 'google_places' | 'google_flights' | 'booking.com' | 'airbnb' | 'expedia' | 'tripadvisor' | 'other'
+- status: 'confirmed' | 'exploring' (default to 'confirmed')
+- source: 'manual' | 'google_places' | 'google_flights' | 'booking.com' | 'airbnb' | 'expedia' | 'tripadvisor' | 'other' (default to 'other')
 - location?: { lat: number, lng: number, address?: string }
 - notes?: string
 - thumbnailUrl?: string
@@ -644,7 +659,7 @@ Return the response in this exact JSON format:
 {
   "type": "single" | "multiple", (based on how many events you detected in the text. Return flights with both arrival to and departure from the trip destination are also multiple events)
   "events": [{
-    "type": "one of: arrival, departure, stay, destination, flight, train, rental_car, bus",
+    "type": "one of: arrival, departure, stay, destination, flight, train, rental_car, bus, activity",
     "fields": {
       // All fields matching the type's interface, including required and any detected optional fields
       // Dates must be in YYYY-MM-DD format
@@ -680,17 +695,11 @@ Return the response in this exact JSON format:
 
     // Clean up the response text
     const cleanText = text
-      // Remove any markdown code block markers
       .replace(/```json\s*/g, '')
       .replace(/```\s*/g, '')
-      // Remove any leading/trailing whitespace
       .trim()
-      // Ensure the text starts with { and ends with }
       .replace(/^[^{]*({.*})[^}]*$/s, '$1')
-      // Unescape quotes
       .replace(/\\"/g, '"');
-
-    //console.log('Cleaned response:', cleanText);
 
     const parsed = JSON.parse(cleanText) as ParsedResponse;
     
@@ -708,12 +717,10 @@ Return the response in this exact JSON format:
       const baseEvent: Partial<Event> = {
         id: uuidv4(),
         type: eventData.type,
-        date: '', // Will be set based on specific event type
         status: 'confirmed',
         source: 'other' as const,
         location: { lat: 0, lng: 0 },
-        //notes: `Parsed from text with ${Math.round(eventData.confidence * 100)}% confidence\n\nReasoning: ${eventData.reasoning}`,
-        notes: 'Parsed from text',
+        notes: `Parsed from text`,
         createdBy: {
           _id: request.user._id,
           name: request.user.name,
@@ -727,29 +734,131 @@ Return the response in this exact JSON format:
           photoUrl: request.user.photoUrl
         },
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        likes: [],
+        dislikes: []
       };
 
-      // Merge the AI-parsed fields with the base event
+      // Process event-specific fields and construct startDate/endDate
       let event: Event;
       
-      if (eventData.type === 'stay') {
-        const address = eventData.fields.address || '';
-        event = {
-          ...baseEvent,
-          ...eventData.fields,
-          address: address,
-          location: address ? {
-            lat: 0, // These will be updated by geocoding
-            lng: 0,
-            address: address
-          } : undefined
-        } as StayEvent;
-      } else {
-        event = {
-          ...baseEvent,
-          ...eventData.fields,
-        } as Event;
+      switch (eventData.type) {
+        case 'arrival':
+        case 'departure': {
+          const { date, time, airport, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${date}T${time}:00`,
+            endDate: `${date}T${time}:00`,
+            date,
+            time,
+            airport,
+          } as ArrivalDepartureEvent;
+          break;
+        }
+        case 'stay': {
+          const { checkIn, checkInTime, checkOut, checkOutTime, accommodationName, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${checkIn}T${checkInTime}:00`,
+            endDate: `${checkOut}T${checkOutTime}:00`,
+            checkIn,
+            checkInTime,
+            checkOut,
+            checkOutTime,
+            accommodationName,
+          } as StayEvent;
+          break;
+        }
+        case 'destination': {
+          const { startDate, startTime, endDate, endTime, placeName, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${startDate}T${startTime}:00`,
+            endDate: `${endDate}T${endTime}:00`,
+            startTime,
+            endTime,
+            placeName,
+          } as DestinationEvent;
+          break;
+        }
+        case 'activity': {
+          const { startDate, startTime, endDate, endTime, title, activityType, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${startDate}T${startTime}:00`,
+            endDate: `${endDate}T${endTime}:00`,
+            startTime,
+            endTime,
+            title,
+            activityType,
+          } as ActivityEvent;
+          break;
+        }
+        case 'flight': {
+          const { departureDate, departureTime, arrivalDate, arrivalTime, departureAirport, arrivalAirport, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${departureDate}T${departureTime}:00`,
+            endDate: `${arrivalDate}T${arrivalTime}:00`,
+            departureTime,
+            arrivalTime,
+            departureAirport,
+            arrivalAirport,
+          } as FlightEvent;
+          break;
+        }
+        case 'train': {
+          const { departureDate, departureTime, arrivalDate, arrivalTime, departureStation, arrivalStation, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${departureDate}T${departureTime}:00`,
+            endDate: `${arrivalDate}T${arrivalTime}:00`,
+            departureTime,
+            arrivalTime,
+            departureStation,
+            arrivalStation,
+          } as TrainEvent;
+          break;
+        }
+        case 'bus': {
+          const { departureDate, departureTime, arrivalDate, arrivalTime, departureStation, arrivalStation, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${departureDate}T${departureTime}:00`,
+            endDate: `${arrivalDate}T${arrivalTime}:00`,
+            departureTime,
+            arrivalTime,
+            departureStation,
+            arrivalStation,
+          } as BusEvent;
+          break;
+        }
+        case 'rental_car': {
+          const { date, pickupTime, dropoffDate, dropoffTime, pickupLocation, dropoffLocation, ...rest } = eventData.fields;
+          event = {
+            ...baseEvent,
+            ...rest,
+            startDate: `${date}T${pickupTime}:00`,
+            endDate: `${dropoffDate}T${dropoffTime}:00`,
+            date,
+            pickupTime,
+            dropoffDate,
+            dropoffTime,
+            pickupLocation,
+            dropoffLocation,
+          } as RentalCarEvent;
+          break;
+        }
+        default:
+          throw new Error(`Unsupported event type: ${eventData.type}`);
       }
 
       return event;
@@ -763,4 +872,109 @@ Return the response in this exact JSON format:
     console.error('Error parsing event from text:', error);
     throw new Error('Failed to parse event details. Please try again or enter details manually.');
   }
+};
+
+// Update the event creation to use startDate and endDate
+const createEvent = (e: any): Event => {
+  const suggestedDate = e.SUGGESTED_DATE || new Date().toISOString().split('T')[0];
+  const suggestedTime = e.SUGGESTED_TIME || '12:00';
+
+  return {
+    id: uuidv4(),
+    type: e.type,
+    startDate: `${suggestedDate}T${suggestedTime}:00`,
+    endDate: `${suggestedDate}T${suggestedTime}:00`,
+    notes: e.notes,
+    status: 'exploring',
+    source: 'other',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    location: {
+      lat: 0,
+      lng: 0,
+      address: e.address
+    },
+    createdBy: {
+      _id: 'user123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      photoUrl: 'https://example.com/photo.jpg'
+    },
+    updatedBy: {
+      _id: 'user123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      photoUrl: 'https://example.com/photo.jpg'
+    }
+  };
+};
+
+// Update the example events to use startDate and endDate
+const exampleEvents = {
+  activity: {
+    type: 'activity' as const,
+    title: 'Hiking',
+    activityType: 'outdoor',
+    address: '123 Mountain Trail',
+    description: 'Scenic mountain hike',
+    startDate: '2024-07-01T09:00:00',
+    startTime: '09:00',
+    endDate: '2024-07-01T17:00:00',
+    endTime: '17:00',
+    notes: 'Bring water and snacks',
+    status: 'exploring' as const,
+    source: 'other' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    location: {
+      lat: 0,
+      lng: 0,
+      address: '123 Mountain Trail'
+    },
+    createdBy: {
+      _id: 'user123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      photoUrl: 'https://example.com/photo.jpg'
+    },
+    updatedBy: {
+      _id: 'user123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      photoUrl: 'https://example.com/photo.jpg'
+    }
+  } as ActivityEvent,
+  destination: {
+    type: 'destination' as const,
+    placeName: 'Eiffel Tower',
+    address: 'Champ de Mars, 5 Avenue Anatole France, 75007 Paris, France',
+    description: 'Famous landmark',
+    openingHours: '9:00-23:00',
+    startDate: '2024-07-01T10:00:00',
+    startTime: '10:00',
+    endDate: '2024-07-01T12:00:00',
+    endTime: '12:00',
+    notes: 'Book tickets in advance',
+    status: 'exploring' as const,
+    source: 'other' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    location: {
+      lat: 48.8584,
+      lng: 2.2945,
+      address: 'Champ de Mars, 5 Avenue Anatole France, 75007 Paris, France'
+    },
+    createdBy: {
+      _id: 'user123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      photoUrl: 'https://example.com/photo.jpg'
+    },
+    updatedBy: {
+      _id: 'user123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      photoUrl: 'https://example.com/photo.jpg'
+    }
+  } as DestinationEvent
 }; 

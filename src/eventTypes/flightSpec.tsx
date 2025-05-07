@@ -32,8 +32,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export const flightEventSchema = z.object({
   id: z.string().optional(), 
   type: z.literal('flight'),
-  startDate: z.string().datetime().optional(), // Will be populated by form logic
-  endDate: z.string().datetime().optional(),   // Will be populated by form logic
+  startDate: z.string().optional(), // Will be populated by form logic
+  endDate: z.string().optional(),   // Will be populated by form logic
   departureDate: z.string({ required_error: "Departure date is required." })
                     .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   departureTime: z.string({ required_error: "Departure time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
@@ -125,9 +125,27 @@ const renderFlightFormFields = (form: UseFormReturn<FlightFormData>): React.Reac
         <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}
-                name="departureDate" // String field
+                name="departureDate"
                 render={({ field }) => {
-                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    try {
+                      // Handle both ISO and simple YYYY-MM-DD formats
+                      const datePart = field.value.includes('T') ? field.value.split('T')[0] : field.value;
+                      const [year, month, day] = datePart.split('-').map(Number);
+                      
+                      // Validate date parts
+                      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        selectedDate = new Date(year, month - 1, day);
+                        // Validate the date
+                        if (isNaN(selectedDate.getTime())) {
+                          selectedDate = undefined;
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Error parsing date:', error, field.value);
+                    }
+                  }
                   return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Departure Date *</FormLabel>
@@ -194,10 +212,28 @@ const renderFlightFormFields = (form: UseFormReturn<FlightFormData>): React.Reac
         <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}
-                name="arrivalDate" // String field
+                name="arrivalDate"
                 render={({ field }) => {
-                   const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
-                   return (
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    try {
+                      // Handle both ISO and simple YYYY-MM-DD formats
+                      const datePart = field.value.includes('T') ? field.value.split('T')[0] : field.value;
+                      const [year, month, day] = datePart.split('-').map(Number);
+                      
+                      // Validate date parts
+                      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        selectedDate = new Date(year, month - 1, day);
+                        // Validate the date
+                        if (isNaN(selectedDate.getTime())) {
+                          selectedDate = undefined;
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Error parsing date:', error, field.value);
+                    }
+                  }
+                  return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Arrival Date *</FormLabel>
                         <Popover>
@@ -213,13 +249,13 @@ const renderFlightFormFields = (form: UseFormReturn<FlightFormData>): React.Reac
                             </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
+                            <Calendar 
+                              mode="single" 
                               selected={selectedDate}
                               onSelect={(date) => {
                                 field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
                               }}
-                              initialFocus
+                              initialFocus 
                             />
                             </PopoverContent>
                         </Popover>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DreamTrip } from '../types/dreamTripTypes';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { User } from '../types';
+import { User } from '../types/eventTypes';
 
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' } | null | undefined): c is { user: User; role: 'viewer' | 'editor' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c && 

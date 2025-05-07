@@ -124,7 +124,25 @@ const renderBusFormFields = (form: UseFormReturn<BusFormData>): React.ReactNode 
                 control={control}
                 name="departureDate"
                 render={({ field }) => {
-                  const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    try {
+                      // Handle both ISO and simple YYYY-MM-DD formats
+                      const datePart = field.value.includes('T') ? field.value.split('T')[0] : field.value;
+                      const [year, month, day] = datePart.split('-').map(Number);
+                      
+                      // Validate date parts
+                      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        selectedDate = new Date(year, month - 1, day);
+                        // Validate the date
+                        if (isNaN(selectedDate.getTime())) {
+                          selectedDate = undefined;
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Error parsing date:', error, field.value);
+                    }
+                  }
                   return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Departure Date *</FormLabel>
@@ -190,8 +208,26 @@ const renderBusFormFields = (form: UseFormReturn<BusFormData>): React.ReactNode 
                 control={control}
                 name="arrivalDate"
                 render={({ field }) => {
-                   const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
-                   return (
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    try {
+                      // Handle both ISO and simple YYYY-MM-DD formats
+                      const datePart = field.value.includes('T') ? field.value.split('T')[0] : field.value;
+                      const [year, month, day] = datePart.split('-').map(Number);
+                      
+                      // Validate date parts
+                      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        selectedDate = new Date(year, month - 1, day);
+                        // Validate the date
+                        if (isNaN(selectedDate.getTime())) {
+                          selectedDate = undefined;
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Error parsing date:', error, field.value);
+                    }
+                  }
+                  return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Arrival Date *</FormLabel>
                         <Popover>
@@ -207,13 +243,13 @@ const renderBusFormFields = (form: UseFormReturn<BusFormData>): React.ReactNode 
                             </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
+                            <Calendar 
+                              mode="single" 
                               selected={selectedDate}
                               onSelect={(date) => {
                                 field.onChange(date ? format(date, 'yyyy-MM-dd') : '');
                               }}
-                              initialFocus
+                              initialFocus 
                             />
                             </PopoverContent>
                         </Popover>

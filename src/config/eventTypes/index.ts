@@ -1,194 +1,180 @@
-import { EventType, Event, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '../../types';
+import { EventType, Event, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '../../types/eventTypes';
 
-export interface EventTypeConfig {
+export interface EventTypeConfig<T extends Event = Event> {
   type: EventType;
   label: string;
   icon: string;
-  defaultThumbnail: string;
-  fields: {
-    required: string[];
-    optional: string[];
-  };
-  validate: (event: Event) => boolean;
+  color: string;
+  getDate: (event: T) => string;
+  getTime: (event: T) => string;
+  getLocation: (event: T) => string;
+  getTitle: (event: T) => string;
+  getSubtitle: (event: T) => string;
+  validate: (event: T) => boolean;
 }
 
-const eventTypes: Record<EventType, EventTypeConfig> = {
+export const eventTypeConfigs: {
+  arrival: EventTypeConfig<ArrivalDepartureEvent>;
+  departure: EventTypeConfig<ArrivalDepartureEvent>;
+  stay: EventTypeConfig<StayEvent>;
+  destination: EventTypeConfig<DestinationEvent>;
+  flight: EventTypeConfig<FlightEvent>;
+  train: EventTypeConfig<TrainEvent>;
+  rental_car: EventTypeConfig<RentalCarEvent>;
+  bus: EventTypeConfig<BusEvent>;
+  activity: EventTypeConfig<ActivityEvent>;
+} = {
   arrival: {
     type: 'arrival',
     label: 'Arrival',
-    icon: '✈️',
-    defaultThumbnail: '/images/arrival.jpg',
-    fields: {
-      required: ['date', 'time', 'airport'],
-      optional: ['flightNumber', 'airline', 'terminal', 'gate', 'bookingReference', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const arrivalEvent = event as ArrivalDepartureEvent;
-      return !!(
-        arrivalEvent.date &&
-        arrivalEvent.time &&
-        arrivalEvent.airport
-      );
-    }
+    icon: 'plane-arrival',
+    color: 'blue',
+    getDate: (event: ArrivalDepartureEvent) => event.date,
+    getTime: (event: ArrivalDepartureEvent) => event.time,
+    getLocation: (event: ArrivalDepartureEvent) => event.airport,
+    getTitle: (event: ArrivalDepartureEvent) => `Arrival at ${event.airport}`,
+    getSubtitle: (event: ArrivalDepartureEvent) => event.flightNumber ? `Flight ${event.flightNumber}` : '',
+    validate: (event: ArrivalDepartureEvent) => !!(event.date && event.time && event.airport)
   },
   departure: {
     type: 'departure',
     label: 'Departure',
-    icon: '✈️',
-    defaultThumbnail: '/images/departure.jpg',
-    fields: {
-      required: ['date', 'time', 'airport'],
-      optional: ['flightNumber', 'airline', 'terminal', 'gate', 'bookingReference', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const departureEvent = event as ArrivalDepartureEvent;
-      return !!(
-        departureEvent.date &&
-        departureEvent.time &&
-        departureEvent.airport
-      );
-    }
+    icon: 'plane-departure',
+    color: 'red',
+    getDate: (event: ArrivalDepartureEvent) => event.date,
+    getTime: (event: ArrivalDepartureEvent) => event.time,
+    getLocation: (event: ArrivalDepartureEvent) => event.airport,
+    getTitle: (event: ArrivalDepartureEvent) => `Departure from ${event.airport}`,
+    getSubtitle: (event: ArrivalDepartureEvent) => event.flightNumber ? `Flight ${event.flightNumber}` : '',
+    validate: (event: ArrivalDepartureEvent) => !!(event.date && event.time && event.airport)
   },
   stay: {
     type: 'stay',
     label: 'Stay',
-    icon: '🏨',
-    defaultThumbnail: '/images/stay.jpg',
-    fields: {
-      required: ['date', 'accommodationName', 'checkIn', 'checkOut'],
-      optional: ['address', 'reservationNumber', 'contactInfo', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const stayEvent = event as StayEvent;
-      return !!(
-        stayEvent.date &&
-        stayEvent.accommodationName &&
-        stayEvent.checkIn &&
-        stayEvent.checkOut
-      );
-    }
+    icon: 'bed',
+    color: 'green',
+    getDate: (event: StayEvent) => event.checkIn,
+    getTime: (event: StayEvent) => event.checkInTime,
+    getLocation: (event: StayEvent) => event.accommodationName,
+    getTitle: (event: StayEvent) => event.accommodationName,
+    getSubtitle: (event: StayEvent) => `${event.checkIn} - ${event.checkOut}`,
+    validate: (event: StayEvent) => !!(event.checkIn && event.checkOut && event.accommodationName)
   },
   destination: {
     type: 'destination',
     label: 'Destination',
-    icon: '📍',
-    defaultThumbnail: '/images/destination.jpg',
-    fields: {
-      required: ['date', 'placeName'],
-      optional: ['address', 'description', 'openingHours', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const destinationEvent = event as DestinationEvent;
-      return !!(
-        destinationEvent.date &&
-        destinationEvent.placeName
-      );
-    }
+    icon: 'map-marker-alt',
+    color: 'purple',
+    getDate: (event: DestinationEvent) => event.startDate,
+    getTime: (event: DestinationEvent) => event.startTime,
+    getLocation: (event: DestinationEvent) => event.placeName,
+    getTitle: (event: DestinationEvent) => event.placeName,
+    getSubtitle: (event: DestinationEvent) => event.description || '',
+    validate: (event: DestinationEvent) => !!(event.startDate && event.placeName)
   },
   flight: {
     type: 'flight',
     label: 'Flight',
-    icon: '✈️',
-    defaultThumbnail: '/images/flight.jpg',
-    fields: {
-      required: ['date'],
-      optional: ['airline', 'flightNumber', 'departureAirport', 'arrivalAirport', 'departureTime', 'arrivalTime', 'terminal', 'gate', 'bookingReference', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const flightEvent = event as FlightEvent;
-      return !!(
-        flightEvent.date
-      );
-    }
+    icon: 'plane',
+    color: 'blue',
+    getDate: (event: FlightEvent) => event.startDate,
+    getTime: (event: FlightEvent) => event.departureTime || '',
+    getLocation: (event: FlightEvent) => `${event.departureAirport} → ${event.arrivalAirport}`,
+    getTitle: (event: FlightEvent) => `Flight ${event.flightNumber || ''}`,
+    getSubtitle: (event: FlightEvent) => `${event.departureAirport} → ${event.arrivalAirport}`,
+    validate: (event: FlightEvent) => !!(event.startDate && event.departureAirport && event.arrivalAirport)
   },
   train: {
     type: 'train',
     label: 'Train',
-    icon: '🚂',
-    defaultThumbnail: '/images/train.jpg',
-    fields: {
-      required: ['date'],
-      optional: ['trainNumber', 'trainOperator', 'departureStation', 'arrivalStation', 'departureTime', 'arrivalTime', 'carriageNumber', 'seatNumber', 'bookingReference', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const trainEvent = event as TrainEvent;
-      return !!(
-        trainEvent.date
-      );
-    }
+    icon: 'train',
+    color: 'orange',
+    getDate: (event: TrainEvent) => event.startDate,
+    getTime: (event: TrainEvent) => event.departureTime || '',
+    getLocation: (event: TrainEvent) => `${event.departureStation} → ${event.arrivalStation}`,
+    getTitle: (event: TrainEvent) => `Train ${event.trainNumber || ''}`,
+    getSubtitle: (event: TrainEvent) => `${event.departureStation} → ${event.arrivalStation}`,
+    validate: (event: TrainEvent) => !!(event.startDate && event.departureStation && event.arrivalStation)
   },
   rental_car: {
     type: 'rental_car',
     label: 'Rental Car',
-    icon: '🚗',
-    defaultThumbnail: '/images/rental_car.jpg',
-    fields: {
-      required: ['date'],
-      optional: ['carCompany', 'pickupLocation', 'dropoffLocation', 'pickupTime', 'dropoffTime', 'carType', 'bookingReference', 'licensePlate', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const rentalCarEvent = event as RentalCarEvent;
-      return !!(
-        rentalCarEvent.date
-      );
-    }
+    icon: 'car',
+    color: 'yellow',
+    getDate: (event: RentalCarEvent) => event.date,
+    getTime: (event: RentalCarEvent) => event.pickupTime,
+    getLocation: (event: RentalCarEvent) => event.pickupLocation || '',
+    getTitle: (event: RentalCarEvent) => `${event.carCompany || 'Car Rental'}`,
+    getSubtitle: (event: RentalCarEvent) => `${event.pickupLocation} → ${event.dropoffLocation}`,
+    validate: (event: RentalCarEvent) => !!(event.date && event.pickupTime && event.pickupLocation && event.dropoffLocation)
   },
   bus: {
     type: 'bus',
     label: 'Bus',
-    icon: '🚌',
-    defaultThumbnail: '/images/bus.jpg',
-    fields: {
-      required: ['date'],
-      optional: ['busNumber', 'busOperator', 'departureStation', 'arrivalStation', 'departureTime', 'arrivalTime', 'seatNumber', 'bookingReference', 'notes', 'source']
-    },
-    validate: (event: Event) => {
-      const busEvent = event as BusEvent;
-      return !!(
-        busEvent.date
-      );
-    }
+    icon: 'bus',
+    color: 'green',
+    getDate: (event: BusEvent) => event.startDate,
+    getTime: (event: BusEvent) => event.departureTime || '',
+    getLocation: (event: BusEvent) => `${event.departureStation} → ${event.arrivalStation}`,
+    getTitle: (event: BusEvent) => `Bus ${event.busNumber || ''}`,
+    getSubtitle: (event: BusEvent) => `${event.departureStation} → ${event.arrivalStation}`,
+    validate: (event: BusEvent) => !!(event.startDate && event.departureStation && event.arrivalStation)
   },
   activity: {
     type: 'activity',
     label: 'Activity',
-    icon: '🏔️',
-    defaultThumbnail: '/images/activity.jpg',
-    fields: {
-      required: ['date', 'title', 'activityType'],
-      optional: ['notes', 'source', 'location']
-    },
-    validate: (event: Event) => {
-      const activityEvent = event as ActivityEvent;
-      return !!(
-        activityEvent.date &&
-        activityEvent.title &&
-        activityEvent.activityType
-      );
-    }
+    icon: 'calendar-check',
+    color: 'purple',
+    getDate: (event: ActivityEvent) => event.startDate,
+    getTime: (event: ActivityEvent) => event.startTime,
+    getLocation: (event: ActivityEvent) => event.address || '',
+    getTitle: (event: ActivityEvent) => event.title,
+    getSubtitle: (event: ActivityEvent) => event.description || '',
+    validate: (event: ActivityEvent) => !!(event.startDate && event.title && event.activityType)
   }
 };
 
-export const getEventTypeConfig = (type: EventType): EventTypeConfig => {
-  return eventTypes[type];
+export const getEventTypeConfig = <T extends Event>(type: EventType): EventTypeConfig<T> => {
+  return eventTypeConfigs[type] as EventTypeConfig<T>;
 };
 
 export const getAllEventTypes = (): EventType[] => {
-  return Object.keys(eventTypes) as EventType[];
+  return Object.keys(eventTypeConfigs) as EventType[];
 };
 
 export const getEventTypeLabel = (type: EventType): string => {
-  return eventTypes[type].label;
+  return eventTypeConfigs[type].label;
 };
 
 export const getEventTypeIcon = (type: EventType): string => {
-  return eventTypes[type].icon;
+  return eventTypeConfigs[type].icon;
 };
 
-export const getEventTypeDefaultThumbnail = (type: EventType): string => {
-  return eventTypes[type].defaultThumbnail;
+export const getEventTypeColor = (type: EventType): string => {
+  return eventTypeConfigs[type].color;
+};
+
+export const getEventTypeDate = <T extends Event>(type: EventType, event: T): string => {
+  return eventTypeConfigs[type].getDate(event as any);
+};
+
+export const getEventTypeTime = <T extends Event>(type: EventType, event: T): string => {
+  return eventTypeConfigs[type].getTime(event as any);
+};
+
+export const getEventTypeLocation = <T extends Event>(type: EventType, event: T): string => {
+  return eventTypeConfigs[type].getLocation(event as any);
+};
+
+export const getEventTypeTitle = <T extends Event>(type: EventType, event: T): string => {
+  return eventTypeConfigs[type].getTitle(event as any);
+};
+
+export const getEventTypeSubtitle = <T extends Event>(type: EventType, event: T): string => {
+  return eventTypeConfigs[type].getSubtitle(event as any);
 };
 
 export const validateEvent = (event: Event): boolean => {
-  return eventTypes[event.type].validate(event);
+  const config = eventTypeConfigs[event.type];
+  return config.validate(event as any);
 }; 

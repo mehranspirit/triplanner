@@ -61,16 +61,21 @@ export default {
   		},
   		animation: {
   			'spin-slow': 'spin 3s linear infinite',
-  			orbit: 'orbit 8s linear infinite',
-  			float: 'float 3s ease-in-out infinite'
+  			'orbit': 'orbit 3s linear infinite',
+  			float: 'float 3s ease-in-out infinite',
+  			'fly': 'fly 3s ease-in-out infinite',
+  			'moveRight': 'moveRight 4s ease-in-out infinite',
+  			'moveLeft': 'moveLeft 5s ease-in-out infinite',
+  			'bounce': 'bounce 2s ease-in-out infinite',
+  			'pulse': 'pulse 2s ease-in-out infinite'
   		},
   		keyframes: {
   			orbit: {
   				'0%': {
-  					transform: 'rotate(0deg)'
+  					transform: 'rotate(0deg) translateX(80px) rotate(0deg)'
   				},
   				'100%': {
-  					transform: 'rotate(360deg)'
+  					transform: 'rotate(360deg) translateX(80px) rotate(-360deg)'
   				}
   			},
   			float: {
@@ -80,6 +85,26 @@ export default {
   				'50%': {
   					transform: 'translateY(-10px)'
   				}
+  			},
+  			fly: {
+  				'0%, 100%': { transform: 'translate(-50%, -50%) rotate(-45deg)' },
+  				'50%': { transform: 'translate(50%, 50%) rotate(-45deg)' }
+  			},
+  			moveRight: {
+  				'0%': { transform: 'translateX(-100%)' },
+  				'100%': { transform: 'translateX(100%)' }
+  			},
+  			moveLeft: {
+  				'0%': { transform: 'translateX(100%)' },
+  				'100%': { transform: 'translateX(-100%)' }
+  			},
+  			bounce: {
+  				'0%, 100%': { transform: 'translateY(0)' },
+  				'50%': { transform: 'translateY(-20px)' }
+  			},
+  			pulse: {
+  				'0%, 100%': { transform: 'scale(1)' },
+  				'50%': { transform: 'scale(1.2)' }
   			}
   		},
   		backgroundImage: {

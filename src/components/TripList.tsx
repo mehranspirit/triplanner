@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
-import { Trip as IndexTrip, StayEvent as IndexStayEvent, User } from '../types';
+import { Trip, StayEvent, User } from '../types/eventTypes';
 import { Trip as EventTypesTrip } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 import { Link } from 'react-router-dom';
@@ -10,7 +10,7 @@ import { api } from '../services/api';
 import Avatar from '../components/Avatar';
 
 // Create conversion functions to bridge the type differences
-const convertToIndexTrip = (trip: EventTypesTrip): IndexTrip => {
+const convertToIndexTrip = (trip: EventTypesTrip): Trip => {
   // Create a trip that matches the IndexTrip type
   return {
     ...trip,
@@ -20,10 +20,10 @@ const convertToIndexTrip = (trip: EventTypesTrip): IndexTrip => {
       // Add the date field required by IndexTrip.Event
       date: event.startDate?.split('T')[0] || ''
     }))
-  } as unknown as IndexTrip;
+  } as unknown as Trip;
 };
 
-const convertToEventTypesTrip = (trip: IndexTrip): EventTypesTrip => {
+const convertToEventTypesTrip = (trip: Trip): EventTypesTrip => {
   // Create a trip that matches the EventTypesTrip type
   return trip as unknown as EventTypesTrip;
 };
@@ -106,16 +106,16 @@ interface TripDuration {
 }
 
 interface CategorizedTrips {
-  ongoing: IndexTrip[];
-  upcoming: IndexTrip[];
-  past: IndexTrip[];
+  ongoing: Trip[];
+  upcoming: Trip[];
+  past: Trip[];
 }
 
-const categorizeTripsByDate = (trips: IndexTrip[], durations: { [key: string]: TripDuration }): CategorizedTrips => {
+const categorizeTripsByDate = (trips: Trip[], durations: { [key: string]: TripDuration }): CategorizedTrips => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  return trips.reduce((acc: CategorizedTrips, trip: IndexTrip) => {
+  return trips.reduce((acc: CategorizedTrips, trip: Trip) => {
     const duration = durations[trip._id];
     if (!duration) return acc;
 
@@ -144,7 +144,7 @@ export default function TripList() {
   const [editFormData, setEditFormData] = useState({ name: '', thumbnailUrl: '', description: '' });
   const [tripThumbnails, setTripThumbnails] = useState<{ [key: string]: string }>({});
   const [tripDurations, setTripDurations] = useState<{ [key: string]: TripDuration }>({});
-  const [tripToDelete, setTripToDelete] = useState<IndexTrip | null>(null);
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Load thumbnails for trips
@@ -392,7 +392,7 @@ export default function TripList() {
     }
   };
 
-  const startEditing = (trip: IndexTrip) => {
+  const startEditing = (trip: Trip) => {
     setEditFormData({
       name: trip.name,
       thumbnailUrl: trip.thumbnailUrl || '',
@@ -418,12 +418,12 @@ export default function TripList() {
     }
   };
 
-  const openDeleteModal = (trip: IndexTrip) => {
+  const openDeleteModal = (trip: Trip) => {
     setTripToDelete(trip);
     setShowDeleteModal(true);
   };
 
-  const renderTripCard = (trip: IndexTrip) => (
+  const renderTripCard = (trip: Trip) => (
     <div
       key={trip._id}
       className="bg-white overflow-hidden shadow rounded-lg relative group"
@@ -613,7 +613,7 @@ export default function TripList() {
     </div>
   );
 
-  const renderTripSection = (title: string, trips: IndexTrip[]) => (
+  const renderTripSection = (title: string, trips: Trip[]) => (
     trips.length > 0 && (
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-gray-800 mb-4">{title}</h3>

@@ -231,6 +231,21 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
                 </p>
               </div>
             )}
+
+            {event.notes && (
+              <div className="flex items-start text-xs space-x-1 pt-2 border-t mt-2">
+                <Info className={cn(
+                  "h-3 w-3 mt-1 flex-shrink-0 transition-all duration-200",
+                  isExploring ? "text-gray-400" : "text-gray-500"
+                )} />
+                <p className={cn(
+                  "transition-all duration-200",
+                  isExploring ? "text-gray-600" : "text-gray-900"
+                )}>
+                  <span className="font-semibold">Notes:</span> {event.notes}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

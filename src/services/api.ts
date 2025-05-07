@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { Event } from '../types';
+import { Event } from '../types/eventTypes';
 import { Trip, AISuggestionHistory, User } from '../types/eventTypes';
 import { API_URL } from '../config';
 import { getHeaders } from '../utils/api.ts';

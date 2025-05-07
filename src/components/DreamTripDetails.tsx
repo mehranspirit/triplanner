@@ -6,7 +6,7 @@ import { EditDreamTripForm } from './EditDreamTripForm';
 import { IdeaBoard } from './IdeaBoard';
 import { CollaboratorManagementModal } from './CollaboratorManagementModal';
 import { useAuth } from '../context/AuthContext';
-import { User } from '../types';
+import { User } from '../types/eventTypes';
 import { DreamTripAISuggestionsModal } from './DreamTripAISuggestionsModal';
 import { AISuggestionsDisplay } from './AISuggestionsDisplay';
 import { generateDreamTripSuggestions } from '../services/aiService';

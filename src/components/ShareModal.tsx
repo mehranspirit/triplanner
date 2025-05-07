@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trip } from '../types';
+import { Trip } from '../types/eventTypes';
 import { api } from '../services/api';
 
 interface ShareModalProps {

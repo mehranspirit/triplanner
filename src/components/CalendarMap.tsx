@@ -1,246 +1,194 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Trip, Event, StayEvent } from '../types/eventTypes';
 import L from 'leaflet';
 import type { Map as LeafletMap } from 'leaflet';
-import { Trip } from '../types';
 
 // Create custom marker icons
-const createMarkerIcon = (color: string) => {
-  return new L.Icon({
-    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-  });
-};
+const defaultIcon = L.icon({
+  iconUrl: '/marker-icon.png',
+  iconRetinaUrl: '/marker-icon-2x.png',
+  shadowUrl: '/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
 
-const greyMarker = createMarkerIcon('grey');
-const greenMarker = createMarkerIcon('green');
-const blueMarker = createMarkerIcon('blue');
+L.Marker.prototype.options.icon = defaultIcon;
 
 interface CalendarMapProps {
-  trips: Trip[];
+  trip: Trip;
 }
 
 interface Location {
   lat: number;
-  lon: number;
-  displayName: string;
+  lng: number;
+  name: string;
+  event: Event;
   tripId: string;
   tripName: string;
+  displayName: string;
   startDate: Date;
   endDate: Date;
 }
 
-// Create module-level cache for locations
-const calendarLocationCache: Record<string, { lat: number, lon: number, displayName: string }> = {};
+const calendarLocationCache: { [key: string]: any } = {};
 
-// Function to get a cache key for a location query
-const getCalendarLocationCacheKey = (query: string): string => {
-  return `calendar_loc_${query.toLowerCase().trim()}`;
-};
+const getCalendarLocationCacheKey = (locationName: string) => `calendar_location_${locationName}`;
 
-// Load cached data from localStorage on module initialization
-try {
-  const savedLocations = localStorage.getItem('calendarMapLocationCache');
-  if (savedLocations) {
-    const parsedLocations = JSON.parse(savedLocations);
-    Object.assign(calendarLocationCache, parsedLocations);
-    console.log('Loaded calendar location cache from localStorage:', Object.keys(parsedLocations).length, 'locations');
-  }
-} catch (err) {
-  console.warn('Failed to load calendar location cache from localStorage:', err);
-}
-
-// Function to save location cache to localStorage
-const saveCalendarLocationCache = () => {
-  try {
-    localStorage.setItem('calendarMapLocationCache', JSON.stringify(calendarLocationCache));
-  } catch (err) {
-    console.warn('Failed to save calendar location cache to localStorage:', err);
-  }
-};
-
-const CalendarMap: React.FC<CalendarMapProps> = ({ trips }) => {
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [error, setError] = useState<string | null>(null);
+const CalendarMap: React.FC<CalendarMapProps> = ({ trip }) => {
+  const mapRef = React.useRef<LeafletMap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const mapRef = useRef<LeafletMap | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [mapLocations, setMapLocations] = useState<Location[]>([]);
 
-  const getTripMarkerIcon = (startDate: Date, endDate: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (endDate < today) {
-      return greyMarker; // Past trip
-    } else if (startDate <= today && today <= endDate) {
-      return greenMarker; // Ongoing trip
-    } else {
-      return blueMarker; // Upcoming trip
+  const getEventDate = (event: Event) => {
+    if (event.type === 'stay') {
+      return (event as StayEvent).checkIn;
     }
+    return event.startDate;
   };
+
+  const getEventLocation = (event: Event) => {
+    if (event.location) {
+      return {
+        lat: event.location.lat,
+        lng: event.location.lng,
+        name: event.location.address || 'Unknown location'
+      };
+    }
+    return null;
+  };
+
+  const eventLocations = trip.events
+    .map(event => {
+      const location = getEventLocation(event);
+      if (!location) return null;
+      return {
+        ...location,
+        event
+      };
+    })
+    .filter((loc): loc is Location => loc !== null)
+    .sort((a, b) => {
+      const dateA = getEventDate(a.event);
+      const dateB = getEventDate(b.event);
+      return new Date(dateA).getTime() - new Date(dateB).getTime();
+    });
 
   useEffect(() => {
     const fetchLocations = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        const locationPromises = trips.map(async (trip) => {
-          try {
-            // Check cache first
-            const cacheKey = getCalendarLocationCacheKey(trip.name);
-            if (calendarLocationCache[cacheKey]) {
-              console.log(`Using cached location data for trip: ${trip.name}`);
-              
-              // Find the first event date and last event date
-              const eventDates = trip.events.map(event => 
-                event.type === 'stay' 
-                  ? [new Date((event as any).checkIn), new Date((event as any).checkOut)]
-                  : [new Date(event.date), new Date(event.date)]
-              ).flat();
-
-              const startDate = new Date(Math.min(...eventDates.map(d => d.getTime())));
-              const endDate = new Date(Math.max(...eventDates.map(d => d.getTime())));
-              
-              return {
-                ...calendarLocationCache[cacheKey],
-                tripId: trip._id,
-                tripName: trip.name,
-                startDate,
-                endDate
-              };
-            }
+      setIsLoading(true);
+      setError(null);
+      
+      const locationPromises = eventLocations.map(async (loc) => {
+        try {
+          // Check cache first
+          const cacheKey = getCalendarLocationCacheKey(loc.name);
+          if (calendarLocationCache[cacheKey]) {
+            console.log(`Using cached location data for location: ${loc.name}`);
             
-            // Add a small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trip.name)}`
-            );
-            
-            if (!response.ok) {
-              throw new Error(`Failed to fetch location for ${trip.name}`);
-            }
-
-            const data = await response.json();
-            
-            if (data && data.length > 0) {
-              // Find the first event date and last event date
-              const eventDates = trip.events.map(event => 
-                event.type === 'stay' 
-                  ? [new Date((event as any).checkIn), new Date((event as any).checkOut)]
-                  : [new Date(event.date), new Date(event.date)]
-              ).flat();
-
-              const startDate = new Date(Math.min(...eventDates.map(d => d.getTime())));
-              const endDate = new Date(Math.max(...eventDates.map(d => d.getTime())));
-
-              const locationData = {
-                lat: parseFloat(data[0].lat),
-                lon: parseFloat(data[0].lon),
-                displayName: data[0].display_name
-              };
-              
-              // Cache the result
-              calendarLocationCache[cacheKey] = locationData;
-              
-              // Save updated cache to localStorage
-              saveCalendarLocationCache();
-
-              return {
-                ...locationData,
-                tripId: trip._id,
-                tripName: trip.name,
-                startDate,
-                endDate
-              };
-            }
-            return null;
-          } catch (err) {
-            console.warn(`Error fetching location for ${trip.name}:`, err);
-            return null;
+            return {
+              ...calendarLocationCache[cacheKey],
+              tripId: trip._id,
+              tripName: trip.name,
+              startDate: new Date(loc.event.startDate),
+              endDate: new Date(loc.event.endDate)
+            };
           }
-        });
 
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(loc.name)}`
+          );
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch location for ${loc.name}`);
+          }
+
+          const data = await response.json();
+          
+          if (data && data.length > 0) {
+            const locationData = {
+              lat: parseFloat(data[0].lat),
+              lng: parseFloat(data[0].lon),
+              displayName: data[0].display_name,
+              tripId: trip._id,
+              tripName: trip.name,
+              startDate: new Date(loc.event.startDate),
+              endDate: new Date(loc.event.endDate)
+            };
+
+            // Cache the result
+            calendarLocationCache[cacheKey] = locationData;
+            
+            return locationData;
+          }
+          return null;
+        } catch (err) {
+          console.warn(`Error fetching location for ${loc.name}:`, err);
+          return null;
+        }
+      });
+
+      try {
         const results = await Promise.all(locationPromises);
         const validLocations = results.filter((loc): loc is Location => loc !== null);
-        
-        setLocations(validLocations);
-
-        // If we have locations, fit the map bounds to show all markers
-        if (validLocations.length > 0 && mapRef.current) {
-          const bounds = L.latLngBounds(validLocations.map(loc => [loc.lat, loc.lon]));
-          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-        }
+        setMapLocations(validLocations);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch locations');
+        console.error('Error processing locations:', err);
+        setError('Failed to process locations');
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (trips.length > 0) {
+    if (eventLocations.length > 0) {
       fetchLocations();
     }
-  }, [trips]);
+  }, [eventLocations, trip._id]);
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-96 bg-gray-50 rounded-lg">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-      </div>
-    );
+    return <div className="flex items-center justify-center h-full">Loading map...</div>;
   }
 
-  if (error || locations.length === 0) {
-    return (
-      <div className="flex justify-center items-center h-96 bg-gray-50 rounded-lg">
-        <p className="text-gray-500">{error || 'No trip locations found'}</p>
-      </div>
-    );
+  if (error) {
+    return <div className="text-red-500">Error: {error}</div>;
   }
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
+  if (mapLocations.length === 0) {
+    return <div className="text-gray-500">No locations to display</div>;
+  }
 
   return (
-    <div className="h-96 rounded-lg overflow-hidden">
-      <MapContainer
-        center={[locations[0].lat, locations[0].lon]}
-        zoom={4}
-        style={{ height: '100%', width: '100%' }}
-        ref={mapRef}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        />
-        {locations.map((location) => (
-          <Marker 
-            key={location.tripId} 
-            position={[location.lat, location.lon]}
-            icon={getTripMarkerIcon(location.startDate, location.endDate)}
-          >
-            <Popup>
-              <div className="font-semibold">{location.tripName}</div>
-              <div className="text-sm text-gray-600">
-                {formatDate(location.startDate)} - {formatDate(location.endDate)}
-              </div>
-              <div className="text-xs text-gray-500 mt-1">{location.displayName}</div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
-    </div>
+    <MapContainer
+      center={[mapLocations[0].lat, mapLocations[0].lng]}
+      zoom={4}
+      style={{ height: '100%', width: '100%' }}
+      ref={mapRef}
+    >
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      />
+      {mapLocations.map((location, index) => (
+        <Marker
+          key={`${location.tripId}-${index}`}
+          position={[location.lat, location.lng]}
+        >
+          <Popup>
+            <div>
+              <h3 className="font-semibold">{location.tripName}</h3>
+              <p>{location.displayName}</p>
+              <p className="text-sm text-gray-500">
+                {new Date(location.startDate).toLocaleDateString()} - {new Date(location.endDate).toLocaleDateString()}
+              </p>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </MapContainer>
   );
 };
 

@@ -95,8 +95,26 @@ const renderDepartureFormFields = (form: UseFormReturn<DepartureFormData>): Reac
                 control={control}
                 name="departureDate"
                 render={({ field }) => {
-                   const selectedDate = field.value ? parse(field.value, 'yyyy-MM-dd', new Date()) : undefined;
-                   return (
+                  let selectedDate: Date | undefined = undefined;
+                  if (field.value) {
+                    try {
+                      // Handle both ISO and simple YYYY-MM-DD formats
+                      const datePart = field.value.includes('T') ? field.value.split('T')[0] : field.value;
+                      const [year, month, day] = datePart.split('-').map(Number);
+                      
+                      // Validate date parts
+                      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        selectedDate = new Date(year, month - 1, day);
+                        // Validate the date
+                        if (isNaN(selectedDate.getTime())) {
+                          selectedDate = undefined;
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Error parsing date:', error, field.value);
+                    }
+                  }
+                  return (
                     <FormItem className="flex flex-col">
                         <FormLabel>Departure Date *</FormLabel>
                         <Popover>
@@ -124,7 +142,7 @@ const renderDepartureFormFields = (form: UseFormReturn<DepartureFormData>): Reac
                         </Popover>
                         <FormMessage />
                     </FormItem>
-                 );
+                  );
                 }}
                 />
             <FormField

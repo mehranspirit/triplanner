@@ -12,6 +12,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { parse, format } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
@@ -19,10 +22,13 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { getDefaultThumbnail } from './thumbnailHelpers';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
+import TripMap from '@/components/TripMap';
+import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus } from 'lucide-react';
+import TripNotes from '@/components/TripNotes';
 
 // Import icons
 import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
-import { Clock, Info, MapPin } from 'lucide-react';
+import { Clock, Info } from 'lucide-react';
 
 // Import the new specific modals
 import ArrivalFormModal from './EventFormModals/ArrivalFormModal';
@@ -38,6 +44,10 @@ import DepartureFormModal from './EventFormModals/DepartureFormModal';
 
 // Import TripActions component
 import TripActions from './TripActions';
+import { parseEventFromText } from '@/services/aiService';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import TripLoading from '@/components/ui/trip-loading';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -81,6 +91,14 @@ const NewTripDetails: React.FC = () => {
   const [modalType, setModalType] = useState<EventType | null>(null); // State to track which modal to show
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [isCondensedView, setIsCondensedView] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [isAIParseModalOpen, setIsAIParseModalOpen] = useState(false);
+  const [parseText, setParseText] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
   const handleAddEventClick = (type: EventType) => {
     setEditingEvent(null);
@@ -173,8 +191,51 @@ const NewTripDetails: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-4">Loading trip details...</div>; // TODO: Add a proper spinner
-  if (error) return <div className="p-4 text-red-600">Error: {error}</div>; // TODO: Add a proper error component
+  const handleAIParse = async () => {
+    if (!trip || !user) return;
+    
+    setIsParsing(true);
+    setParseError(null);
+    
+    try {
+      const parsedEvents = await parseEventFromText({
+        text: parseText,
+        trip: {
+          name: trip.name,
+          description: trip.description || '',
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          events: trip.events
+        },
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          photoUrl: user.photoUrl || null
+        }
+      });
+      
+      // Handle both single event and array of events
+      const eventsToAdd = Array.isArray(parsedEvents) ? parsedEvents : [parsedEvents];
+      
+      // Add each event to the trip
+      for (const event of eventsToAdd) {
+        await handleSaveEvent(event);
+      }
+      
+      // Close the modal and reset state
+      setIsAIParseModalOpen(false);
+      setParseText('');
+    } catch (error) {
+      console.error('Error parsing text:', error);
+      setParseError(error instanceof Error ? error.message : 'Failed to parse text');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  if (loading) return <TripLoading />;
+  if (error) return <div className="p-4 text-red-600">Error: {error}</div>;
   if (!trip) return <div className="p-4">Trip not found.</div>;
 
   // Sort events by startDate, earliest first
@@ -231,13 +292,32 @@ const NewTripDetails: React.FC = () => {
       }
     };
 
-    const formatDate = (dateStr: string, timeStr?: string) => {
+    const formatDate = (dateStr: string | undefined, timeStr?: string) => {
       if (!dateStr) return '';
       try {
-        const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+        // Handle both ISO and simple YYYY-MM-DD formats
+        const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+        const [year, month, day] = datePart.split('-').map(Number);
+        
+        // Validate date parts
+        if (isNaN(year) || isNaN(month) || isNaN(day)) {
+          console.warn('Invalid date parts:', { year, month, day, dateStr });
+          return dateStr;
+        }
+
+        // Create date with time set to noon to avoid timezone issues
+        const date = new Date(year, month - 1, day, 12);
+        
+        // Validate the date
+        if (isNaN(date.getTime())) {
+          console.warn('Invalid date:', dateStr);
+          return dateStr;
+        }
+
         const formattedDate = format(date, 'MMM d');
         return timeStr ? `${formattedDate} ${timeStr}` : formattedDate;
       } catch (error) {
+        console.warn('Error formatting date:', error, dateStr);
         return dateStr;
       }
     };
@@ -456,7 +536,7 @@ const NewTripDetails: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 space-y-6 py-6">
       {/* Header with Trip Info and Actions */}
       <div className="relative">
         {/* Background Image with Overlay */}
@@ -526,27 +606,43 @@ const NewTripDetails: React.FC = () => {
               <DropdownMenuContent align="start">
                 <DropdownMenuLabel>Add New Event</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {addableEventTypes.map(type => {
-                  const eventType = EVENT_TYPES[type];
-                  if (!eventType) return null;
-                  return (
-                    <DropdownMenuItem 
-                      key={type} 
-                      onClick={() => handleAddEventClick(type)}
-                    >
-                      {type === 'flight' && <FaPlane className="mr-2 h-4 w-4 text-blue-500" />}
-                      {type === 'arrival' && <FaPlane className="mr-2 h-4 w-4 text-green-500 transform rotate-45" />}
-                      {type === 'departure' && <FaPlane className="mr-2 h-4 w-4 text-red-500 transform -rotate-45" />}
-                      {type === 'train' && <FaTrain className="mr-2 h-4 w-4 text-green-500" />}
-                      {type === 'bus' && <FaBus className="mr-2 h-4 w-4 text-purple-500" />}
-                      {type === 'rental_car' && <FaCar className="mr-2 h-4 w-4 text-red-500" />}
-                      {type === 'stay' && <FaHotel className="mr-2 h-4 w-4 text-yellow-500" />}
-                      {type === 'destination' && <FaMapMarkerAlt className="mr-2 h-4 w-4 text-pink-500" />}
-                      {type === 'activity' && <FaMountain className="mr-2 h-4 w-4 text-indigo-500" />}
-                      {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
-                    </DropdownMenuItem>
-                  );
-                })}
+                <DropdownMenuItem onClick={() => setIsAIParseModalOpen(true)}>
+                  <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
+                  Parse with AI
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Manual Entry
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {addableEventTypes.map(type => {
+                      const eventType = EVENT_TYPES[type];
+                      if (!eventType) return null;
+                      return (
+                        <DropdownMenuItem
+                          key={type}
+                          onClick={() => {
+                            setSelectedEventType(type);
+                            setIsEventModalOpen(true);
+                          }}
+                        >
+                          {type === 'flight' && <FaPlane className="mr-2 h-4 w-4 text-blue-500" />}
+                          {type === 'arrival' && <FaPlane className="mr-2 h-4 w-4 text-green-500 transform rotate-45" />}
+                          {type === 'departure' && <FaPlane className="mr-2 h-4 w-4 text-red-500 transform -rotate-45" />}
+                          {type === 'train' && <FaTrain className="mr-2 h-4 w-4 text-green-500" />}
+                          {type === 'bus' && <FaBus className="mr-2 h-4 w-4 text-purple-500" />}
+                          {type === 'rental_car' && <FaCar className="mr-2 h-4 w-4 text-red-500" />}
+                          {type === 'stay' && <FaHotel className="mr-2 h-4 w-4 text-yellow-500" />}
+                          {type === 'destination' && <FaMapMarkerAlt className="mr-2 h-4 w-4 text-pink-500" />}
+                          {type === 'activity' && <FaMountain className="mr-2 h-4 w-4 text-indigo-500" />}
+                          {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -611,7 +707,33 @@ const NewTripDetails: React.FC = () => {
                     <div key={dateKey} className="relative">
                       <div className="sticky top-0 bg-white z-10 py-2 mb-4">
                         <div className="inline-block px-4 py-2 bg-gray-100 rounded-full text-sm font-semibold text-gray-800 shadow-sm border border-gray-200">
-                          {format(parse(dateKey, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d, yyyy')}
+                          {(() => {
+                            try {
+                              // Handle both ISO and simple YYYY-MM-DD formats
+                              const datePart = dateKey.includes('T') ? dateKey.split('T')[0] : dateKey;
+                              const [year, month, day] = datePart.split('-').map(Number);
+                              
+                              // Validate date parts
+                              if (isNaN(year) || isNaN(month) || isNaN(day)) {
+                                console.warn('Invalid date parts:', { year, month, day, dateKey });
+                                return dateKey;
+                              }
+
+                              // Create date with time set to noon to avoid timezone issues
+                              const date = new Date(year, month - 1, day, 12);
+                              
+                              // Validate the date
+                              if (isNaN(date.getTime())) {
+                                console.warn('Invalid date:', dateKey);
+                                return dateKey;
+                              }
+
+                              return format(date, 'EEEE, MMMM d, yyyy');
+                            } catch (error) {
+                              console.warn('Error formatting date:', error, dateKey);
+                              return dateKey;
+                            }
+                          })()}
                         </div>
                       </div>
                       
@@ -656,6 +778,98 @@ const NewTripDetails: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Map Toggle Button */}
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "fixed bottom-6 right-6 z-50 rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          showMap ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
+        )}
+        onClick={() => setShowMap(!showMap)}
+      >
+        {showMap ? (
+          <X className="h-8 w-8" />
+        ) : (
+          <MapPin className="h-8 w-8 text-blue-500" />
+        )}
+      </Button>
+
+      {/* Notes Toggle Button */}
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "fixed bottom-24 right-6 z-50 rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          showNotes ? "bg-purple-500 text-white hover:bg-purple-600" : "bg-white hover:bg-gray-50"
+        )}
+        onClick={() => setShowNotes(!showNotes)}
+      >
+        {showNotes ? (
+          <X className="h-8 w-8" />
+        ) : (
+          <FileText className="h-8 w-8 text-purple-500" />
+        )}
+      </Button>
+
+      {/* Trip Map */}
+      {showMap && (
+        <div className="fixed bottom-24 right-6 z-40 w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
+          <TripMap trip={trip} />
+        </div>
+      )}
+
+      {/* Trip Notes */}
+      {showNotes && (
+        <div className="fixed bottom-24 right-6 z-40 w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
+          <TripNotes tripId={trip._id} canEdit={canEdit} />
+        </div>
+      )}
+
+      {/* AI Parse Modal */}
+      <Dialog open={isAIParseModalOpen} onOpenChange={setIsAIParseModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Parse Event with AI</DialogTitle>
+            <DialogDescription>
+              Paste your event details, reservation email, or natural language description.
+              The AI will try to extract event information and create appropriate events.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <Textarea
+              placeholder="Paste your text here..."
+              value={parseText}
+              onChange={(e) => setParseText(e.target.value)}
+              className="min-h-[200px]"
+            />
+            {parseError && (
+              <p className="mt-2 text-sm text-red-500">{parseError}</p>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAIParseModalOpen(false);
+                setParseText('');
+                setParseError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAIParse}
+              disabled={!parseText.trim() || isParsing}
+            >
+              {isParsing ? 'Parsing...' : 'Parse Text'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Render Specific EventFormModals conditionally */}
       {modalType === 'arrival' && (
