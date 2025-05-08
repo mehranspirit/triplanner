@@ -284,7 +284,14 @@ app.patch('/api/users/:userId/role', auth, async (req, res) => {
 
 // Connect to MongoDB
 console.log('Attempting to connect with URI:', process.env.MONGODB_URI);
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  family: 4,
+  maxPoolSize: 20,
+  retryWrites: true,
+  retryReads: true
+})
   .then(async () => {
     console.log('Connected to MongoDB');
     // Initialize admin user
