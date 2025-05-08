@@ -14,21 +14,21 @@ interface ArrivalEventCardProps {
 
 const ArrivalEventCard: React.FC<ArrivalEventCardProps> = ({ event, thumbnail, onEdit, onDelete }) => {
   // Output event object to console for debugging
-  console.log('Arrival Event:', {
-    id: event.id,
-    type: event.type,
-    startDate: event.startDate,
-    arrivalDate: event.arrivalDate,
-    arrivalTime: event.arrivalTime,
-    hasDirectFields: Boolean(event.arrivalDate && event.arrivalTime)
-  });
+  // console.log('Arrival Event:', {
+  //   id: event.id,
+  //   type: event.type,
+  //   startDate: event.startDate,
+  //   arrivalDate: event.arrivalDate,
+  //   arrivalTime: event.arrivalTime,
+  //   hasDirectFields: Boolean(event.arrivalDate && event.arrivalTime)
+  // });
 
   const formatDateTime = (isoString: string) => {
     if (!isoString) return 'N/A';
     try {
         // Arrival is typically a point in time
         const date = new Date(isoString);
-        console.log('Formatting ISO string:', isoString, 'results in date:', date.toString());
+        //console.log('Formatting ISO string:', isoString, 'results in date:', date.toString());
         return format(date, 'MMM d, yyyy h:mm a'); 
     } catch (error) {
       console.error("Error formatting date:", error);
@@ -59,9 +59,9 @@ const ArrivalEventCard: React.FC<ArrivalEventCardProps> = ({ event, thumbnail, o
     try {
       // Combine date and time, parse without timezone interpretation
       const combinedStr = `${dateStr} ${timeStr}`;
-      console.log('Formatting raw date/time:', combinedStr);
+      //console.log('Formatting raw date/time:', combinedStr);
       const date = parse(combinedStr, 'yyyy-MM-dd HH:mm', new Date());
-      console.log('Parsed date:', date.toString());
+      //console.log('Parsed date:', date.toString());
       return format(date, 'MMM d, yyyy h:mm a');
     } catch (error) {
       console.error("Error formatting raw date/time:", error);
@@ -90,11 +90,11 @@ const ArrivalEventCard: React.FC<ArrivalEventCardProps> = ({ event, thumbnail, o
   // Determine which time display method to use
   const arrivalTimeDisplay = () => {
     if (event.arrivalDate && event.arrivalTime) {
-      console.log('Using raw date/time fields', event.arrivalDate, event.arrivalTime);
+      //console.log('Using raw date/time fields', event.arrivalDate, event.arrivalTime);
       // Use direct method to avoid any Date object timezone issues
       return formatRawDateTimeDirect(event.arrivalDate, event.arrivalTime);
     }
-    console.log('Falling back to startDate', event.startDate);
+    //console.log('Falling back to startDate', event.startDate);
     // Use the UTC time from startDate without timezone conversion
     return formatIsoStringAsUTC(event.startDate);
   };

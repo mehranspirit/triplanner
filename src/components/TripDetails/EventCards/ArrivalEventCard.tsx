@@ -24,14 +24,14 @@ interface ArrivalEventCardProps {
 
 const ArrivalEventCard: React.FC<ArrivalEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
   // Output event object to console for debugging
-  console.log('Arrival Event:', {
-    id: event.id,
-    type: event.type,
-    startDate: event.startDate,
-    date: event.date,
-    time: event.time,
-    hasDirectFields: Boolean(event.date && event.time)
-  });
+  // console.log('Arrival Event:', {
+  //   id: event.id,
+  //   type: event.type,
+  //   startDate: event.startDate,
+  //   date: event.date,
+  //   time: event.time,
+  //   hasDirectFields: Boolean(event.date && event.time)
+  // });
 
   // Format raw date and time strings without timezone conversion
   const formatRawDateTime = (dateStr?: string, timeStr?: string) => {
@@ -39,12 +39,12 @@ const ArrivalEventCard: React.FC<ArrivalEventCardProps> = ({ event, thumbnail, o
     try {
       // Combine date and time, parse without timezone interpretation
       const combinedStr = `${dateStr} ${timeStr}`;
-      console.log('Formatting raw date/time:', combinedStr);
+      //console.log('Formatting raw date/time:', combinedStr);
       const date = parse(combinedStr, 'yyyy-MM-dd HH:mm', new Date());
-      console.log('Parsed date:', date.toString());
+      //console.log('Parsed date:', date.toString());
       return format(date, 'MMM d, yyyy h:mm a');
     } catch (error) {
-      console.error("Error formatting raw date/time:", error);
+      //console.error("Error formatting raw date/time:", error);
       return 'Invalid Date/Time';
     }
   };
@@ -73,21 +73,21 @@ const ArrivalEventCard: React.FC<ArrivalEventCardProps> = ({ event, thumbnail, o
     const hasDateTimeFields = event.date && event.time && 
                             event.date !== "" && event.time !== "";
     
-    console.log("ArrivalEventCard: Attempting to display time with data:", {
-      date: event.date,
-      time: event.time,
-      hasDateTimeFields,
-      fullEvent: JSON.stringify(event)
-    });
+    //console.log("ArrivalEventCard: Attempting to display time with data:", {
+    //   date: event.date,
+    //   time: event.time,
+    //   hasDateTimeFields,
+    //   fullEvent: JSON.stringify(event)
+    // });
     
     // Try using direct fields if available
     if (hasDateTimeFields) {
-      console.log('Using raw date/time fields from event object', event.date, event.time);
+      //console.log('Using raw date/time fields from event object', event.date, event.time);
       return formatRawDateTimeDirect(event.date, event.time);
     }
     
     // Fall back to providing a message if the event appears to be incomplete
-    console.log('No valid dates found, returning message');
+    //console.log('No valid dates found, returning message');
     return 'Time not set';
   };
 

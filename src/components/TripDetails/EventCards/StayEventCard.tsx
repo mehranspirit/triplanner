@@ -24,16 +24,16 @@ interface StayEventCardProps {
 
 const StayEventCard: React.FC<StayEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
   // Output event object to console for debugging
-  console.log('Stay Event:', {
-    id: event.id,
-    type: event.type,
-    checkIn: event.checkIn,
-    checkInTime: event.checkInTime,
-    checkOut: event.checkOut,
-    checkOutTime: event.checkOutTime,
-    startDate: event.startDate,
-    endDate: event.endDate
-  });
+  // console.log('Stay Event:', {
+  //   id: event.id,
+  //   type: event.type,
+  //   checkIn: event.checkIn,
+  //   checkInTime: event.checkInTime,
+  //   checkOut: event.checkOut,
+  //   checkOutTime: event.checkOutTime,
+  //   startDate: event.startDate,
+  //   endDate: event.endDate
+  // });
 
   const formatDateTime = (dateString: string, timeString?: string) => {
     if (!dateString) return 'N/A';

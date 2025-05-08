@@ -9,7 +9,8 @@ import {
   RentalCarEvent,
   BusEvent,
   EventType,
-  ActivityEvent
+  ActivityEvent,
+  User
 } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -117,15 +118,15 @@ Please provide detailed suggestions for activities and experiences in a clear, o
 Format the response in clear sections with proper spacing. Use simple dashes (-) for bullet points. Do not use asterisks or other special formatting characters.`;
 
   // Log the full prompt
-  console.log('AI Suggestion Prompt:', {
-    tripDates: {
-      startDate: formatDate(earlierDate),
-      endDate: formatDate(laterDate)
-    },
-    places: request.places,
-    activities: request.activities,
-    fullPrompt: prompt
-  });
+  // console.log('AI Suggestion Prompt:', {
+  //   tripDates: {
+  //     startDate: formatDate(earlierDate),
+  //     endDate: formatDate(laterDate)
+  //   },
+  //   places: request.places,
+  //   activities: request.activities,
+  //   fullPrompt: prompt
+  // });
 
   try {
     // Configure generation parameters for cleaner formatting
@@ -290,212 +291,179 @@ const formatEventForPrompt = (event: Event): string => {
   switch (event.type) {
     case 'stay': {
       const e = event as StayEvent;
-      return `Stay at ${e.accommodationName} in ${e.address} from ${formatDate(e.date)} to ${formatDate(e.checkOut || e.date)}`;
+      return `Stay at ${e.accommodationName}${e.address ? ` in ${e.address}` : ''} from ${formatDate(e.startDate)} to ${formatDate(e.endDate)}${e.checkInTime ? ` (Check-in: ${e.checkInTime})` : ''}${e.checkOutTime ? ` (Check-out: ${e.checkOutTime})` : ''}`;
     }
     case 'destination': {
       const e = event as DestinationEvent;
-      return `Visit to ${e.placeName}${e.address ? ` at ${e.address}` : ''} on ${formatDate(e.date)}${e.openingHours ? ` (Hours: ${e.openingHours})` : ''}`;
+      return `Visit to ${e.placeName}${e.address ? ` at ${e.address}` : ''} from ${formatDate(e.startDate)} to ${formatDate(e.endDate)}${e.openingHours ? ` (Hours: ${e.openingHours})` : ''}`;
     }
     case 'arrival': {
       const e = event as ArrivalDepartureEvent;
-      return `Arrival at ${e.airport}${formatTime(e.time)} on ${formatDate(e.date)}${e.flightNumber ? ` - Flight ${e.flightNumber}` : ''}${e.airline ? ` by ${e.airline}` : ''}`;
+      return `Arrival at ${e.airport}${formatTime(e.time)} on ${formatDate(e.startDate)}${e.flightNumber ? ` - Flight ${e.flightNumber}` : ''}${e.airline ? ` by ${e.airline}` : ''}`;
     }
     case 'departure': {
       const e = event as ArrivalDepartureEvent;
-      return `Departure from ${e.airport}${formatTime(e.time)} on ${formatDate(e.date)}${e.flightNumber ? ` - Flight ${e.flightNumber}` : ''}${e.airline ? ` by ${e.airline}` : ''}`;
+      return `Departure from ${e.airport}${formatTime(e.time)} on ${formatDate(e.startDate)}${e.flightNumber ? ` - Flight ${e.flightNumber}` : ''}${e.airline ? ` by ${e.airline}` : ''}`;
     }
     case 'flight': {
       const e = event as FlightEvent;
-      return `Flight from ${e.departureAirport} to ${e.arrivalAirport} on ${formatDate(e.date)}${e.airline ? ` by ${e.airline}` : ''}${e.flightNumber ? ` (${e.flightNumber})` : ''}${e.departureTime ? ` - Departure: ${e.departureTime}` : ''}${e.arrivalTime ? `, Arrival: ${e.arrivalTime}` : ''}`;
+      return `Flight from ${e.departureAirport} to ${e.arrivalAirport} from ${formatDate(e.startDate)} to ${formatDate(e.endDate)}${e.airline ? ` by ${e.airline}` : ''}${e.flightNumber ? ` (${e.flightNumber})` : ''}${e.departureTime ? ` - Departure: ${e.departureTime}` : ''}${e.arrivalTime ? `, Arrival: ${e.arrivalTime}` : ''}`;
     }
     case 'train': {
       const e = event as TrainEvent;
-      return `Train from ${e.departureStation} to ${e.arrivalStation} on ${formatDate(e.date)}${e.trainOperator ? ` by ${e.trainOperator}` : ''}${e.trainNumber ? ` (${e.trainNumber})` : ''}${e.departureTime ? ` - Departure: ${e.departureTime}` : ''}${e.arrivalTime ? `, Arrival: ${e.arrivalTime}` : ''}`;
+      return `Train from ${e.departureStation} to ${e.arrivalStation} from ${formatDate(e.startDate)} to ${formatDate(e.endDate)}${e.trainOperator ? ` by ${e.trainOperator}` : ''}${e.trainNumber ? ` (${e.trainNumber})` : ''}${e.departureTime ? ` - Departure: ${e.departureTime}` : ''}${e.arrivalTime ? `, Arrival: ${e.arrivalTime}` : ''}`;
     }
     case 'rental_car': {
       const e = event as RentalCarEvent;
-      return `Car rental from ${e.pickupLocation} to ${e.dropoffLocation} on ${formatDate(e.date)}${e.carCompany ? ` from ${e.carCompany}` : ''}${e.carType ? ` (${e.carType})` : ''}${e.pickupTime ? ` - Pickup: ${e.pickupTime}` : ''}${e.dropoffTime ? `, Dropoff: ${e.dropoffTime}` : ''}${e.dropoffDate ? ` until ${formatDate(e.dropoffDate)}` : ''}`;
+      return `Car rental from ${e.pickupLocation} to ${e.dropoffLocation} from ${formatDate(e.startDate)} to ${formatDate(e.endDate)}${e.carCompany ? ` from ${e.carCompany}` : ''}${e.carType ? ` (${e.carType})` : ''}${e.pickupTime ? ` - Pickup: ${e.pickupTime}` : ''}${e.dropoffTime ? `, Dropoff: ${e.dropoffTime}` : ''}`;
     }
     case 'bus': {
       const e = event as BusEvent;
-      return `Bus from ${e.departureStation} to ${e.arrivalStation} on ${formatDate(e.date)}${e.busOperator ? ` by ${e.busOperator}` : ''}${e.busNumber ? ` (${e.busNumber})` : ''}${e.departureTime ? ` - Departure: ${e.departureTime}` : ''}${e.arrivalTime ? `, Arrival: ${e.arrivalTime}` : ''}`;
+      return `Bus from ${e.departureStation} to ${e.arrivalStation} from ${formatDate(e.startDate)} to ${formatDate(e.endDate)}${e.busOperator ? ` by ${e.busOperator}` : ''}${e.busNumber ? ` (${e.busNumber})` : ''}${e.departureTime ? ` - Departure: ${e.departureTime}` : ''}${e.arrivalTime ? `, Arrival: ${e.arrivalTime}` : ''}`;
+    }
+    case 'activity': {
+      const e = event as ActivityEvent;
+      return `Activity: ${e.title}${e.address ? ` at ${e.address}` : ''} from ${formatDate(e.startDate)} to ${formatDate(e.endDate)}${e.activityType ? ` (Type: ${e.activityType})` : ''}`;
     }
     default:
-      return `${event.type} on ${formatDate(event.date)}`;
+      return `${event.type} from ${formatDate(event.startDate)} to ${formatDate(event.endDate)}`;
   }
 };
 
 export const generateDestinationSuggestions = async (
-  allEvents: Event[],
+  existingEvents: Event[],
   tripDates: { startDate: string; endDate: string },
-  user: { _id: string; name: string; email: string; photoUrl: string | null; }
-): Promise<(DestinationEvent | ActivityEvent)[]> => {
-  const aiSuggestions = allEvents.filter(e => {
-    const isAISuggestion = e.source === 'other' && e.notes?.includes('AI-Generated Suggestion');
-    if (isAISuggestion) {
-      console.log('Found existing AI suggestion:', {
-        id: e.id,
-        type: e.type,
-        name: (e as any).placeName || (e as any).title || 'N/A',
-        date: e.date,
-        status: e.status
-      });
-    }
-    return isAISuggestion;
-  });
-
-  const existingAISuggestions = aiSuggestions.map(e => {
-    const formatted = formatEventForPrompt(e);
-    return formatted;
-  });
-
-  const confirmedEvents = allEvents.filter(e => e.status === 'confirmed');
-  const exploringEvents = allEvents.filter(e => e.status === 'exploring' && !aiSuggestions.includes(e));
-  
-  const prompt = `Based on the following events in our trip from ${tripDates.startDate} to ${tripDates.endDate}, suggest 3 new and diverse experiences to enhance the trip.
-
-Confirmed Events (in chronological order):
-${confirmedEvents.map(e => formatEventForPrompt(e)).join('\n')}
-
-${exploringEvents.length > 0 ? `
-Currently Exploring These Options:
-${exploringEvents.map(e => formatEventForPrompt(e)).join('\n')}
-` : ''}
-
-${existingAISuggestions.length > 0 ? `
-=== IMPORTANT: Previously AI-Generated Suggestions ===
-${existingAISuggestions.join('\n')}
-
-IMPORTANT: You must NOT suggest any destinations or activities already in the trip. Ensure your new suggestions are possibly in different areas and offer different types of experiences.
-` : ''}
-
-You must provide exactly 3 NEW suggestions in this specific order:
-1. A cultural destination (museum, historical site, theater, etc.) - MUST be different from any existing suggestions
-2. An outdoor activity (hiking, kayaking, biking, etc.) - MUST be different from any existing suggestions
-3. A local experience (either a destination or an activity e.g. food tour, cooking class, artisan workshop, etc.) - MUST be different from any existing suggestions
-
-For each suggestion, consider:
-- Ensure timing doesn't conflict with existing events
-- Focus on unique experiences not mentioned in any previous suggestions
-
-For each suggestion, use exactly this format with no deviations:
-SUGGESTION_START
-TYPE: [Either 'destination' or 'activity']
-NAME: [Full name of the place or activity]
-ADDRESS: [Complete address]
-SUGGESTED_DATE: [YYYY-MM-DD format - Choose a logical date based on the schedule]
-DESCRIPTION: [Rich description including historical/cultural context]
-HOURS: [Opening hours or duration]
-ACTIVITY_TYPE: [Only for activities: type of activity e.g., "Hiking", "Food Tour", "Workshop"]
-TIPS: [Practical visitor information]
-NOTES: [Cost information and booking requirements]
-SUGGESTION_END
-
-Ensure each suggestion is wrapped with SUGGESTION_START and SUGGESTION_END markers.
-Make sure SUGGESTED_DATE is in YYYY-MM-DD format and makes sense with the existing schedule.
-For activities, make sure to include the ACTIVITY_TYPE field.`;
-
+  user: User
+): Promise<Event[]> => {
   try {
+    // Filter out existing AI suggestions
+    const nonAISuggestions = existingEvents.filter(event => !(event as any).isAISuggestion);
+    
+    // Format existing events for the prompt
+    const formattedEvents = nonAISuggestions.map(formatEventForPrompt).join('\n\n');
+
+    const prompt = `Generate exactly 3 new event suggestions for a trip, following these rules:
+1. Generate in this order: cultural destination, outdoor activity, local experience
+2. Each suggestion must include:
+   - A descriptive title/name
+   - A detailed description
+   - A relevant image URL (Must start with https://images.unsplash.com/ or https://source.unsplash.com/ Check they return HTTP 200.)
+   - Start date and time (in YYYY-MM-DD and HH:mm format)
+   - End date and time (in YYYY-MM-DD and HH:mm format)
+   - Address (if applicable)
+   - Activity type (for activities)
+   - Opening hours (for destinations)
+3. All dates must be between ${tripDates.startDate} and ${tripDates.endDate}
+4. All dates must be in YYYY-MM-DD format
+5. All times must be in HH:mm format
+6. Do not overlap with existing events
+7. Ensure suggestions are diverse and complement each other
+
+Existing events:
+${formattedEvents}
+
+Format each suggestion like this:
+SUGGESTION_START
+type: [activity or destination]
+title/placeName: [name]
+description: [detailed description]
+imageUrl: [a relevant image URL]
+startDate: YYYY-MM-DD
+startTime: HH:mm
+endDate: YYYY-MM-DD
+endTime: HH:mm
+address: [full address]
+activityType: [for activities only]
+openingHours: [for destinations only]
+SUGGESTION_END`;
+
+    // Log the prompt
+    //console.log('AI Suggestion Prompt:', prompt);
+
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.95,
+        temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
-      },
+        maxOutputTokens: 2000
+      }
     });
 
     const response = await result.response;
-    const text = response.text();
+    const content = response.text();
     
-    const suggestionMatches = text.match(/SUGGESTION_START([\s\S]*?)SUGGESTION_END/g);
+    // Log the raw AI response
+    //console.log('Raw AI Response:', content);
     
-    if (!suggestionMatches || suggestionMatches.length !== 3) {
-      console.error('Invalid number of suggestions:', suggestionMatches?.length);
-      throw new Error('Failed to generate exactly 3 suggestions. Retrying...');
-    }
+    if (!content) throw new Error('No response from AI');
 
-    const suggestions = suggestionMatches.map((suggestionText, index) => {
-      const cleanText = suggestionText
-        .replace('SUGGESTION_START', '')
-        .replace('SUGGESTION_END', '')
-        .trim();
+    // Parse suggestions
+    const suggestions: Event[] = [];
+    const suggestionBlocks = content.split('SUGGESTION_START').slice(1);
 
-      const fields: Record<string, string> = {};
-      const lines = cleanText.split('\n');
+    // Log the parsed suggestion blocks
+    //console.log('Parsed Suggestion Blocks:', suggestionBlocks);
+
+    for (const block of suggestionBlocks) {
+      const suggestionContent = block.split('SUGGESTION_END')[0].trim();
+      const lines = suggestionContent.split('\n').map((line: string) => line.trim());
       
-      let currentField = '';
-      for (const line of lines) {
-        const match = line.match(/^([A-Z_]+):\s*(.+)/);
-        if (match) {
-          currentField = match[1];
-          fields[currentField] = match[2].trim();
-        } else if (line.trim() && currentField) {
-          fields[currentField] += '\n' + line.trim();
+      const fields: Record<string, string> = {};
+      lines.forEach((line: string) => {
+        const [key, ...valueParts] = line.split(':');
+        if (key && valueParts.length > 0) {
+          fields[key.trim()] = valueParts.join(':').trim();
         }
-      }
+      });
 
-      const categories = ['Cultural Destination', 'Outdoor Activity', 'Local Experience'];
-      const categoryNote = `Category: ${categories[index]}\n\n`;
+      // Log the parsed fields for each suggestion
+      //console.log('Parsed Fields for Suggestion:', fields);
 
-      let suggestedDate = fields.SUGGESTED_DATE || '';
-      if (!suggestedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        console.warn('Invalid suggested date format:', suggestedDate);
-        suggestedDate = tripDates.startDate;
-      }
-
+      // Create base event
       const baseEvent = {
         id: uuidv4(),
-        date: suggestedDate,
-        notes: `✨ AI-Generated Suggestion\n${categoryNote}${fields.TIPS || ''}\n\n${fields.NOTES || ''}`,
-        status: 'exploring' as const,
-        source: 'other' as const,
+        type: fields.type as 'activity' | 'destination',
+        startDate: fields.startDate,
+        endDate: fields.endDate,
+        startTime: fields.startTime,
+        endTime: fields.endTime,
+        description: fields.description,
+        isAISuggestion: true,
+        createdBy: user,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        location: { lat: 0, lng: 0 },
-        createdBy: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          photoUrl: user.photoUrl
-        },
-        updatedBy: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          photoUrl: user.photoUrl
-        }
+        updatedBy: user,
+        status: 'exploring' as const,
+        likes: [],
+        dislikes: [],
+        //thumbnailUrl: fields.imageUrl
       };
 
-      // Create either a destination or activity event based on the TYPE field
-      if (fields.TYPE?.toLowerCase() === 'activity') {
-        const activityEvent: ActivityEvent = {
+      if (fields.type === 'activity') {
+        suggestions.push({
           ...baseEvent,
-          type: 'activity',
-          title: fields.NAME || 'Suggested Activity',
-          activityType: fields.ACTIVITY_TYPE || 'Activity',
-          address: fields.ADDRESS || '',
-          description: fields.DESCRIPTION || ''
-        };
-        return activityEvent;
+          title: fields['title/placeName'],
+          activityType: fields.activityType,
+          address: fields.address
+        } as unknown as ActivityEvent);
       } else {
-        const destinationEvent: DestinationEvent = {
+        suggestions.push({
           ...baseEvent,
-          type: 'destination',
-          placeName: fields.NAME || 'Suggested Destination',
-          address: fields.ADDRESS || '',
-          description: fields.DESCRIPTION || '',
-          openingHours: fields.HOURS || ''
-        };
-        return destinationEvent;
+          placeName: fields['title/placeName'],
+          address: fields.address,
+          openingHours: fields.openingHours
+        } as unknown as DestinationEvent);
       }
-    });
+    }
+
+    // Log the final suggestions
+    //console.log('Final Generated Suggestions:', suggestions);
 
     return suggestions;
   } catch (error) {
     console.error('Error generating suggestions:', error);
-    throw new Error('Failed to generate suggestions. Please try again.');
+    throw error;
   }
 };
 
@@ -597,7 +565,7 @@ Possible Event Types and Their Required Fields:
    Required:
    - pickupLocation (string)
    - dropoffLocation (string)
-   - date (YYYY-MM-DD)
+   - date (YYYY-MM-DD) (pickup date)
    - pickupTime (HH:mm)
    - dropoffDate (YYYY-MM-DD)
    - dropoffTime (HH:mm)
@@ -691,7 +659,7 @@ Return the response in this exact JSON format:
     }
 
     // Log the raw response
-    console.log('Raw AI response:', text);
+    //console.log('Raw AI response:', text);
 
     // Clean up the response text
     const cleanText = text

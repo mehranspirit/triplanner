@@ -3,7 +3,7 @@ import { useTripDetails } from './hooks';
 // import EventCard from './EventCard'; // Placeholder
 import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"; // Assuming Shadcn UI Card
-import { Event, EventType } from '@/types/eventTypes'; // Import EventType
+import { Event, EventType, ActivityEvent, DestinationEvent } from '@/types/eventTypes'; // Import EventType
 import { EVENT_TYPES } from '@/eventTypes/registry'; // Correct import name
 import {
   DropdownMenu,
@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { getDefaultThumbnail } from './thumbnailHelpers';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripMap from '@/components/TripMap';
-import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus } from 'lucide-react';
+import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2 } from 'lucide-react';
 import TripNotes from '@/components/TripNotes';
 
 // Import icons
@@ -44,7 +44,7 @@ import DepartureFormModal from './EventFormModals/DepartureFormModal';
 
 // Import TripActions component
 import TripActions from './TripActions';
-import { parseEventFromText } from '@/services/aiService';
+import { parseEventFromText, generateDestinationSuggestions } from '@/services/aiService';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TripLoading from '@/components/ui/trip-loading';
@@ -99,6 +99,11 @@ const NewTripDetails: React.FC = () => {
   const [parseError, setParseError] = useState<string | null>(null);
   const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [generatedSuggestions, setGeneratedSuggestions] = useState<Event[]>([]);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
   const handleAddEventClick = (type: EventType) => {
     setEditingEvent(null);
@@ -160,8 +165,14 @@ const NewTripDetails: React.FC = () => {
   const handleDeleteEvent = async (eventId: string) => {
     if (window.confirm('Are you sure you want to delete this event?')) {
       try {
-      await deleteEvent(eventId);
-        // Update the local state immediately
+        setDeletingEventId(eventId);
+        
+        // Wait for animation to complete (300ms) before actually deleting
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        await deleteEvent(eventId);
+        
+        // Update the local state after successful deletion
         if (trip) {
           const updatedEvents = trip.events.filter(event => event.id !== eventId);
           trip.events = updatedEvents;
@@ -169,6 +180,8 @@ const NewTripDetails: React.FC = () => {
       } catch (error) {
         console.error('Error deleting event:', error);
         alert('Failed to delete event. Please try again.');
+      } finally {
+        setDeletingEventId(null);
       }
     } 
   };
@@ -234,6 +247,54 @@ const NewTripDetails: React.FC = () => {
     }
   };
 
+  const handleGenerateSuggestions = async () => {
+    if (!trip || !user) return;
+
+    try {
+      setIsGeneratingSuggestions(true);
+      setSuccess(null);
+
+      // Calculate trip dates from events
+      const sortedEvents = [...trip.events].sort((a, b) => {
+        const dateA = new Date(a.startDate).getTime();
+        const dateB = new Date(b.startDate).getTime();
+        return dateA - dateB;
+      });
+
+      let startDate = trip.startDate || sortedEvents[0]?.startDate || new Date().toISOString();
+      let endDate = trip.endDate || sortedEvents[sortedEvents.length - 1]?.endDate || startDate;
+
+      const suggestions = await generateDestinationSuggestions(
+        trip.events,
+        { startDate, endDate },
+        {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          photoUrl: user.photoUrl || null
+        }
+      );
+
+      // Add suggestions to trip
+      const updatedTrip = {
+        ...trip,
+        events: [...trip.events, ...suggestions]
+      };
+
+      await handleTripUpdate(updatedTrip);
+      
+      // Store suggestions for the success dialog
+      setGeneratedSuggestions(suggestions);
+      setShowSuccessDialog(true);
+      
+    } catch (error) {
+      console.error('Error generating suggestions:', error);
+      setSuccess('Failed to generate suggestions. Please try again.');
+    } finally {
+      setIsGeneratingSuggestions(false);
+    }
+  };
+
   if (loading) return <TripLoading />;
   if (error) return <div className="p-4 text-red-600">Error: {error}</div>;
   if (!trip) return <div className="p-4">Trip not found.</div>;
@@ -266,6 +327,8 @@ const NewTripDetails: React.FC = () => {
   const CondensedEventCard: React.FC<{ event: Event; thumbnail: string }> = ({ event, thumbnail }) => {
     const registryItem = EVENT_TYPES[event.type];
     if (!registryItem) return null;
+
+    const isDeleting = deletingEventId === event.id;
 
     const getEventIcon = () => {
       switch (event.type) {
@@ -325,7 +388,8 @@ const NewTripDetails: React.FC = () => {
     return (
       <div className={cn(
         "flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-all duration-200",
-        event.status === 'exploring' && "bg-white border-2 border-gray-300 border-dashed"
+        event.status === 'exploring' && "bg-white border-2 border-gray-300 border-dashed",
+        isDeleting && "animate-fade-out opacity-0"
       )}>
         <div className="w-16 h-16 flex-shrink-0 relative">
           <img 
@@ -595,11 +659,12 @@ const NewTripDetails: React.FC = () => {
       
       {/* Add Event & View Options */}
       <div className="flex justify-between items-center">
-        <div>
+        <div className="flex gap-2">
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" />
                   Add Event
                 </Button>
               </DropdownMenuTrigger>
@@ -623,10 +688,7 @@ const NewTripDetails: React.FC = () => {
                       return (
                         <DropdownMenuItem
                           key={type}
-                          onClick={() => {
-                            setSelectedEventType(type);
-                            setIsEventModalOpen(true);
-                          }}
+                          onClick={() => handleAddEventClick(type)}
                         >
                           {type === 'flight' && <FaPlane className="mr-2 h-4 w-4 text-blue-500" />}
                           {type === 'arrival' && <FaPlane className="mr-2 h-4 w-4 text-green-500 transform rotate-45" />}
@@ -645,6 +707,17 @@ const NewTripDetails: React.FC = () => {
                 </DropdownMenuSub>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          
+          {canEdit && (
+            <Button
+              variant="outline"
+              onClick={handleGenerateSuggestions}
+              disabled={isGeneratingSuggestions}
+            >
+              <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
+              {isGeneratingSuggestions ? 'Generating...' : 'AI Suggestions'}
+            </Button>
           )}
         </div>
         <div className="flex items-center space-x-2">
@@ -753,8 +826,16 @@ const NewTripDetails: React.FC = () => {
 
                             if (!EventCardComponent) return <div key={event.id}>No card component for {event.type}</div>;
 
+                            const isDeleting = deletingEventId === event.id;
+
                             return (
-                              <div key={event.id} className="relative">
+                              <div 
+                                key={event.id} 
+                                className={cn(
+                                  "relative transition-all duration-300",
+                                  isDeleting && "animate-fade-out opacity-0"
+                                )}
+                              >
                                 {isCondensedView ? (
                                   <CondensedEventCard event={event} thumbnail={thumbnail} />
                                 ) : (
@@ -945,8 +1026,88 @@ const NewTripDetails: React.FC = () => {
               eventToEdit={editingEvent as any}
           />
       )}
+
+      {success && (
+        <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+          {success}
+        </div>
+      )}
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-yellow-500" />
+              AI Suggestions Added Successfully
+            </DialogTitle>
+            <DialogDescription>
+              The following suggestions have been added to your trip:
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4 space-y-4">
+            {generatedSuggestions.map((suggestion, index) => (
+              <div key={suggestion.id} className="p-4 bg-muted rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="mt-1">
+                    {suggestion.type === 'activity' ? (
+                      <FaMountain className="h-5 w-5 text-blue-500" />
+                    ) : (
+                      <FaMapMarkerAlt className="h-5 w-5 text-red-500" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium">
+                      {suggestion.type === 'activity' 
+                        ? (suggestion as ActivityEvent).title 
+                        : (suggestion as DestinationEvent).placeName}
+                    </h4>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {suggestion.type === 'activity' 
+                        ? (suggestion as ActivityEvent).description 
+                        : (suggestion as DestinationEvent).description}
+                    </p>
+                    <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        {format(new Date(suggestion.startDate), 'MMM d, yyyy')} at{' '}
+                        {format(new Date(suggestion.startDate), 'h:mm a')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button onClick={() => setShowSuccessDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+// Add the animation keyframes to your global CSS or tailwind config
+const styles = `
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+.animate-fade-out {
+  animation: fadeOut 0.3s ease-out forwards;
+}
+`;
 
 export default NewTripDetails;

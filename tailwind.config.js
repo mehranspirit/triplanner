@@ -67,7 +67,8 @@ export default {
   			'moveRight': 'moveRight 4s ease-in-out infinite',
   			'moveLeft': 'moveLeft 5s ease-in-out infinite',
   			'bounce': 'bounce 2s ease-in-out infinite',
-  			'pulse': 'pulse 2s ease-in-out infinite'
+  			'pulse': 'pulse 2s ease-in-out infinite',
+  			'fade-out': 'fade-out 0.3s ease-out forwards'
   		},
   		keyframes: {
   			orbit: {
@@ -105,6 +106,16 @@ export default {
   			pulse: {
   				'0%, 100%': { transform: 'scale(1)' },
   				'50%': { transform: 'scale(1.2)' }
+  			},
+  			'fade-out': {
+  				'from': {
+  					opacity: '1',
+  					transform: 'translateX(0)'
+  				},
+  				'to': {
+  					opacity: '0',
+  					transform: 'translateX(-20px)'
+  				}
   			}
   		},
   		backgroundImage: {
