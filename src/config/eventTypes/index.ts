@@ -112,7 +112,7 @@ export const eventTypeConfigs: {
     type: 'bus',
     label: 'Bus',
     icon: 'bus',
-    color: 'green',
+    color: 'purple',
     getDate: (event: BusEvent) => event.startDate,
     getTime: (event: BusEvent) => event.departureTime || '',
     getLocation: (event: BusEvent) => `${event.departureStation} → ${event.arrivalStation}`,

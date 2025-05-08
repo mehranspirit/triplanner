@@ -1,0 +1,17 @@
+:root {
+  /* Tailwind colors in RGB format for glow effects */
+  --blue-500-rgb: 59, 130, 246;    /* #3B82F6 */
+  --red-500-rgb: 239, 68, 68;      /* #EF4444 */
+  --yellow-500-rgb: 234, 179, 8;   /* #EAB308 */
+  --purple-500-rgb: 168, 85, 247;  /* #A855F7 */
+  --orange-500-rgb: 249, 115, 22;  /* #F97316 */
+  --green-500-rgb: 34, 197, 94;    /* #22C55E */
+  --indigo-500-rgb: 99, 102, 241;  /* #6366F1 */
+
+  /* Glow opacity variables */
+  --glow-opacity-low: 1;
+  --glow-opacity-high: 1;
+
+  /* Glow intensity multipliers */
+  --glow-intensity: 1.2;
+} 

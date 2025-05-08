@@ -68,7 +68,8 @@ export default {
   			'moveLeft': 'moveLeft 5s ease-in-out infinite',
   			'bounce': 'bounce 2s ease-in-out infinite',
   			'pulse': 'pulse 2s ease-in-out infinite',
-  			'fade-out': 'fade-out 0.3s ease-out forwards'
+  			'fade-out': 'fade-out 0.3s ease-out forwards',
+  			'pulse-glow': 'pulse-glow 2s ease-in-out infinite'
   		},
   		keyframes: {
   			orbit: {
@@ -115,6 +116,16 @@ export default {
   				'to': {
   					opacity: '0',
   					transform: 'translateX(-20px)'
+  				}
+  			},
+  			'pulse-glow': {
+  				'0%, 100%': { 
+  					opacity: '0',
+  					boxShadow: '0 0 12px 12px rgba(0, 0, 0, 0), 0 0 4px 8px rgba(0, 0, 0, 0)'
+  				},
+  				'50%': { 
+  					opacity: '1',
+  					boxShadow: '0 0 16px 16px var(--glow-color, rgba(234, 179, 8, 1)), 0 0 6px 10px var(--glow-color, rgba(234, 179, 8, 0.9))'
   				}
   			}
   		},

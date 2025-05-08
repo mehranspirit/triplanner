@@ -55,6 +55,7 @@ export interface StayEvent extends Event {
   checkOutTime: string; // HH:mm format
   reservationNumber?: string;
   contactInfo?: string;
+  description?: string;
 }
 
 export interface DestinationEvent extends Event {

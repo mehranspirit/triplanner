@@ -48,6 +48,7 @@ import { parseEventFromText, generateDestinationSuggestions } from '@/services/a
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TripLoading from '@/components/ui/trip-loading';
+import { isEventCurrentlyActive } from '@/utils/eventGlow';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -329,6 +330,8 @@ const NewTripDetails: React.FC = () => {
     if (!registryItem) return null;
 
     const isDeleting = deletingEventId === event.id;
+    const isExploring = event.status === 'exploring';
+    const isActive = isEventCurrentlyActive(event);
 
     const getEventIcon = () => {
       switch (event.type) {
@@ -385,12 +388,106 @@ const NewTripDetails: React.FC = () => {
       }
     };
 
+    const getTimeInfo = () => {
+      switch (event.type) {
+        case 'stay':
+          const stayEvent = event as any;
+          return (
+            <>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Check-in: {formatDate(stayEvent.checkIn, stayEvent.checkInTime)}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Check-out: {formatDate(stayEvent.checkOut, stayEvent.checkOutTime)}</span>
+              </div>
+            </>
+          );
+        case 'rental_car':
+          const carEvent = event as any;
+          return (
+            <>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Pickup: {formatDate(carEvent.date, carEvent.pickupTime)}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Dropoff: {formatDate(carEvent.dropoffDate, carEvent.dropoffTime)}</span>
+              </div>
+            </>
+          );
+        case 'destination':
+          const destEvent = event as any;
+          return (
+            <>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Start: {formatDate(destEvent.startDate, destEvent.startTime)}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>End: {formatDate(destEvent.endDate, destEvent.endTime)}</span>
+              </div>
+            </>
+          );
+        case 'activity':
+          const activityEvent = event as any;
+          return (
+            <>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Start: {formatDate(activityEvent.startDate, activityEvent.startTime)}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>End: {formatDate(activityEvent.endDate, activityEvent.endTime)}</span>
+              </div>
+            </>
+          );
+        case 'flight':
+        case 'train':
+        case 'bus':
+          const transportEvent = event as any;
+          const startTime = event.startDate?.split('T')[1]?.substring(0, 5) || transportEvent.departureTime;
+          const endTime = event.endDate?.split('T')[1]?.substring(0, 5) || transportEvent.arrivalTime;
+          return (
+            <>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Departure: {formatDate(event.startDate?.split('T')[0], startTime)}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>Arrival: {formatDate(event.endDate?.split('T')[0], endTime)}</span>
+              </div>
+            </>
+          );
+        case 'arrival':
+        case 'departure':
+          const airportEvent = event as any;
+          return (
+            <div className="flex items-center space-x-1">
+              <Clock className="w-3 h-3" />
+              <span>Time: {formatDate(airportEvent.date, airportEvent.time)}</span>
+            </div>
+          );
+        default:
+          return null;
+      }
+    };
+
     return (
       <div className={cn(
-        "flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-all duration-200",
+        "flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-all duration-200 relative",
         event.status === 'exploring' && "bg-white border-2 border-gray-300 border-dashed",
-        isDeleting && "animate-fade-out opacity-0"
+        isDeleting && "animate-fade-out opacity-0",
+        isActive && !isExploring && "bg-gradient-to-r from-white to-gray-50"
       )}>
+        {isActive && !isExploring && (
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-transparent via-blue-500 to-transparent animate-pulse" />
+        )}
         <div className="w-16 h-16 flex-shrink-0 relative">
           <img 
             src={thumbnail} 
@@ -410,11 +507,14 @@ const NewTripDetails: React.FC = () => {
             "absolute -bottom-2 -right-2 rounded-full p-2 transition-all duration-200",
             event.status === 'exploring'
               ? "bg-white border border-gray-200 shadow-sm"
-              : "bg-white shadow-md"
+              : isActive 
+                ? "bg-white shadow-lg ring-2 ring-blue-500 ring-opacity-50"
+                : "bg-white shadow-md"
           )}>
             <div className={cn(
               "transition-all duration-200",
-              event.status === 'exploring' && "filter saturate-150"
+              event.status === 'exploring' && "filter saturate-150",
+              isActive && !isExploring && "scale-110"
             )}>
               {getEventIcon()}
             </div>
@@ -455,25 +555,37 @@ const NewTripDetails: React.FC = () => {
               switch (event.type) {
                 case 'stay':
                   return (
-                    <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                    <span className={cn(
+                      "text-xs px-2 py-1 rounded-full",
+                      isActive && !isExploring ? "bg-yellow-200 text-yellow-900" : "bg-yellow-100 text-yellow-800"
+                    )}>
                       {formatDate((event as any).checkIn)} - {formatDate((event as any).checkOut)}
                     </span>
                   );
                 case 'activity':
                   return (
-                    <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800">
+                    <span className={cn(
+                      "text-xs px-2 py-1 rounded-full",
+                      isActive && !isExploring ? "bg-indigo-200 text-indigo-900" : "bg-indigo-100 text-indigo-800"
+                    )}>
                       {formatDate((event as any).startDate)} - {formatDate((event as any).endDate)}
                     </span>
                   );
                 case 'rental_car':
                   return (
-                    <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-800">
+                    <span className={cn(
+                      "text-xs px-2 py-1 rounded-full",
+                      isActive && !isExploring ? "bg-red-200 text-red-900" : "bg-red-100 text-red-800"
+                    )}>
                       {formatDate((event as any).date)} - {formatDate((event as any).dropoffDate)}
                     </span>
                   );
                 case 'destination':
                   return (
-                    <span className="text-xs px-2 py-1 rounded-full bg-pink-100 text-pink-800">
+                    <span className={cn(
+                      "text-xs px-2 py-1 rounded-full",
+                      isActive && !isExploring ? "bg-pink-200 text-pink-900" : "bg-pink-100 text-pink-800"
+                    )}>
                       {formatDate((event as any).startDate)} - {formatDate((event as any).endDate)}
                     </span>
                   );
@@ -484,11 +596,12 @@ const NewTripDetails: React.FC = () => {
                   const endDate = event.endDate?.split('T')[0];
                   if (startDate && endDate && startDate !== endDate) {
                     return (
-                      <span className={cn("text-xs px-2 py-1 rounded-full", {
-                        'bg-blue-100 text-blue-800': event.type === 'flight',
-                        'bg-green-100 text-green-800': event.type === 'train',
-                        'bg-purple-100 text-purple-800': event.type === 'bus',
-                      })}>
+                      <span className={cn(
+                        "text-xs px-2 py-1 rounded-full",
+                        event.type === 'flight' && (isActive && !isExploring ? "bg-blue-200 text-blue-900" : "bg-blue-100 text-blue-800"),
+                        event.type === 'train' && (isActive && !isExploring ? "bg-green-200 text-green-900" : "bg-green-100 text-green-800"),
+                        event.type === 'bus' && (isActive && !isExploring ? "bg-purple-200 text-purple-900" : "bg-purple-100 text-purple-800")
+                      )}>
                         {formatDate(startDate)} - {formatDate(endDate)}
                       </span>
                     );
@@ -500,97 +613,32 @@ const NewTripDetails: React.FC = () => {
             })()}
           </div>
           <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+            {getTimeInfo()}
             {(() => {
-              if (event.type === 'stay') {
-                const stayEvent = event as any;
-                return (
-                  <>
+              switch (event.type) {
+                case 'stay':
+                  return (event as any).reservationNumber && (
                     <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>Check-in: {formatDate(stayEvent.checkIn, stayEvent.checkInTime)}</span>
+                      <Info className="w-3 h-3" />
+                      <span>Reservation: {(event as any).reservationNumber}</span>
                     </div>
+                  );
+                case 'rental_car':
+                  return (event as any).bookingReference && (
                     <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>Check-out: {formatDate(stayEvent.checkOut, stayEvent.checkOutTime)}</span>
+                      <Info className="w-3 h-3" />
+                      <span>Booking: {(event as any).bookingReference}</span>
                     </div>
-                    {stayEvent.reservationNumber && (
-                      <div className="flex items-center space-x-1">
-                        <Info className="w-3 h-3" />
-                        <span>Reservation: {stayEvent.reservationNumber}</span>
-                      </div>
-                    )}
-                  </>
-                );
-              } else if (event.type === 'rental_car') {
-                const carEvent = event as any;
-                return (
-                  <>
+                  );
+                case 'destination':
+                  return (event as any).address && (
                     <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>Pickup: {formatDate(carEvent.date, carEvent.pickupTime)}</span>
+                      <MapPin className="w-3 h-3" />
+                      <span>{(event as any).address}</span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>Dropoff: {formatDate(carEvent.dropoffDate, carEvent.dropoffTime)}</span>
-                    </div>
-                    {carEvent.bookingReference && (
-                      <div className="flex items-center space-x-1">
-                        <Info className="w-3 h-3" />
-                        <span>Booking: {carEvent.bookingReference}</span>
-                      </div>
-                    )}
-                  </>
-                );
-              } else if (event.type === 'destination') {
-                const destEvent = event as any;
-                return (
-                  <>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>Start: {formatDate(destEvent.startDate, destEvent.startTime)}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>End: {formatDate(destEvent.endDate, destEvent.endTime)}</span>
-                    </div>
-                    {destEvent.address && (
-                      <div className="flex items-center space-x-1">
-                        <MapPin className="w-3 h-3" />
-                        <span>{destEvent.address}</span>
-                      </div>
-                    )}
-                  </>
-                );
-              }
-              
-              try {
-                let dateToFormat = '';
-                let timeToShow = '';
-                switch (event.type) {
-                  case 'bus':
-                  case 'train':
-                    dateToFormat = event.startDate?.split('T')[0] || '';
-                    timeToShow = event.startDate?.split('T')[1]?.substring(0, 5) || '';
-                    break;
-                  case 'arrival':
-                  case 'departure':
-                    dateToFormat = (event as any).date || '';
-                    timeToShow = (event as any).time || '';
-                    break;
-                  default: 
-                    dateToFormat = (event.startDate?.split('T')[0]) || '';
-                    timeToShow = event.startDate?.split('T')[1]?.substring(0, 5) || '';
-                }
-                
-                if (!dateToFormat) return null;
-                
-                const date = parse(dateToFormat, 'yyyy-MM-dd', new Date());
-                const formattedDate = !isNaN(date.getTime()) ? format(date, 'MMM d, yyyy') : 'Invalid date';
-                
-                return timeToShow ? `${formattedDate} at ${timeToShow}` : formattedDate;
-              } catch (error) {
-                console.error('Error formatting date for event:', event.type, error);
-                return null;
+                  );
+                default:
+                  return null;
               }
             })()}
           </div>

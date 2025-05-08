@@ -1,18 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RentalCarEvent } from '@/types/eventTypes';
 import { format, parse, formatISO } from 'date-fns';
-import { Clock, MapPin, Edit, Trash2, Ticket, SquareAsterisk, Info, MoreVertical, CheckCircle2, Search } from 'lucide-react';
+import { 
+  Clock, 
+  MapPin, 
+  Edit, 
+  Trash2, 
+  Ticket, 
+  SquareAsterisk, 
+  Info, 
+  MoreVertical, 
+  CheckCircle2, 
+  Search,
+  Map,
+  Share,
+  Calendar,
+  ArrowUpRight,
+  ArrowDownLeft
+} from 'lucide-react';
 import { FaCar } from 'react-icons/fa';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
+import { CollapsibleContent, ShowMoreButton } from './utils';
+import GlowingIcon from '@/components/ui/GlowingIcon';
+import { isEventCurrentlyActive } from '@/utils/eventGlow';
 
 interface RentalCarEventCardProps {
   event: RentalCarEvent;
@@ -23,6 +40,10 @@ interface RentalCarEventCardProps {
 }
 
 const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isExploring = event.status === 'exploring';
+  const isActive = isEventCurrentlyActive(event);
+
   // Format pickup and dropoff times
   const formatDateTime = (dateString: string | undefined, timeString: string | undefined) => {
     if (!dateString) return 'N/A';
@@ -39,18 +60,161 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
     }
   };
 
+  // Quick action handlers
+  const handleMapClick = (location: string) => {
+    const searchQuery = encodeURIComponent(location);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${searchQuery}`, '_blank');
+  };
+
+  const handleCalendarClick = () => {
+    const startDate = parse(event.date, 'yyyy-MM-dd', new Date());
+    const endDate = parse(event.dropoffDate || event.date, 'yyyy-MM-dd', new Date());
+    
+    if (event.pickupTime) {
+      const [hours, minutes] = event.pickupTime.split(':').map(Number);
+      startDate.setHours(hours, minutes);
+    }
+    if (event.dropoffTime) {
+      const [hours, minutes] = event.dropoffTime.split(':').map(Number);
+      endDate.setHours(hours, minutes);
+    }
+    
+    const calendarUrl = new URL('https://calendar.google.com/calendar/render');
+    calendarUrl.searchParams.append('action', 'TEMPLATE');
+    calendarUrl.searchParams.append('text', `Car Rental: ${event.carCompany || ''} ${event.carType ? `(${event.carType})` : ''}`);
+    calendarUrl.searchParams.append('details', `Pickup: ${event.pickupLocation}\nDropoff: ${event.dropoffLocation}\nCar: ${event.carType || 'N/A'}\nCompany: ${event.carCompany || 'N/A'}\nLicense: ${event.licensePlate || 'N/A'}`);
+    calendarUrl.searchParams.append('dates', `${format(startDate, 'yyyyMMdd\'T\'HHmmss')}/${format(endDate, 'yyyyMMdd\'T\'HHmmss')}`);
+    
+    window.open(calendarUrl.toString(), '_blank');
+  };
+
+  const handleShareClick = () => {
+    const shareText = `Car Rental: ${event.carCompany || ''} ${event.carType ? `(${event.carType})` : ''}\nPickup: ${event.pickupLocation} at ${formatDateTime(event.date, event.pickupTime)}\nDropoff: ${event.dropoffLocation} at ${formatDateTime(event.dropoffDate, event.dropoffTime)}`;
+    navigator.clipboard.writeText(shareText);
+  };
+
   const pickupDisplayDateTime = formatDateTime(event.date, event.pickupTime);
   const dropoffDisplayDateTime = formatDateTime(event.dropoffDate, event.dropoffTime);
 
-  const isExploring = event.status === 'exploring';
+  const hasLongContent = (event.notes?.length || 0) > 100;
 
   return (
     <Card className={cn(
-      "overflow-hidden h-full transition-all duration-200",
+      "overflow-hidden h-full transition-all duration-200 group relative",
       isExploring 
         ? "bg-white border-2 border-gray-300 border-dashed" 
         : "bg-white"
     )}>
+      {/* Action Menu Button */}
+      <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 rounded-full bg-white/80 hover:bg-white shadow-sm border border-gray-100/50 backdrop-blur-sm transition-all duration-200 data-[state=open]:bg-gray-100/80"
+            >
+              <MoreVertical className="h-4 w-4 text-gray-500 transition-transform duration-200 ease-in-out data-[state=open]:rotate-90" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-10 p-1 rounded-xl shadow-lg border border-gray-100/50 bg-white/95 backdrop-blur-sm animate-in fade-in-0 zoom-in-95 data-[side=right]:slide-in-from-left-2 data-[side=left]:slide-in-from-right-2 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2" 
+            align="center"
+            side="bottom"
+            alignOffset={-28}
+            sideOffset={5}
+          >
+            <div 
+              className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
+            >
+              {event.pickupLocation && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => handleMapClick(event.pickupLocation!)}
+                  title="View Pickup Location"
+                >
+                  <div className="relative">
+                    <Map className="h-4 w-4 text-gray-500" />
+                    <ArrowUpRight className="h-2.5 w-2.5 absolute -top-1 -right-1 text-gray-500" />
+                  </div>
+                </Button>
+              )}
+              {event.dropoffLocation && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => handleMapClick(event.dropoffLocation!)}
+                  title="View Dropoff Location"
+                >
+                  <div className="relative">
+                    <Map className="h-4 w-4 text-gray-500" />
+                    <ArrowDownLeft className="h-2.5 w-2.5 absolute -top-1 -right-1 text-gray-500" />
+                  </div>
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                onClick={handleCalendarClick}
+                title="Add to Calendar"
+              >
+                <Calendar className="h-4 w-4 text-gray-500" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                onClick={handleShareClick}
+                title="Share"
+              >
+                <Share className="h-4 w-4 text-gray-500" />
+              </Button>
+              {onStatusChange && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => onStatusChange(isExploring ? 'confirmed' : 'exploring')}
+                  title={isExploring ? "Mark as Confirmed" : "Change to Exploring"}
+                >
+                  {isExploring ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Search className="h-4 w-4 text-gray-500" />
+                  )}
+                </Button>
+              )}
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={onEdit}
+                  title="Edit"
+                >
+                  <Edit className="h-4 w-4 text-gray-500" />
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors duration-200"
+                  onClick={onDelete}
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
       <div className="flex h-full">
         <div className="w-1/4 relative">
           <div className="absolute inset-0">
@@ -66,7 +230,7 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
               "absolute inset-0 transition-all duration-200",
               isExploring 
                 ? "bg-gradient-to-br from-white/80 to-transparent"
-                : "bg-gradient-to-br from-orange-500/10 to-orange-900/30"
+                : "bg-gradient-to-br from-yellow-500/10 to-yellow-900/30"
             )}></div>
             {isExploring && (
               <>
@@ -81,25 +245,18 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
             )}
           </div>
           
-          <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-            <div className={cn(
-              "rounded-full p-4 transition-all duration-200",
-              isExploring 
-                ? "bg-transparent border-2 border-gray-400 border-dashed" 
-                : "bg-white/90 shadow-lg"
-            )}>
-              <FaCar className={cn(
-                "h-8 w-8 transition-all duration-200",
-                isExploring ? "text-gray-400" : "text-orange-500"
-              )} />
-            </div>
-          </div>
+          <GlowingIcon
+            icon={<FaCar />}
+            isActive={isActive}
+            isExploring={isExploring}
+            eventType="rental_car"
+          />
           
           <div className={cn(
             "absolute top-2 left-2 px-3 py-1 rounded-sm flex items-center gap-1.5 transition-all duration-200",
             isExploring 
               ? "bg-white border-2 border-gray-300 border-dashed text-gray-600"
-              : "bg-orange-600 text-white"
+              : "bg-yellow-600 text-white"
           )}>
             {isExploring ? (
               <>
@@ -127,56 +284,6 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
               )}>
           {event.carCompany || 'Rental Car'} {event.carType ? `(${event.carType})` : ''}
         </CardTitle>
-              {(onEdit || onDelete || onStatusChange) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className={cn(
-                      "h-8 w-8",
-                      isExploring && "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                    )}>
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {onStatusChange && (
-                      <>
-                        <DropdownMenuItem 
-                          onClick={() => onStatusChange(isExploring ? 'confirmed' : 'exploring')}
-                          className="flex items-center"
-                        >
-                          {isExploring ? (
-                            <>
-                              <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" />
-                              <span>Mark as Confirmed</span>
-                            </>
-                          ) : (
-                            <>
-                              <Search className="h-4 w-4 mr-2 text-gray-600" />
-                              <span>Change to Exploring</span>
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    {onEdit && (
-                      <DropdownMenuItem onClick={onEdit}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                    )}
-                    {onDelete && (
-                      <DropdownMenuItem
-                        onClick={onDelete}
-                        className="text-red-600 focus:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </div>
         
         <div className="flex items-center text-sm space-x-2">
@@ -263,19 +370,23 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
             </div>
             
             {event.notes && (
-              <div className="flex items-start text-xs space-x-1 pt-2 border-t mt-2">
-                <Info className={cn(
-                  "h-3 w-3 mt-1 flex-shrink-0 transition-all duration-200",
-                  isExploring ? "text-gray-400" : "text-gray-500"
-                )} />
-                <p className={cn(
-                  "transition-all duration-200",
-                  isExploring ? "text-gray-600" : "text-gray-900"
-                )}>
-                  <span className="font-semibold">Notes:</span> {event.notes}
-                </p>
-            </div>
-        )}
+              <div className="mt-2 space-y-2">
+                <CollapsibleContent
+                  content={event.notes}
+                  label="Notes"
+                  isExpanded={isExpanded}
+                  isExploring={isExploring}
+                />
+
+                {hasLongContent && (
+                  <ShowMoreButton
+                    isExpanded={isExpanded}
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    isExploring={isExploring}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

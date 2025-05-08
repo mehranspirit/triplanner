@@ -72,25 +72,32 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
     console.log("Raw Train form data (strings):", data);
     const processedData: any = { ...data };
 
-    // Construct naive ISO-like strings
+    // Construct naive ISO-like strings with proper time handling
     if (data.departureDate && data.departureTime) {
-      processedData.startDate = `${data.departureDate}T${data.departureTime}:00`;
+      // Ensure time is in HH:mm:ss format
+      const time = data.departureTime.includes(':') ? data.departureTime : `${data.departureTime}:00`;
+      processedData.startDate = `${data.departureDate}T${time}`;
+      processedData.departureTime = time;
       console.log("TrainFormModal: Constructed naive ISO for startDate:", processedData.startDate);
     } else {
       processedData.startDate = undefined;
+      processedData.departureTime = undefined;
     }
+    
     if (data.arrivalDate && data.arrivalTime) {
-      processedData.endDate = `${data.arrivalDate}T${data.arrivalTime}:00`;
+      // Ensure time is in HH:mm:ss format
+      const time = data.arrivalTime.includes(':') ? data.arrivalTime : `${data.arrivalTime}:00`;
+      processedData.endDate = `${data.arrivalDate}T${time}`;
+      processedData.arrivalTime = time;
       console.log("TrainFormModal: Constructed naive ISO for endDate:", processedData.endDate);
     } else {
       processedData.endDate = undefined;
+      processedData.arrivalTime = undefined;
     }
 
     // Remove form-specific fields
     delete processedData.departureDate;
-    delete processedData.departureTime;
     delete processedData.arrivalDate;
-    delete processedData.arrivalTime;
 
     console.log("Processed Train data to save (naive ISO):", processedData);
     onSave(processedData as Event);

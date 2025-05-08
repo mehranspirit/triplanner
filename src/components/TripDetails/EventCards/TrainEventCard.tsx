@@ -1,18 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TrainEvent } from '@/types/eventTypes';
 import { format } from 'date-fns'; // For date formatting
-import { Clock, Edit, Trash2, MapPin, Info, MoreVertical, CheckCircle2, Search } from 'lucide-react'; // Icons
+import { 
+  Clock, 
+  Edit, 
+  Trash2, 
+  MapPin, 
+  Info, 
+  MoreVertical, 
+  CheckCircle2, 
+  Search,
+  Map,
+  Share,
+  Calendar,
+  ExternalLink,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Ticket
+} from 'lucide-react'; // Icons
 import { FaTrain } from 'react-icons/fa'; // Import FaTrain from react-icons
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
+import { CollapsibleContent, ShowMoreButton } from './utils';
+import GlowingIcon from '@/components/ui/GlowingIcon';
+import { isEventCurrentlyActive } from '@/utils/eventGlow';
 
 interface TrainEventCardProps {
   event: TrainEvent;
@@ -23,27 +40,189 @@ interface TrainEventCardProps {
 }
 
 const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isExploring = event.status === 'exploring';
+  const isActive = isEventCurrentlyActive(event);
 
-  // Helper to format date/time - adjust format as needed
-  const formatDateTime = (dateString: string | undefined) => {
-    if (!dateString) return 'N/A';
+  // Debug log the event data
+  console.log('Train Event Data:', {
+    startDate: event.startDate,
+    endDate: event.endDate,
+    departureTime: event.departureTime,
+    arrivalTime: event.arrivalTime,
+    raw: event
+  });
+
+  // Helper to format date/time from ISO string
+  const formatDateTime = (isoDate: string) => {
+    if (!isoDate) return 'N/A';
     try {
-      return format(new Date(dateString), 'MMM d, yyyy h:mm a');
+      const date = new Date(isoDate);
+      return format(date, 'MMM d, yyyy h:mm a');
     } catch (error) {
       console.error("Error formatting date:", error);
       return 'Invalid Date';
     }
   };
 
-  const isExploring = event.status === 'exploring';
+  // Extract time from ISO date string
+  const getTimeFromISO = (isoDate: string) => {
+    if (!isoDate) return null;
+    try {
+      const date = new Date(isoDate);
+      return format(date, 'h:mm a');
+    } catch (error) {
+      return null;
+    }
+  };
+
+  // Quick action handlers
+  const handleMapClick = (location: string) => {
+    const searchQuery = encodeURIComponent(location + ' train station');
+    window.open(`https://www.google.com/maps/search/?api=1&query=${searchQuery}`, '_blank');
+  };
+
+  const handleCalendarClick = () => {
+    const startDate = new Date(event.startDate);
+    const endDate = new Date(event.endDate);
+    
+    const calendarUrl = new URL('https://calendar.google.com/calendar/render');
+    calendarUrl.searchParams.append('action', 'TEMPLATE');
+    calendarUrl.searchParams.append('text', `Train: ${event.trainOperator || 'Train'} ${event.trainNumber ? `#${event.trainNumber}` : ''}`);
+    calendarUrl.searchParams.append('details', `From: ${event.departureStation}\nTo: ${event.arrivalStation}\nTrain: ${event.trainNumber || 'N/A'}\nOperator: ${event.trainOperator || 'N/A'}\nCarriage: ${event.carriageNumber || 'N/A'}\nSeat: ${event.seatNumber || 'N/A'}\nBooking Ref: ${event.bookingReference || 'N/A'}`);
+    calendarUrl.searchParams.append('dates', `${format(startDate, 'yyyyMMdd\'T\'HHmmss')}/${format(endDate, 'yyyyMMdd\'T\'HHmmss')}`);
+    
+    window.open(calendarUrl.toString(), '_blank');
+  };
+
+  const handleShareClick = () => {
+    const shareText = `Train: ${event.trainOperator || 'Train'} ${event.trainNumber ? `#${event.trainNumber}` : ''}\nFrom: ${event.departureStation}\nTo: ${event.arrivalStation}\nDeparture: ${formatDateTime(event.startDate)}\nArrival: ${formatDateTime(event.endDate)}`;
+    navigator.clipboard.writeText(shareText);
+  };
+
+  const hasLongContent = (event.notes?.length || 0) > 100;
+
+  // Get times from ISO dates
+  const departureTime = getTimeFromISO(event.startDate);
+  const arrivalTime = getTimeFromISO(event.endDate);
 
   return (
     <Card className={cn(
-      "overflow-hidden h-full transition-all duration-200",
+      "overflow-hidden h-full transition-all duration-200 group relative",
       isExploring 
         ? "bg-white border-2 border-gray-300 border-dashed" 
         : "bg-white"
     )}>
+      {/* Action Menu Button */}
+      <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 rounded-full bg-white/80 hover:bg-white shadow-sm border border-gray-100/50 backdrop-blur-sm transition-all duration-200 data-[state=open]:bg-gray-100/80"
+            >
+              <MoreVertical className="h-4 w-4 text-gray-500 transition-transform duration-200 ease-in-out data-[state=open]:rotate-90" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-10 p-1 rounded-xl shadow-lg border border-gray-100/50 bg-white/95 backdrop-blur-sm animate-in fade-in-0 zoom-in-95 data-[side=right]:slide-in-from-left-2 data-[side=left]:slide-in-from-right-2 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2" 
+            align="center"
+            side="bottom"
+            alignOffset={-28}
+            sideOffset={5}
+          >
+            <div 
+              className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
+            >
+              {event.departureStation && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => handleMapClick(event.departureStation!)}
+                  title="View Departure Station"
+                >
+                  <div className="relative">
+                    <Map className="h-4 w-4 text-gray-500" />
+                    <ArrowUpRight className="h-2.5 w-2.5 absolute -top-1 -right-1 text-gray-500" />
+                  </div>
+                </Button>
+              )}
+              {event.arrivalStation && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => handleMapClick(event.arrivalStation!)}
+                  title="View Arrival Station"
+                >
+                  <div className="relative">
+                    <Map className="h-4 w-4 text-gray-500" />
+                    <ArrowDownLeft className="h-2.5 w-2.5 absolute -top-1 -right-1 text-gray-500" />
+                  </div>
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                onClick={handleCalendarClick}
+                title="Add to Calendar"
+              >
+                <Calendar className="h-4 w-4 text-gray-500" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                onClick={handleShareClick}
+                title="Share"
+              >
+                <Share className="h-4 w-4 text-gray-500" />
+              </Button>
+              {onStatusChange && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={() => onStatusChange(isExploring ? 'confirmed' : 'exploring')}
+                  title={isExploring ? "Mark as Confirmed" : "Change to Exploring"}
+                >
+                  {isExploring ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Search className="h-4 w-4 text-gray-500" />
+                  )}
+                </Button>
+              )}
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  onClick={onEdit}
+                  title="Edit"
+                >
+                  <Edit className="h-4 w-4 text-gray-500" />
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors duration-200"
+                  onClick={onDelete}
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
       <div className="flex h-full">
         {/* Narrower thumbnail (25% instead of 33%) */}
         <div className="w-1/4 relative">
@@ -60,7 +239,7 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
               "absolute inset-0 transition-all duration-200",
               isExploring 
                 ? "bg-gradient-to-br from-white/80 to-transparent"
-                : "bg-gradient-to-br from-teal-500/10 to-teal-900/30"
+                : "bg-gradient-to-br from-orange-500/10 to-orange-900/30"
             )}></div>
             {isExploring && (
               <>
@@ -75,28 +254,18 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
             )}
           </div>
           
-          {/* Centered icon badge */}
-          <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-            <div className={cn(
-              "rounded-full p-4 transition-all duration-200",
-              isExploring 
-                ? "bg-transparent border-2 border-gray-400 border-dashed" 
-                : "bg-white/90 shadow-lg"
-            )}>
-              <FaTrain className={cn(
-                "h-8 w-8 transition-all duration-200",
-                "text-teal-500",
-                isExploring && "filter brightness-90"
-              )} />
-            </div>
-          </div>
+          <GlowingIcon
+            icon={<FaTrain />}
+            isActive={isActive}
+            isExploring={isExploring}
+            eventType="train"
+          />
           
-          {/* Prominent event type badge at top left */}
           <div className={cn(
             "absolute top-2 left-2 px-3 py-1 rounded-sm flex items-center gap-1.5 transition-all duration-200",
             isExploring 
               ? "bg-white border-2 border-gray-300 border-dashed text-gray-600"
-              : "bg-teal-600 text-white"
+              : "bg-orange-600 text-white"
           )}>
             {isExploring ? (
               <>
@@ -125,56 +294,6 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
               )}>
                 {event.trainOperator || 'Train'} {event.trainNumber ? `#${event.trainNumber}` : ''}
               </CardTitle>
-              {(onEdit || onDelete || onStatusChange) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className={cn(
-                      "h-8 w-8",
-                      isExploring && "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                    )}>
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {onStatusChange && (
-                      <>
-                        <DropdownMenuItem 
-                          onClick={() => onStatusChange(isExploring ? 'confirmed' : 'exploring')}
-                          className="flex items-center"
-                        >
-                          {isExploring ? (
-                            <>
-                              <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" />
-                              <span>Mark as Confirmed</span>
-                            </>
-                          ) : (
-                            <>
-                              <Search className="h-4 w-4 mr-2 text-gray-600" />
-                              <span>Change to Exploring</span>
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    {onEdit && (
-                      <DropdownMenuItem onClick={onEdit}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                    )}
-                    {onDelete && (
-                      <DropdownMenuItem
-                        onClick={onDelete}
-                        className="text-red-600 focus:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </div>
 
             <div className="flex items-center text-sm space-x-2">
@@ -199,7 +318,8 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
                 "transition-all duration-200",
                 isExploring ? "text-gray-600" : "text-gray-900"
               )}>
-                <span className="font-semibold">Departure:</span> {formatDateTime(event.departureTime)}
+                <span className="font-semibold">Departure:</span>{' '}
+                {formatDateTime(event.startDate)}
               </span>
             </div>
 
@@ -225,7 +345,8 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
                 "transition-all duration-200",
                 isExploring ? "text-gray-600" : "text-gray-900"
               )}>
-                <span className="font-semibold">Arrival:</span> {formatDateTime(event.arrivalTime)}
+                <span className="font-semibold">Arrival:</span>{' '}
+                {formatDateTime(event.endDate)}
               </span>
             </div>
             
@@ -302,18 +423,23 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
               )}
             </div>
             
+            {/* Notes Section */}
             {event.notes && (
-              <div className="flex items-start text-xs space-x-1 pt-2 border-t mt-2">
-                <Info className={cn(
-                  "h-3 w-3 mt-1 flex-shrink-0 transition-all duration-200",
-                  isExploring ? "text-gray-400" : "text-gray-500"
-                )} />
-                <p className={cn(
-                  "transition-all duration-200",
-                  isExploring ? "text-gray-600" : "text-gray-900"
-                )}>
-                  <span className="font-semibold">Notes:</span> {event.notes}
-                </p>
+              <div className="mt-2 space-y-2">
+                <CollapsibleContent
+                  content={event.notes}
+                  label="Notes"
+                  isExpanded={isExpanded}
+                  isExploring={isExploring}
+                />
+
+                {hasLongContent && (
+                  <ShowMoreButton
+                    isExpanded={isExpanded}
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    isExploring={isExploring}
+                  />
+                )}
               </div>
             )}
           </div>
