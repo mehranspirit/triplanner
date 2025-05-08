@@ -73,7 +73,7 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
 
   const onSubmit = (data: StayFormData) => {
     console.log("Raw Stay form data (strings):", data);
-    let processedData: any = { ...data };
+    const processedData: any = { ...data };
 
     // Map form fields to database fields
     if (data.checkInDate) {

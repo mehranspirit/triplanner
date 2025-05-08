@@ -70,7 +70,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
 
   const onSubmit = (data: TrainFormData) => {
     console.log("Raw Train form data (strings):", data);
-    let processedData: any = { ...data };
+    const processedData: any = { ...data };
 
     // Construct naive ISO-like strings
     if (data.departureDate && data.departureTime) {

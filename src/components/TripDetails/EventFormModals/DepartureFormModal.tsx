@@ -71,7 +71,7 @@ const DepartureFormModal: React.FC<DepartureFormModalProps> = ({ isOpen, onClose
 
   const onSubmit = (data: DepartureFormData) => {
     console.log("Raw Departure form data (strings):", data);
-    let processedData: any = { ...data };
+    const processedData: any = { ...data };
 
     // Map form fields to database fields
     processedData.date = data.departureDate || '';

@@ -31,5 +31,6 @@
     "allowSyntheticDefaultImports": true
   },
   "include": ["src"],
+  "exclude": ["src/components/_deprecated/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 } 

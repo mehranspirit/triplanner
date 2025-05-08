@@ -91,7 +91,9 @@ const normalizeEventDates = (events: any[] = []) => {
         const iso = new Date(`${ev.date}T${legacyTime}:00Z`).toISOString();
         ev.startDate = iso;
         ev.endDate = iso;
-      } catch (_) {}
+      } catch (error) {
+        console.error(`Failed to normalize legacy time: ${legacyTime}`, error);
+      }
     }
 
     // Stay events with checkIn / checkOut (date only)
@@ -99,12 +101,16 @@ const normalizeEventDates = (events: any[] = []) => {
       if (!ev.startDate && ev.checkIn) {
         try {
           ev.startDate = new Date(`${ev.checkIn}T00:00:00Z`).toISOString();
-        } catch (_) { console.error(`Stay Norm: Bad checkIn date format: ${ev.checkIn}`); }
+        } catch (error) { 
+          console.error(`Stay Norm: Bad checkIn date format: ${ev.checkIn}`, error); 
+        }
       }
       if (!ev.endDate && ev.checkOut) {
         try {
           ev.endDate = new Date(`${ev.checkOut}T00:00:00Z`).toISOString();
-        } catch (_) { console.error(`Stay Norm: Bad checkOut date format: ${ev.checkOut}`); }
+        } catch (error) { 
+          console.error(`Stay Norm: Bad checkOut date format: ${ev.checkOut}`, error); 
+        }
       }
     }
 
@@ -114,14 +120,18 @@ const normalizeEventDates = (events: any[] = []) => {
         const pt = ev.pickupTime || '00:00';
         try {
           ev.startDate = new Date(`${ev.date}T${pt}:00Z`).toISOString();
-        } catch (_) {}
+        } catch (error) {
+          console.error(`Rental Car Norm: Bad pickup date/time format: ${ev.date}T${pt}`, error);
+        }
       }
       if (!ev.endDate && (ev.dropoffDate || ev.date)) {
         const dd = ev.dropoffDate || ev.date;
         const dt = ev.dropoffTime || '00:00';
         try {
           ev.endDate = new Date(`${dd}T${dt}:00Z`).toISOString();
-        } catch (_) {}
+        } catch (error) {
+          console.error(`Rental Car Norm: Bad dropoff date/time format: ${dd}T${dt}`, error);
+        }
       }
     }
 

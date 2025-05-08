@@ -71,7 +71,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
 
   const onSubmit = (data: BusFormData) => {
     console.log("BusFormModal: Raw Bus form data being submitted:", data);
-    let processedData: any = { ...data };
+    const processedData: any = { ...data };
 
     // Construct naive ISO-like strings
     if (data.departureDate && data.departureTime) {

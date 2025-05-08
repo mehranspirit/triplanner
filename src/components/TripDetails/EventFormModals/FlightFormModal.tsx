@@ -74,7 +74,7 @@ const FlightFormModal: React.FC<FlightFormModalProps> = ({ isOpen, onClose, onSa
 
   const onSubmit = (data: FlightFormData) => {
     console.log("Raw Flight form data (strings):", data);
-    let processedData: any = { ...data };
+    const processedData: any = { ...data };
 
     // Construct naive ISO-like strings
     if (data.departureDate && data.departureTime) {

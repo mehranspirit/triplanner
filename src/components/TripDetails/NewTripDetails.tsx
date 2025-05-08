@@ -261,8 +261,8 @@ const NewTripDetails: React.FC = () => {
         return dateA - dateB;
       });
 
-      let startDate = trip.startDate || sortedEvents[0]?.startDate || new Date().toISOString();
-      let endDate = trip.endDate || sortedEvents[sortedEvents.length - 1]?.endDate || startDate;
+      const startDate = trip.startDate || sortedEvents[0]?.startDate || new Date().toISOString();
+      const endDate = trip.endDate || sortedEvents[sortedEvents.length - 1]?.endDate || startDate;
 
       const suggestions = await generateDestinationSuggestions(
         trip.events,

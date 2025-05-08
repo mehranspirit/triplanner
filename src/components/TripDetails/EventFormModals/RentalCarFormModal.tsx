@@ -76,7 +76,7 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
 
   const onSubmit = (data: RentalCarFormData) => {
     console.log("Raw RentalCar form data (strings):", data);
-    let processedData: any = { ...data };
+    const processedData: any = { ...data };
 
     // Map form fields to database fields
     processedData.date = data.date;
