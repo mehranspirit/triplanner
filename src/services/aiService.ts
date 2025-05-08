@@ -364,7 +364,7 @@ ${formattedEvents}
 
 Format each suggestion like this:
 SUGGESTION_START
-type: [activity or destination]
+type: [ONLY either "activity" or "destination"]
 title/placeName: [name]
 description: [detailed description]
 imageUrl: [a relevant image URL]
