@@ -706,8 +706,8 @@ const NewTripDetails: React.FC = () => {
       </div>
       
       {/* Add Event & View Options */}
-      <div className="flex justify-between items-center">
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex flex-wrap gap-2">
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
