@@ -656,12 +656,12 @@ const NewTripDetails: React.FC = () => {
           <img
             src={trip.thumbnailUrl || tripThumbnail}
             alt={trip.name}
-              className="w-full h-full object-cover"
-            />
+            className="w-full h-full object-cover"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent"></div>
           
           {/* Trip Actions */}
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-4 right-4 z-20">
             <TripActions
               trip={trip}
               isOwner={isOwner}

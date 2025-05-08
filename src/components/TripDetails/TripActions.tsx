@@ -125,14 +125,18 @@ const TripActions: React.FC<TripActionsProps> = ({
   return (
     <div className={cn("flex items-center gap-2", className)}>
       {/* Mobile view: Dropdown menu */}
-      <div className="md:hidden">
+      <div className="md:hidden relative">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="w-10 h-10 p-0 relative z-50 bg-white hover:bg-gray-50"
+            >
               <MoreHorizontal className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-56 z-50">
             <DropdownMenuLabel>Trip Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
             
