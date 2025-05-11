@@ -133,6 +133,33 @@ const categorizeTripsByDate = (trips: Trip[], durations: { [key: string]: TripDu
   }, { ongoing: [], upcoming: [], past: [] });
 };
 
+// Add a new component for the countdown badge
+const CountdownBadge: React.FC<{ startDate: Date }> = ({ startDate }) => {
+  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number }>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      const diff = startDate.getTime() - now.getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      setTimeLeft({ days, hours, minutes, seconds });
+    };
+
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(timer);
+  }, [startDate]);
+
+  return (
+    <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded-md text-xs">
+      {timeLeft.days}d {timeLeft.hours}h {timeLeft.minutes}m {timeLeft.seconds}s
+    </div>
+  );
+};
+
 export default function TripList() {
   const navigate = useNavigate();
   const { state, addTrip, deleteTrip, updateTrip } = useTrip();
@@ -488,6 +515,9 @@ export default function TripList() {
                 alt={trip.name}
                 className="h-full w-full object-cover"
               />
+              {tripDurations[trip._id] && tripDurations[trip._id].startDate > new Date() && (
+                <CountdownBadge startDate={tripDurations[trip._id].startDate} />
+              )}
               {user && trip.owner._id !== user._id && (
                 <div className="absolute top-2 right-2 z-10">
                   <div className="relative group">
