@@ -318,12 +318,6 @@ const NewTripDetails: React.FC = () => {
     return timeA.localeCompare(timeB);
   });
 
-  // Define which event types can be added from the dropdown
-  // Adjust this array as needed
-  const addableEventTypes: EventType[] = [
-    'arrival', 'departure', 'stay', 'flight', 'train', 'bus', 'rental_car', 'activity', 'destination'
-  ];
-
   // Update the CondensedEventCard component to include icons
   const CondensedEventCard: React.FC<{ event: Event; thumbnail: string }> = ({ event, thumbnail }) => {
     const registryItem = EVENT_TYPES[event.type];
@@ -647,6 +641,44 @@ const NewTripDetails: React.FC = () => {
     );
   };
 
+  // Happening Now Section (move logic above return)
+  const activeEvents = sortedEvents.filter(e => isEventCurrentlyActive(e));
+  const happeningNowSection = activeEvents.length === 0 ? null : (
+    <div className="bg-blue-50 shadow-sm rounded-lg p-4 md:p-6 mb-8 border border-blue-200">
+      <h2 className="text-xl font-semibold mb-4 text-blue-800">Happening Now</h2>
+      <div className={isCondensedView ? "flex flex-col gap-2" : "space-y-4"}>
+        {activeEvents.map(event => {
+          const registryItem = EVENT_TYPES[event.type];
+          if (!registryItem) return <div key={event.id}>Unknown event type: {event.type}</div>;
+          const EventCardComponent = registryItem.cardComponent;
+          const thumbnail = eventThumbnails[event.id] || registryItem.defaultThumbnail;
+          if (!EventCardComponent) return <div key={event.id}>No card component for {event.type}</div>;
+          return (
+            <div key={event.id} className={isCondensedView ? "" : undefined}>
+              {isCondensedView ? (
+                <CondensedEventCard event={event} thumbnail={thumbnail} />
+              ) : (
+                <EventCardComponent 
+                  event={event} 
+                  thumbnail={thumbnail}
+                  onEdit={canEdit ? () => handleEditEventClick(event) : undefined}
+                  onDelete={canEdit ? () => handleDeleteEvent(event.id) : undefined}
+                  onStatusChange={canEdit ? (newStatus) => handleStatusChange(event, newStatus) : undefined}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // Define which event types can be added from the dropdown
+  // Adjust this array as needed
+  const addableEventTypes: EventType[] = [
+    'arrival', 'departure', 'stay', 'flight', 'train', 'bus', 'rental_car', 'activity', 'destination'
+  ];
+
   return (
     <div className="max-w-7xl mx-auto px-4 space-y-6 py-6">
       {/* Header with Trip Info and Actions */}
@@ -777,6 +809,9 @@ const NewTripDetails: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Happening Now Section */}
+      {happeningNowSection}
 
       {/* Events Timeline */}
       <div className="bg-white shadow-sm rounded-lg p-4 md:p-6">
