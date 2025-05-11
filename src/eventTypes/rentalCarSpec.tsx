@@ -55,6 +55,10 @@ export const rentalCarEventSchema = z.object({
   carType: z.string().optional(),
   bookingReference: z.string().optional(),
   licensePlate: z.string().optional(),
+  cost: z.preprocess(
+    (val) => val === '' || val === undefined ? undefined : Number(val),
+    z.number().min(0, { message: "Cost must be a positive number" }).optional()
+  ),
 }).refine(data => {
   if (!data.date || !data.pickupTime || !data.dropoffDate || !data.dropoffTime) return false;
   const startString = `${data.date}T${data.pickupTime}`;

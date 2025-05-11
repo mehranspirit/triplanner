@@ -3,7 +3,7 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FlightEvent } from '@/types/eventTypes';
 import { format } from 'date-fns'; // For date formatting
-import { Clock, Edit, Trash2, MapPin, Info, MoreVertical, CheckCircle2, Search, Map, Share, Calendar, Plane, ExternalLink, ArrowUpRight, ArrowDownLeft } from 'lucide-react'; // Icons
+import { Clock, Edit, Trash2, MapPin, Info, MoreVertical, CheckCircle2, Search, Map, Share, Calendar, Plane, ExternalLink, ArrowUpRight, ArrowDownLeft, Ticket } from 'lucide-react'; // Icons
 import { FaPlane } from 'react-icons/fa'; // Import FaPlane from react-icons
 import {
   Popover,
@@ -590,6 +590,22 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
                 </div>
               )}
             </div>
+            
+            {/* Cost Section - above description/notes */}
+            {typeof event.cost === 'number' && (
+              <div className="flex items-center text-sm space-x-2 mt-2">
+                <Ticket className={cn(
+                  "h-4 w-4 transition-all duration-200",
+                  isExploring ? "text-gray-400" : "text-gray-500"
+                )} />
+                <span className={cn(
+                  "transition-all duration-200",
+                  isExploring ? "text-gray-600" : "text-gray-900"
+                )}>
+                  <span className="font-semibold">Cost:</span> ${event.cost.toFixed(2)}
+                </span>
+              </div>
+            )}
             
             {/* Notes Section */}
             {event.notes && (

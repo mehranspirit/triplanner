@@ -53,6 +53,10 @@ export const stayEventSchema = z.object({
   address: z.string().optional(),
   reservationNumber: z.string().optional(),
   contactInfo: z.string().optional(),
+  cost: z.preprocess(
+    (val) => val === '' || val === undefined ? undefined : Number(val),
+    z.number().min(0, { message: "Cost must be a positive number" }).optional()
+  ),
 }).refine(data => {
   if (!data.checkInDate || !data.checkInTime || !data.checkOutDate || !data.checkOutTime) return false;
   const startString = `${data.checkInDate}T${data.checkInTime}`;
@@ -318,6 +322,22 @@ const renderStayFormFields = (form: UseFormReturn<StayFormData>): React.ReactNod
                             <SelectItem value="confirmed">Confirmed</SelectItem>
                         </SelectContent>
                     </Select>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+        <FormField
+            control={control}
+            name="cost"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Cost</FormLabel>
+                    <FormControl>
+                        <Input type="number" min={0} step="0.01" placeholder="e.g., 250.00" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                        Optional. Enter the cost for this stay (in your default currency).
+                    </FormDescription>
                     <FormMessage />
                 </FormItem>
             )}

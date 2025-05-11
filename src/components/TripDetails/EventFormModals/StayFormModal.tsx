@@ -20,6 +20,7 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
     resolver: zodResolver(stayEventSchema as z.ZodType<StayFormData>),
     defaultValues: eventToEdit ? {
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         // Map database fields to form fields
         checkInDate: eventToEdit.checkIn || '',
         checkInTime: eventToEdit.checkInTime || '14:00', // Use stored time or default
@@ -27,11 +28,15 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
         checkOutTime: eventToEdit.checkOutTime || '11:00', // Use stored time or default
     } : {
         type: 'stay',
+        status: 'confirmed',
+        cost: undefined,
         checkInDate: '',
         checkInTime: '14:00', // Default check-in time
         checkOutDate: '',
         checkOutTime: '11:00', // Default check-out time
-        status: 'confirmed',
+        notes: '',
+        reservationNumber: '',
+        contactInfo: '',
     },
   });
 
@@ -48,6 +53,7 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
       
       form.reset({
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         checkInDate: eventToEdit.checkIn || '',
         checkInTime: eventToEdit.checkInTime || '14:00',
         checkOutDate: eventToEdit.checkOut || '',
@@ -57,6 +63,8 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
       // Reset with empty strings and defaults for new event
       form.reset({
         type: 'stay',
+        status: 'confirmed',
+        cost: undefined,
         accommodationName: '',
         address: '',
         checkInDate: '',
@@ -64,7 +72,6 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
         checkOutDate: '',
         checkOutTime: '11:00',
         notes: '',
-        status: 'confirmed',
         reservationNumber: '',
         contactInfo: '',
       });

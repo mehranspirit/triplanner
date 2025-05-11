@@ -27,6 +27,7 @@ export interface Event {
   updatedAt: string;
   likes?: string[];
   dislikes?: string[];
+  cost?: number;
 }
 
 export interface ArrivalDepartureEvent extends Event {
@@ -56,6 +57,7 @@ export interface StayEvent extends Event {
   reservationNumber?: string;
   contactInfo?: string;
   description?: string;
+  cost?: number;
 }
 
 export interface DestinationEvent extends Event {
@@ -224,6 +226,7 @@ export interface FlightEvent extends Event {
   terminal?: string;
   gate?: string;
   bookingReference?: string;
+  cost?: number;
 }
 
 export interface TrainEvent extends Event {
@@ -237,6 +240,7 @@ export interface TrainEvent extends Event {
   carriageNumber?: string;
   seatNumber?: string;
   bookingReference?: string;
+  cost?: number;
 }
 
 export interface RentalCarEvent extends Event {
@@ -251,6 +255,7 @@ export interface RentalCarEvent extends Event {
   carType?: string;
   bookingReference?: string;
   licensePlate?: string;
+  cost?: number;
 }
 
 export interface BusEvent extends Event {
@@ -265,6 +270,7 @@ export interface BusEvent extends Event {
   arrivalTime?: string;
   seatNumber?: string;
   bookingReference?: string;
+  cost?: number;
 }
 
 export interface ActivityEvent extends Event {
@@ -277,6 +283,7 @@ export interface ActivityEvent extends Event {
   startTime: string;  // HH:mm format
   endDate: string;    // YYYY-MM-DD format
   endTime: string;    // HH:mm format
+  cost?: number;
 }
 
 export interface AISuggestionHistory {

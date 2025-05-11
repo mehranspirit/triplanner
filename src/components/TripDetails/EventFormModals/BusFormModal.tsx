@@ -21,12 +21,14 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
     resolver: zodResolver(busEventSchema as z.ZodType<BusFormData>),
     defaultValues: eventToEdit ? {
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         departureDate: eventToEdit.startDate?.substring(0, 10) || '',
         departureTime: eventToEdit.startDate?.substring(11, 16) || '',
         arrivalDate: eventToEdit.endDate?.substring(0, 10) || '',
         arrivalTime: eventToEdit.endDate?.substring(11, 16) || '',
     } : {
         type: 'bus',
+        cost: undefined,
         departureDate: '',
         departureTime: '',
         arrivalDate: '',
@@ -44,6 +46,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
       console.log('BusFormModal: Directly parsed values for form reset:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
       form.reset({
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         departureDate: departureDatePart,
         departureTime: departureTimePart,
         arrivalDate: arrivalDatePart,
@@ -65,6 +68,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
         bookingReference: '',
         notes: '',
         status: 'confirmed',
+        cost: undefined,
       });
     }
   }, [eventToEdit, form, isOpen]);

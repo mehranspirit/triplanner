@@ -23,6 +23,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({ isOpen, onClose, 
         startTime: eventToEdit.startTime || '',
         endDate: eventToEdit.endDate || '',
         endTime: eventToEdit.endTime || '',
+        cost: eventToEdit.cost ?? undefined,
     } : {
         type: 'activity',
         startDate: '',
@@ -30,6 +31,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({ isOpen, onClose, 
         endDate: '',
         endTime: '',
         status: 'confirmed',
+        cost: undefined,
     },
   });
 
@@ -55,6 +57,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({ isOpen, onClose, 
         location: undefined,
         notes: '',
         status: 'confirmed',
+        cost: undefined,
       });
     }
   }, [eventToEdit, form]);

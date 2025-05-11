@@ -56,6 +56,10 @@ export const trainEventSchema = z.object({
   carriageNumber: z.string().optional(),
   seatNumber: z.string().optional(),
   bookingReference: z.string().optional(),
+  cost: z.preprocess(
+    (val) => val === '' || val === undefined ? undefined : Number(val),
+    z.number().min(0, { message: "Cost must be a positive number" }).optional()
+  ),
 }).refine(data => {
   // Refine based on the string date/time parts
   if (!data.departureDate || !data.departureTime || !data.arrivalDate || !data.arrivalTime) return false;
@@ -334,6 +338,24 @@ const renderTrainFormFields = (form: UseFormReturn<TrainFormData>): React.ReactN
                 </FormControl>
                 <FormDescription>
                     If left empty, a relevant image will be automatically selected based on the train journey details.
+                </FormDescription>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+
+        {/* Cost */} 
+        <FormField
+            control={control}
+            name="cost"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Cost</FormLabel>
+                <FormControl>
+                    <Input type="number" min={0} step="0.01" placeholder="e.g., 45.00" {...field} />
+                </FormControl>
+                <FormDescription>
+                    Optional. Enter the cost for this train ride (in your default currency).
                 </FormDescription>
                 <FormMessage />
                 </FormItem>

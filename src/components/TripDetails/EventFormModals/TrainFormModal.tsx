@@ -19,12 +19,14 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
     resolver: zodResolver(trainEventSchema as z.ZodType<TrainFormData>),
     defaultValues: eventToEdit ? {
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         departureDate: eventToEdit.startDate?.substring(0, 10) || '',
         departureTime: eventToEdit.startDate?.substring(11, 16) || '',
         arrivalDate: eventToEdit.endDate?.substring(0, 10) || '',
         arrivalTime: eventToEdit.endDate?.substring(11, 16) || '',
     } : {
         type: 'train',
+        cost: undefined,
         departureDate: '',
         departureTime: '',
         arrivalDate: '',
@@ -42,6 +44,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
       console.log('TrainFormModal: Directly parsed values for form reset:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
       form.reset({
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         departureDate: departureDatePart,
         departureTime: departureTimePart,
         arrivalDate: arrivalDatePart,
@@ -64,6 +67,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
         bookingReference: '',
         notes: '',
         status: 'confirmed',
+        cost: undefined,
       });
     }
   }, [eventToEdit, form, isOpen]);

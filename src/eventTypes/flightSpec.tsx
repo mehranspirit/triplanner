@@ -58,6 +58,10 @@ export const flightEventSchema = z.object({
   terminal: z.string().optional(),
   gate: z.string().optional(),
   bookingReference: z.string().optional(),
+  cost: z.preprocess(
+    (val) => val === '' || val === undefined ? undefined : Number(val),
+    z.number().min(0, { message: "Cost must be a positive number" }).optional()
+  ),
 }).refine(data => {
   // Refine based on the string date/time parts
   if (!data.departureDate || !data.departureTime || !data.arrivalDate || !data.arrivalTime) return false;
@@ -378,6 +382,24 @@ const renderFlightFormFields = (form: UseFormReturn<FlightFormData>): React.Reac
                             <SelectItem value="confirmed">Confirmed</SelectItem>
                         </SelectContent>
                     </Select>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+
+        {/* Cost */}
+        <FormField
+            control={control}
+            name="cost"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Cost</FormLabel>
+                    <FormControl>
+                        <Input type="number" min={0} step="0.01" placeholder="e.g., 250.00" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                        Optional. Enter the cost for this flight (in your default currency).
+                    </FormDescription>
                     <FormMessage />
                 </FormItem>
             )}

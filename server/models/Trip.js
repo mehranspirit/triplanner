@@ -53,6 +53,10 @@ const eventSchema = new mongoose.Schema({
   arrivalAirport: String,
   departureTime: String,
   arrivalTime: String,
+  terminal: String,
+  gate: String,
+  bookingReference: String,
+  cost: { type: Number, default: undefined },
   // Train fields
   trainOperator: String,
   trainNumber: String,
@@ -60,6 +64,8 @@ const eventSchema = new mongoose.Schema({
   arrivalStation: String,
   carriageNumber: String,
   seatNumber: String,
+  bookingReference: String,
+  cost: { type: Number, default: undefined },
   // Rental Car fields
   carCompany: String,
   carType: String,
@@ -69,11 +75,19 @@ const eventSchema = new mongoose.Schema({
   dropoffTime: String,
   dropoffDate: String,
   licensePlate: String,
+  cost: { type: Number, default: undefined },
   // Bus fields
   busOperator: String,
   busNumber: String,
+  departureStation: String,
+  arrivalStation: String,
+  departureDate: String,
+  arrivalDate: String,
   departureTime: String,
   arrivalTime: String,
+  seatNumber: String,
+  bookingReference: String,
+  cost: { type: Number, default: undefined },
   // Creator and modifier information
   createdBy: {
     _id: {
@@ -105,6 +119,7 @@ const eventSchema = new mongoose.Schema({
   startTime: String, // HH:mm
   endDate: String,   // YYYY-MM-DD
   endTime: String,   // HH:mm
+  cost: { type: Number, default: undefined },
 });
 
 const noteEditSchema = new mongoose.Schema({

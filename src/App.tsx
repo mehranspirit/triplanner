@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { TripProvider } from './context/TripContext';
+import { TripProvider, useTrip } from './context/TripContext';
 import { ExpenseProvider } from './context/ExpenseContext';
+import { EventProvider } from './contexts/EventContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AdminRoute from './components/auth/AdminRoute';
 import Header from './components/Header';
@@ -49,10 +50,19 @@ const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children
 
 const ExpensesPageWrapper: React.FC = () => {
   const { tripId } = useParams<{ tripId: string }>();
+  const { state } = useTrip();
+  const trip = state.trips.find(t => t._id === tripId);
+
+  if (!trip) {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <ExpenseProvider tripId={tripId!}>
-      <ExpensesPage />
-    </ExpenseProvider>
+    <EventProvider initialEvents={trip.events}>
+      <ExpenseProvider tripId={tripId!}>
+        <ExpensesPage />
+      </ExpenseProvider>
+    </EventProvider>
   );
 };
 

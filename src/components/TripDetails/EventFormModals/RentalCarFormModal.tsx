@@ -19,12 +19,14 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
     resolver: zodResolver(rentalCarEventSchema as z.ZodType<RentalCarFormData>),
     defaultValues: eventToEdit ? {
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         date: eventToEdit.date || '',
         pickupTime: eventToEdit.pickupTime || '',
         dropoffDate: eventToEdit.dropoffDate || '',
         dropoffTime: eventToEdit.dropoffTime || '',
     } : {
         type: 'rental_car',
+        cost: undefined,
         date: '',
         pickupTime: '',
         dropoffDate: '',
@@ -50,6 +52,7 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
       
       form.reset({
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         date: datePart,
         pickupTime: pickupTimePart,
         dropoffDate: dropoffDatePart,
@@ -71,6 +74,7 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
         bookingReference: '',
         notes: '',
         status: 'confirmed',
+        cost: undefined,
       });
     }
   }, [eventToEdit, form, isOpen]);

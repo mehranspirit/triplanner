@@ -24,12 +24,15 @@ const FlightFormModal: React.FC<FlightFormModalProps> = ({ isOpen, onClose, onSa
     // Update defaultValues for string dates
     defaultValues: eventToEdit ? {
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         departureDate: eventToEdit.startDate?.substring(0, 10) || '',
         departureTime: eventToEdit.startDate?.substring(11, 16) || '',
         arrivalDate: eventToEdit.endDate?.substring(0, 10) || '',
         arrivalTime: eventToEdit.endDate?.substring(11, 16) || '',
     } : {
         type: 'flight',
+        status: 'confirmed',
+        cost: undefined,
         departureDate: '',
         departureTime: '',
         arrivalDate: '',
@@ -46,6 +49,7 @@ const FlightFormModal: React.FC<FlightFormModalProps> = ({ isOpen, onClose, onSa
       console.log('FlightFormModal: Directly parsed values for form reset:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
       form.reset({
         ...eventToEdit,
+        cost: eventToEdit.cost ?? undefined,
         departureDate: departureDatePart,
         departureTime: departureTimePart,
         arrivalDate: arrivalDatePart,
@@ -55,19 +59,16 @@ const FlightFormModal: React.FC<FlightFormModalProps> = ({ isOpen, onClose, onSa
       // Reset with empty strings and defaults for new event
       form.reset({
         type: 'flight',
+        status: 'confirmed',
+        cost: undefined,
         airline: '',
         flightNumber: '',
         departureAirport: '',
         arrivalAirport: '',
-        departureDate: '',
-        departureTime: '',
-        arrivalDate: '',
-        arrivalTime: '',
         terminal: '',
         gate: '',
         bookingReference: '',
         notes: '',
-        status: 'confirmed',
       });
     }
   }, [eventToEdit, form, isOpen]);

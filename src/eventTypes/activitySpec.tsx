@@ -35,11 +35,11 @@ export const activityEventSchema = z.object({
   title: z.string().min(1, { message: "Activity title is required" }),
   activityType: z.string().min(1, { message: "Activity type is required" }),
   startDate: z.string({ required_error: "Start date is required." })
-              .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+              .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   startTime: z.string({ required_error: "Start time is required." })
               .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   endDate: z.string({ required_error: "End date is required." })
-            .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
+            .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   endTime: z.string({ required_error: "End time is required." })
             .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   location: z.object({ 
@@ -53,6 +53,10 @@ export const activityEventSchema = z.object({
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
   address: z.string().optional(),
   description: z.string().optional(),
+  cost: z.preprocess(
+    (val) => val === '' || val === undefined ? undefined : Number(val),
+    z.number().min(0, { message: "Cost must be a positive number" }).optional()
+  ),
 }).refine(data => {
   const startString = `${data.startDate}T${data.startTime}`;
   const endString = `${data.endDate}T${data.endTime}`;
@@ -319,6 +323,22 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
                         </SelectContent>
                     </Select>
                     <FormMessage />
+                </FormItem>
+            )}
+        />
+        <FormField
+            control={control}
+            name="cost"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Cost</FormLabel>
+                <FormControl>
+                    <Input type="number" min={0} step="0.01" placeholder="e.g., 25.00" {...field} />
+                </FormControl>
+                <FormDescription>
+                    Optional. Enter the cost for this activity (in your default currency).
+                </FormDescription>
+                <FormMessage />
                 </FormItem>
             )}
         />

@@ -18,7 +18,8 @@ import {
   Share,
   Calendar,
   ExternalLink,
-  MoreHorizontal
+  MoreHorizontal,
+  Ticket
 } from 'lucide-react';
 import { FaHotel } from 'react-icons/fa';
 import {
@@ -535,6 +536,22 @@ const StayEventCard: React.FC<StayEventCardProps> = ({ event, thumbnail, onEdit,
                   isExploring ? "text-gray-600" : "text-gray-900"
                 )}>
                   <span className="font-semibold">Address:</span> {event.address}
+                </span>
+              </div>
+            )}
+            
+            {/* Cost Section - above description/notes */}
+            {typeof event.cost === 'number' && (
+              <div className="flex items-center text-sm space-x-2 mt-2">
+                <Ticket className={cn(
+                  "h-4 w-4 transition-all duration-200",
+                  isExploring ? "text-gray-400" : "text-gray-500"
+                )} />
+                <span className={cn(
+                  "transition-all duration-200",
+                  isExploring ? "text-gray-600" : "text-gray-900"
+                )}>
+                  <span className="font-semibold">Cost:</span> ${event.cost.toFixed(2)}
                 </span>
               </div>
             )}

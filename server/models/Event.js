@@ -65,15 +65,20 @@ const eventSchema = new mongoose.Schema({
   checkOutTime: String, // HH:mm format
   reservationNumber: String,
   contactInfo: String,
+  description: String,
+  cost: { type: Number, default: undefined },
   // Fields for destination events
   placeName: String,
-  description: String,
   openingHours: String,
   // Fields for flight events
   departureAirport: String,
   arrivalAirport: String,
   departureTime: String,
   arrivalTime: String,
+  terminal: String,
+  gate: String,
+  bookingReference: String,
+  cost: { type: Number, default: undefined },
   // Fields for train events
   trainNumber: String,
   trainOperator: String,
@@ -81,6 +86,8 @@ const eventSchema = new mongoose.Schema({
   arrivalStation: String,
   carriageNumber: String,
   seatNumber: String,
+  bookingReference: String,
+  cost: { type: Number, default: undefined },
   // Fields for rental car events
   carCompany: String,
   carType: String,
@@ -90,14 +97,25 @@ const eventSchema = new mongoose.Schema({
   dropoffTime: String,
   dropoffDate: String,
   licensePlate: String,
+  cost: { type: Number, default: undefined },
   // Fields for bus events
   busNumber: String,
   busOperator: String,
+  departureStation: String,
+  arrivalStation: String,
+  departureDate: String,
+  arrivalDate: String,
+  departureTime: String,
+  arrivalTime: String,
+  seatNumber: String,
+  bookingReference: String,
+  cost: { type: Number, default: undefined },
   // Activity event fields
   startDate: String, // YYYY-MM-DD
   startTime: String, // HH:mm
   endDate: String,   // YYYY-MM-DD
   endTime: String,   // HH:mm
+  cost: { type: Number, default: undefined },
 }, {
   timestamps: true
 });
