@@ -519,6 +519,7 @@ Possible Event Types and Their Required Fields:
    - address (string)
    - reservationNumber (string)
    - contactInfo (string)
+   - cost (number)
 
 4. destination:
    Required:
@@ -545,6 +546,7 @@ Possible Event Types and Their Required Fields:
    - terminal (string)
    - gate (string)
    - bookingReference (string)
+   - cost (number)
 
 6. train:
    Required:
@@ -560,6 +562,7 @@ Possible Event Types and Their Required Fields:
    - carriageNumber (string)
    - seatNumber (string)
    - bookingReference (string)
+   - cost (number)
 
 7. rental_car:
    Required:
@@ -574,6 +577,7 @@ Possible Event Types and Their Required Fields:
    - carType (string)
    - licensePlate (string)
    - bookingReference (string)
+   - cost (number)
 
 8. bus:
    Required:
@@ -588,6 +592,7 @@ Possible Event Types and Their Required Fields:
    - busNumber (string)
    - seatNumber (string)
    - bookingReference (string)
+   - cost (number)
 
 9. activity:
    Required:
@@ -600,6 +605,7 @@ Possible Event Types and Their Required Fields:
    Optional:
    - address (string)
    - description (string)
+   - cost (number)
 
 Common fields for all events:
 - status: 'confirmed' | 'exploring' (default to 'confirmed')
@@ -726,7 +732,7 @@ Return the response in this exact JSON format:
           break;
         }
         case 'stay': {
-          const { checkIn, checkInTime, checkOut, checkOutTime, accommodationName, ...rest } = eventData.fields;
+          const { checkIn, checkInTime, checkOut, checkOutTime, accommodationName, cost, ...rest } = eventData.fields;
           event = {
             ...baseEvent,
             ...rest,
@@ -737,6 +743,7 @@ Return the response in this exact JSON format:
             checkOut,
             checkOutTime,
             accommodationName,
+            ...(cost !== undefined ? { cost: Number(cost) } : {}),
           } as StayEvent;
           break;
         }
@@ -754,7 +761,7 @@ Return the response in this exact JSON format:
           break;
         }
         case 'activity': {
-          const { startDate, startTime, endDate, endTime, title, activityType, ...rest } = eventData.fields;
+          const { startDate, startTime, endDate, endTime, title, activityType, cost, ...rest } = eventData.fields;
           event = {
             ...baseEvent,
             ...rest,
@@ -764,11 +771,12 @@ Return the response in this exact JSON format:
             endTime,
             title,
             activityType,
+            ...(cost !== undefined ? { cost: Number(cost) } : {}),
           } as ActivityEvent;
           break;
         }
         case 'flight': {
-          const { departureDate, departureTime, arrivalDate, arrivalTime, departureAirport, arrivalAirport, ...rest } = eventData.fields;
+          const { departureDate, departureTime, arrivalDate, arrivalTime, departureAirport, arrivalAirport, cost, ...rest } = eventData.fields;
           event = {
             ...baseEvent,
             ...rest,
@@ -778,11 +786,12 @@ Return the response in this exact JSON format:
             arrivalTime,
             departureAirport,
             arrivalAirport,
+            ...(cost !== undefined ? { cost: Number(cost) } : {}),
           } as FlightEvent;
           break;
         }
         case 'train': {
-          const { departureDate, departureTime, arrivalDate, arrivalTime, departureStation, arrivalStation, ...rest } = eventData.fields;
+          const { departureDate, departureTime, arrivalDate, arrivalTime, departureStation, arrivalStation, cost, ...rest } = eventData.fields;
           event = {
             ...baseEvent,
             ...rest,
@@ -792,11 +801,12 @@ Return the response in this exact JSON format:
             arrivalTime,
             departureStation,
             arrivalStation,
+            ...(cost !== undefined ? { cost: Number(cost) } : {}),
           } as TrainEvent;
           break;
         }
         case 'bus': {
-          const { departureDate, departureTime, arrivalDate, arrivalTime, departureStation, arrivalStation, ...rest } = eventData.fields;
+          const { departureDate, departureTime, arrivalDate, arrivalTime, departureStation, arrivalStation, cost, ...rest } = eventData.fields;
           event = {
             ...baseEvent,
             ...rest,
@@ -806,11 +816,12 @@ Return the response in this exact JSON format:
             arrivalTime,
             departureStation,
             arrivalStation,
+            ...(cost !== undefined ? { cost: Number(cost) } : {}),
           } as BusEvent;
           break;
         }
         case 'rental_car': {
-          const { date, pickupTime, dropoffDate, dropoffTime, pickupLocation, dropoffLocation, ...rest } = eventData.fields;
+          const { date, pickupTime, dropoffDate, dropoffTime, pickupLocation, dropoffLocation, cost, ...rest } = eventData.fields;
           event = {
             ...baseEvent,
             ...rest,
@@ -822,6 +833,7 @@ Return the response in this exact JSON format:
             dropoffTime,
             pickupLocation,
             dropoffLocation,
+            ...(cost !== undefined ? { cost: Number(cost) } : {}),
           } as RentalCarEvent;
           break;
         }
