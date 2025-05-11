@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { TripProvider } from './context/TripContext';
+import { TripProvider, useTrip } from './context/TripContext';
 import { ExpenseProvider } from './context/ExpenseContext';
+import { EventProvider } from './contexts/EventContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AdminRoute from './components/auth/AdminRoute';
 import Header from './components/Header';
@@ -11,7 +12,6 @@ import Register from './components/auth/Register';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ResetPassword from './components/auth/ResetPassword';
 import TripList from './components/TripList';
-import TripDetails from './components/TripDetails';
 import UserProfile from './components/UserProfile';
 import { UserList } from './components/UserList';
 import Calendar from './components/Calendar';
@@ -21,6 +21,21 @@ import AuthCallback from './components/auth/AuthCallback';
 import ExpensesPage from './pages/ExpensesPage';
 import { DreamTripsPage } from './pages/DreamTripsPage';
 import DreamTripDetails from './components/DreamTripDetails';
+import NewTripDetails from './components/TripDetails/NewTripDetails';
+
+// Import the registry first
+import './eventTypes/registry';
+
+// Then import all specific event type specs to trigger registration
+import './eventTypes/flightSpec';
+import './eventTypes/staySpec';
+import './eventTypes/activitySpec';
+import './eventTypes/trainSpec';
+import './eventTypes/busSpec';
+import './eventTypes/rentalCarSpec';
+import './eventTypes/destinationSpec';
+import './eventTypes/arrivalSpec';
+import './eventTypes/departureSpec';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -35,10 +50,19 @@ const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children
 
 const ExpensesPageWrapper: React.FC = () => {
   const { tripId } = useParams<{ tripId: string }>();
+  const { state } = useTrip();
+  const trip = state.trips.find(t => t._id === tripId);
+
+  if (!trip) {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <ExpenseProvider tripId={tripId!}>
-      <ExpensesPage />
-    </ExpenseProvider>
+    <EventProvider initialEvents={trip.events}>
+      <ExpenseProvider tripId={tripId!}>
+        <ExpensesPage />
+      </ExpenseProvider>
+    </EventProvider>
   );
 };
 
@@ -71,7 +95,7 @@ const App: React.FC = () => {
               element={
                 <ProtectedRoute>
                   <AuthenticatedLayout>
-                    <TripDetails />
+                    <NewTripDetails />
                   </AuthenticatedLayout>
                 </ProtectedRoute>
               }

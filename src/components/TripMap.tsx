@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import type { Map as LeafletMap } from 'leaflet';
-import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '../types';
+import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '@/types/eventTypes';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -139,7 +139,8 @@ const extractMapRelevantData = (trip: Trip) => {
     events: trip.events.map(event => ({
       id: event.id,
       type: event.type,
-      date: event.date,
+      startDate: event.startDate,
+      endDate: event.endDate,
       location: event.location,
       status: event.status,
       // Type-specific fields
@@ -208,7 +209,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   const mapRelevantData = useMemo(() => extractMapRelevantData(trip), [
     trip._id,
     trip.name,
-    trip.events.map(event => `${event.id}-${event.status}-${event.type}-${event.date}-${event.location?.lat}-${event.location?.lng}`).join(',')
+    trip.events.map(event => `${event.id}-${event.status}-${event.type}-${event.startDate}-${event.endDate}-${event.location?.lat}-${event.location?.lng}`).join(',')
   ]);
 
   // Add a useEffect to handle trip updates
@@ -421,7 +422,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           event: {
             id: 'trip-location',
             type: 'destination',
-            date: new Date().toISOString(),
+            startDate: new Date().toISOString(),
+            endDate: new Date().toISOString(),
             placeName: trip.name,
             status: 'exploring',
             createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -454,7 +456,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           event: {
             id: 'trip-location',
             type: 'destination',
-            date: new Date().toISOString(),
+            startDate: new Date().toISOString(),
+            endDate: new Date().toISOString(),
             placeName: trip.name,
             status: 'exploring',
             createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -756,7 +759,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: `${event.type.charAt(0).toUpperCase() + event.type.slice(1)} - ${(event as ArrivalDepartureEvent).airport}`,
           details: `${(event as ArrivalDepartureEvent).airline} ${(event as ArrivalDepartureEvent).flightNumber}`,
-          date: formatDate(event.date)
+          date: formatDate(event.startDate)
         };
       case 'stay':
         return {
@@ -768,14 +771,14 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: (event as DestinationEvent).placeName,
           details: (event as DestinationEvent).address || '',
-          date: formatDate(event.date)
+          date: formatDate(event.startDate)
         };
       case 'flight': {
         const flightEvent = event as FlightEvent;
         return {
           title: `${flightEvent.airline || 'Flight'} ${flightEvent.flightNumber || ''}`,
           details: `${flightEvent.departureAirport || ''} to ${flightEvent.arrivalAirport || ''}`,
-          date: formatDate(event.date)
+          date: formatDate(event.startDate)
         };
       }
       case 'train': {
@@ -783,7 +786,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: `${trainEvent.trainOperator || 'Train'} ${trainEvent.trainNumber || ''}`,
           details: `${trainEvent.departureStation || ''} to ${trainEvent.arrivalStation || ''}`,
-          date: formatDate(event.date),
+          date: formatDate(event.startDate),
           additionalInfo: [
             trainEvent.departureTime && `Departure: ${trainEvent.departureTime}`,
             trainEvent.arrivalTime && `Arrival: ${trainEvent.arrivalTime}`,
@@ -797,7 +800,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: `${carEvent.carCompany || 'Rental Car'}`,
           details: `${carEvent.pickupLocation || ''} to ${carEvent.dropoffLocation || ''}`,
-          date: formatDate(event.date)
+          date: formatDate(event.startDate)
         };
       }
       case 'bus': {
@@ -805,7 +808,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: `${busEvent.busOperator || 'Bus'} ${busEvent.busNumber || ''}`,
           details: `${busEvent.departureStation || ''} to ${busEvent.arrivalStation || ''}`,
-          date: formatDate(event.date),
+          date: formatDate(event.startDate),
           additionalInfo: [
             busEvent.departureTime && `Departure: ${busEvent.departureTime}`,
             busEvent.arrivalTime && `Arrival: ${busEvent.arrivalTime}`,
@@ -819,7 +822,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: activityEvent.title || 'Activity',
           details: activityEvent.description || '',
-          date: formatDate(event.date),
+          date: formatDate(event.startDate),
           additionalInfo: activityEvent.activityType
         };
       }
@@ -827,7 +830,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         return {
           title: 'Event',
           details: '',
-          date: formatDate(event.date)
+          date: formatDate(event.startDate)
         };
     }
   };
@@ -846,7 +849,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   return (
     <div className="h-full rounded-lg overflow-hidden [&_.leaflet-pane]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-top]:!z-[2] [&_.leaflet-bottom]:!z-[2]">
       <MapContainer
-        key={`map-${trip._id}-${trip.events.map(e => `${e.id}-${e.status}-${e.type}-${e.date}-${e.location?.lat}-${e.location?.lng}`).join('-')}`}
+        key={`map-container-${trip._id}-${Date.now()}`}
         center={[locations[0]?.lat || 0, locations[0]?.lon || 0]}
         zoom={4}
         style={{ height: '100%', width: '100%' }}
@@ -860,40 +863,35 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           maxZoom={19}
           updateWhenIdle={true}
           updateWhenZooming={false}
-          subdomains={['a', 'b', 'c']} // Use multiple subdomains to distribute requests
+          subdomains={['a', 'b', 'c']}
         />
         
         {/* Render routes */}
-        {routes.map((route, index) => {
-          //console.log('Rendering route:', route.type, route.coordinates.length);
-          return (
-            <Polyline
-              key={`${route.type}-${index}`}
-              positions={route.coordinates}
-              color={route.type === 'driving' ? '#2563EB' : route.type === 'train' ? '#059669' : '#7C3AED'}
-              weight={route.type === 'driving' ? 3 : 4}
-              opacity={0.7}
-              dashArray={route.type === 'train' ? '10, 10' : undefined}
-            >
-              {route.type === 'driving' && (
-                <Tooltip permanent direction="center" offset={[0, -10]} className="bg-white px-2 py-1 rounded shadow text-xs font-medium">
-                  {formatDuration(route.duration / 60)}
-                </Tooltip>
-              )}
-            </Polyline>
-          );
-        })}
+        {routes.map((route, index) => (
+          <Polyline
+            key={`route-${route.type}-${index}-${Date.now()}`}
+            positions={route.coordinates}
+            color={route.type === 'driving' ? '#2563EB' : route.type === 'train' ? '#059669' : '#7C3AED'}
+            weight={route.type === 'driving' ? 3 : 4}
+            opacity={0.7}
+            dashArray={route.type === 'train' ? '10, 10' : undefined}
+          >
+            {route.type === 'driving' && (
+              <Tooltip permanent direction="center" offset={[0, -10]} className="bg-white px-2 py-1 rounded shadow text-xs font-medium">
+                {formatDuration(route.duration / 60)}
+              </Tooltip>
+            )}
+          </Polyline>
+        ))}
 
         {/* Render markers */}
         {locations.map((location: Location, index: number) => {
           const eventDetails = getEventDetails(location.event);
-          // Check if the event is confirmed by looking at the original event in the trip
           const originalEvent = trip.events.find(e => e.id === location.event.id);
           const isConfirmed = !originalEvent?.status || originalEvent.status === 'confirmed';
-          // Create a unique key for each marker
           const markerKey = location.event.id === 'trip-location' 
-            ? `trip-location-${index}` 
-            : location.event.id;
+            ? `trip-location-${index}-${Date.now()}` 
+            : `marker-${location.event.id}-${Date.now()}`;
           return (
             <Marker 
               key={markerKey}

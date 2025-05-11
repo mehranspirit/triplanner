@@ -10,8 +10,13 @@ interface EventContextType {
 
 const EventContext = React.createContext<EventContextType | undefined>(undefined);
 
-export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [events, setEvents] = React.useState<Event[]>([]);
+interface EventProviderProps {
+  children: React.ReactNode;
+  initialEvents?: Event[];
+}
+
+export const EventProvider: React.FC<EventProviderProps> = ({ children, initialEvents = [] }) => {
+  const [events, setEvents] = React.useState<Event[]>(initialEvents);
 
   const addEvent = (event: Event) => {
     setEvents(prev => [...prev, event]);

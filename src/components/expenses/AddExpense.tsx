@@ -5,6 +5,9 @@ import { User } from '../../types/eventTypes';
 import Avatar from '../Avatar';
 import { suggestCategory, CategorySuggestion } from '../../utils/categorySuggestions';
 import { createParticipantWithSplitDetails } from '../../utils/expenseUtils';
+import { useEvent } from '../../contexts/EventContext';
+import { EVENT_TYPES } from '../../eventTypes/registry';
+import { getEventTypeLabel } from '../../config/eventTypes';
 
 // Define expense categories
 const EXPENSE_CATEGORIES: { [key: string]: string[] } = {
@@ -26,7 +29,8 @@ interface AddExpenseProps {
 }
 
 export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, currentUser, onExpenseAdded }) => {
-  const { addExpense } = useExpense();
+  const { addExpense, expenses } = useExpense();
+  const { events } = useEvent();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -43,6 +47,131 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const [categorySuggestion, setCategorySuggestion] = useState<CategorySuggestion | null>(null);
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [splitWarning, setSplitWarning] = useState<string | null>(null);
+  const [expenseSource, setExpenseSource] = useState<'manual' | 'event'>('manual');
+  const [selectedEventId, setSelectedEventId] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+
+  // Debug logging
+  console.log('All events:', events);
+  console.log('Events with cost:', events.filter(e => e.cost !== undefined));
+  console.log('Events with cost > 0:', events.filter(e => typeof e.cost === 'number' && e.cost > 0));
+
+  // Filter events with cost
+  const eventsWithCost = events.filter(e => typeof e.cost === 'number' && e.cost > 0);
+
+  // Helper to format date range
+  const formatEventDateRange = (event: any) => {
+    if (event.startDate && event.endDate) {
+      return `${event.startDate.substring(0, 10)} - ${event.endDate.substring(0, 10)}`;
+    }
+    return event.startDate ? event.startDate.substring(0, 10) : '';
+  };
+
+  // Helper to get event title safely
+  const getEventTitle = (event: any) => {
+    switch (event.type) {
+      case 'activity':
+        return event.title;
+      case 'stay':
+        return event.accommodationName;
+      case 'destination':
+        return event.placeName;
+      case 'flight':
+        return event.flightNumber ? `Flight ${event.flightNumber}` : 'Flight';
+      case 'train':
+        return event.trainNumber ? `Train ${event.trainNumber}` : 'Train';
+      case 'rental_car':
+        return event.carCompany || 'Rental Car';
+      case 'bus':
+        return event.busNumber ? `Bus ${event.busNumber}` : 'Bus';
+      default:
+        return getEventTypeLabel(event.type as import('../../types/eventTypes').EventType) || event.type;
+    }
+  };
+
+  // Helper to get event description safely
+  const getEventDescription = (event: any) => {
+    switch (event.type) {
+      case 'activity':
+      case 'destination':
+        return event.description || '';
+      case 'stay':
+        return event.address || '';
+      case 'flight':
+        return `${event.departureAirport || ''} → ${event.arrivalAirport || ''}`;
+      case 'train':
+        return `${event.departureStation || ''} → ${event.arrivalStation || ''}`;
+      case 'rental_car':
+        return `${event.pickupLocation || ''} → ${event.dropoffLocation || ''}`;
+      case 'bus':
+        return `${event.departureStation || ''} → ${event.arrivalStation || ''}`;
+      default:
+        return '';
+    }
+  };
+
+  // When event is picked, auto-fill amount and suggest category
+  React.useEffect(() => {
+    if (expenseSource === 'event' && selectedEventId) {
+      const event = eventsWithCost.find(e => e.id === selectedEventId);
+      if (event) {
+        setAmount(event.cost?.toString() || '');
+        // Suggest category based on event type
+        let cat = '';
+        let subcat = '';
+        switch (event.type) {
+          case 'flight':
+          case 'train':
+          case 'bus':
+          case 'rental_car':
+            cat = 'Transportation';
+            subcat =
+              event.type === 'flight' ? 'Flights' :
+              event.type === 'train' ? 'Trains' :
+              event.type === 'bus' ? 'Buses' :
+              event.type === 'rental_car' ? 'Car Rental' : '';
+            break;
+          case 'stay':
+            cat = 'Accommodation';
+            subcat = 'Hotels';
+            break;
+          case 'activity':
+            cat = 'Activities & Entertainment';
+            subcat = 'Attractions';
+            break;
+          default:
+            cat = 'Other';
+            subcat = '';
+        }
+        setSelectedCategory(cat);
+        setSelectedSubcategory(subcat);
+        setTitle(getEventTitle(event));
+        setDescription(getEventDescription(event));
+
+        // Check for duplicate expenses using the ExpenseContext
+        const eventTitle = getEventTitle(event);
+        const eventCost = event.cost;
+        if (eventTitle && eventCost) {
+          const duplicateExpense = expenses.find(exp => 
+            exp.title === eventTitle && 
+            exp.amount === eventCost &&
+            exp.category === subcat
+          );
+
+          if (duplicateExpense) {
+            setDuplicateWarning(`Warning: An expense for "${eventTitle}" with the same amount (${eventCost}) and category (${subcat}) already exists.`);
+          } else {
+            setDuplicateWarning(null);
+          }
+        }
+      }
+    }
+    if (expenseSource === 'manual') {
+      setSelectedEventId('');
+      setDuplicateWarning(null);
+    }
+  }, [expenseSource, selectedEventId, expenses]);
 
   const validateSplits = () => {
     if (splitMethod === 'equal') return true;
@@ -95,11 +224,24 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       }
     }
 
+    // If there's a duplicate warning and the user is trying to add an expense from an event,
+    // ask for confirmation
+    if (duplicateWarning && expenseSource === 'event') {
+      const confirmed = window.confirm(
+        `${duplicateWarning}\n\nAre you sure you want to add this expense anyway?`
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     const payer = participants.find(p => p._id === selectedPayer);
     if (!payer) {
       alert('Selected payer not found');
       return;
     }
+
+    setIsSaving(true);
 
     const expenseAmount = parseFloat(amount);
     const expense: Omit<Expense, '_id'> = {
@@ -145,6 +287,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       setSelectedParticipants(participants.map(p => p._id));
       setSelectedCategory('');
       setSelectedSubcategory('');
+      setDuplicateWarning(null);
       
       if (onExpenseAdded) {
         onExpenseAdded();
@@ -152,6 +295,8 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     } catch (error) {
       console.error('Failed to add expense:', error);
       alert('Failed to add expense. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -266,6 +411,35 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Expense Source Dropdown */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Add Expense</label>
+        <select
+          value={expenseSource}
+          onChange={e => setExpenseSource(e.target.value as 'manual' | 'event')}
+          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+        >
+          <option value="manual">Enter Manually</option>
+          <option value="event">From Event with Cost</option>
+        </select>
+      </div>
+      {expenseSource === 'event' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Select Event</label>
+          <select
+            value={selectedEventId}
+            onChange={e => setSelectedEventId(e.target.value)}
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          >
+            <option value="">-- Select an event --</option>
+            {eventsWithCost.map(event => (
+              <option key={event.id} value={event.id}>
+                {getEventTitle(event)} | ${event.cost?.toFixed(2)} | {formatEventDateRange(event)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div>
         <label htmlFor="title" className="block text-sm font-medium text-gray-700">
           Title
@@ -515,20 +689,50 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
           </div>
         )}
 
+        {/* Duplicate Warning */}
+        {duplicateWarning && (
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700">{duplicateWarning}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Submit Button */}
         <div className="flex justify-end space-x-3">
           <button
             type="button"
             onClick={onExpenseAdded}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            disabled={isSaving}
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            disabled={isSaving}
+            className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative ${
+              isSaving ? 'opacity-75 cursor-not-allowed' : ''
+            }`}
           >
-            Add Expense
+            {isSaving ? (
+              <div className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+              </div>
+            ) : (
+              'Add Expense'
+            )}
           </button>
         </div>
       </div>

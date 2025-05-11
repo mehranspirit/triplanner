@@ -4,7 +4,7 @@ import { DreamTrip } from '../types/dreamTripTypes';
 import { EditDreamTripForm } from './EditDreamTripForm';
 import { dreamTripService } from '../services/dreamTripService';
 import { useAuth } from '../context/AuthContext';
-import { User } from '../types';
+import { User } from '../types/eventTypes';
 
 // Predefined thumbnails as fallback
 const PREDEFINED_THUMBNAILS = {

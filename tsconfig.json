@@ -9,7 +9,7 @@
     "noUnusedParameters": false,
 
     /* Bundler mode */
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -24,8 +24,13 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    
+    /* Additional Options */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src"],
+  "exclude": ["src/components/_deprecated/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 } 

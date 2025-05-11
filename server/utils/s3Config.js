@@ -31,7 +31,7 @@ const s3Storage = multerS3({
 const uploadToS3 = multer({
   storage: s3Storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit
   },
   fileFilter: (req, file, cb) => {
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DreamTrip } from '../types/dreamTripTypes';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { User } from '../types';
+import { User } from '../types/eventTypes';
 
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' } | null | undefined): c is { user: User; role: 'viewer' | 'editor' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c && 
@@ -27,6 +27,11 @@ export const CollaboratorManagementModal: React.FC<CollaboratorManagementModalPr
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [localTrip, setLocalTrip] = useState(trip);
+
+  useEffect(() => {
+    setLocalTrip(trip);
+  }, [trip]);
 
   if (!isOpen) return null;
 
@@ -43,12 +48,26 @@ export const CollaboratorManagementModal: React.FC<CollaboratorManagementModalPr
     setIsLoading(true);
 
     try {
+      const optimisticCollaborator = {
+        user: { _id: 'temp', name: 'Adding...', email, photoUrl: null },
+        role
+      };
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: [...(localTrip.collaborators || []), optimisticCollaborator]
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       const updatedTrip = await api.addDreamTripCollaborator(trip._id, email, role);
+      setLocalTrip(updatedTrip);
       onUpdate(updatedTrip);
       setEmail('');
       setRole('viewer');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add collaborator');
+      setLocalTrip(trip);
+      onUpdate(trip);
     } finally {
       setIsLoading(false);
     }
@@ -57,10 +76,23 @@ export const CollaboratorManagementModal: React.FC<CollaboratorManagementModalPr
   const handleRemoveCollaborator = async (userId: string) => {
     setIsLoading(true);
     try {
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: (localTrip.collaborators || []).filter(c => {
+          if (!c) return false;
+          return !isCollaboratorObject(c) || c.user._id !== userId;
+        })
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       const updatedTrip = await api.removeDreamTripCollaborator(trip._id, userId);
+      setLocalTrip(updatedTrip);
       onUpdate(updatedTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove collaborator');
+      setLocalTrip(trip);
+      onUpdate(trip);
     } finally {
       setIsLoading(false);
     }
@@ -69,18 +101,34 @@ export const CollaboratorManagementModal: React.FC<CollaboratorManagementModalPr
   const handleUpdateRole = async (userId: string, newRole: 'viewer' | 'editor') => {
     setIsLoading(true);
     try {
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: (localTrip.collaborators || []).map(c => {
+          if (!c || !isCollaboratorObject(c)) return c;
+          if (c.user._id === userId) {
+            return { ...c, role: newRole };
+          }
+          return c;
+        })
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       const updatedTrip = await api.updateDreamTripCollaboratorRole(trip._id, userId, newRole);
+      setLocalTrip(updatedTrip);
       onUpdate(updatedTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update collaborator role');
+      setLocalTrip(trip);
+      onUpdate(trip);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{ zIndex: 99999 }}>
+      <div className="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col shadow-xl relative">
         {/* Fixed Header */}
         <div className="p-6 border-b flex-shrink-0">
           <div className="flex justify-between items-center">
@@ -144,7 +192,7 @@ export const CollaboratorManagementModal: React.FC<CollaboratorManagementModalPr
           <div className="p-6">
             <div className="space-y-4">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Current Collaborators</h3>
-              {trip.collaborators?.filter(c => c !== null).map((collaborator) => {
+              {localTrip.collaborators?.filter(c => c !== null).map((collaborator) => {
                 if (!isCollaboratorObject(collaborator)) return null;
                 return (
                   <div

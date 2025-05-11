@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTrip } from '../context/TripContext';
-import { Trip, Event, StayEvent } from '../types';
+import { Trip, Event, StayEvent } from '../types/eventTypes';
 import { Link } from 'react-router-dom';
 import CalendarMap from './CalendarMap';
+import { format, parseISO, isValid, startOfMonth, endOfMonth, isSameMonth, isToday } from 'date-fns';
+import { cn } from '../lib/utils';
 
 // Add the default thumbnail constant
 const PREDEFINED_THUMBNAILS = {
@@ -73,34 +75,70 @@ const getDefaultThumbnail = async (tripName: string): Promise<string> => {
 };
 
 interface TripDuration {
-  trip: Trip;
   startDate: Date;
   endDate: Date;
   duration: number;
-  thumbnail: string;
+  tripId: string;
+  trip: Trip;
 }
 
-// Update SEASON_COLORS with more vibrant colors
+interface TripDurations {
+  [key: string]: TripDuration;
+}
+
+interface CategorizedTrips {
+  ongoing: Trip[];
+  upcoming: Trip[];
+  past: Trip[];
+}
+
+const categorizeTripsByDate = (trips: Trip[], durations: TripDurations): CategorizedTrips => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return trips.reduce((acc: CategorizedTrips, trip: Trip) => {
+    const duration = durations[trip._id];
+    if (!duration) return acc;
+
+    const { startDate, endDate } = duration;
+    
+    if (startDate <= today && today <= endDate) {
+      acc.ongoing.push(trip);
+    } else if (startDate > today) {
+      acc.upcoming.push(trip);
+    } else {
+      acc.past.push(trip);
+    }
+    
+    return acc;
+  }, { ongoing: [], upcoming: [], past: [] });
+};
+
+// Update SEASON_COLORS with more vibrant colors and hover states
 const SEASON_COLORS = {
   winter: {
-    bg: 'bg-blue-100',
+    bg: 'bg-blue-50',
     border: 'border-blue-200',
-    text: 'text-blue-900'
+    text: 'text-blue-900',
+    hover: 'hover:bg-blue-100'
   },
   spring: {
-    bg: 'bg-emerald-100',
+    bg: 'bg-emerald-50',
     border: 'border-emerald-200',
-    text: 'text-emerald-900'
+    text: 'text-emerald-900',
+    hover: 'hover:bg-emerald-100'
   },
   summer: {
-    bg: 'bg-amber-100',
+    bg: 'bg-amber-50',
     border: 'border-amber-200',
-    text: 'text-amber-900'
+    text: 'text-amber-900',
+    hover: 'hover:bg-amber-100'
   },
   autumn: {
-    bg: 'bg-orange-100',
+    bg: 'bg-orange-50',
     border: 'border-orange-200',
-    text: 'text-orange-900'
+    text: 'text-orange-900',
+    hover: 'hover:bg-orange-100'
   }
 };
 
@@ -112,7 +150,7 @@ const getSeasonColors = (month: number) => {
 };
 
 const TripBar: React.FC<{
-  trip: TripDuration;
+  trip: Trip;
   position: { left: string; width: string; top: string };
   monthStart: Date;
   monthEnd: Date;
@@ -120,7 +158,8 @@ const TripBar: React.FC<{
   formatDateRange: (start: Date, end: Date) => string;
   hasOverlap: boolean;
   height: number;
-}> = ({ trip, position, monthStart, monthEnd, zIndex, formatDateRange, hasOverlap, height }) => {
+  duration: TripDuration;
+}> = ({ trip, position, monthStart, monthEnd, zIndex, formatDateRange, hasOverlap, height, duration }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const dateRangeRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
@@ -131,69 +170,52 @@ const TripBar: React.FC<{
   // Check if trip is in the past
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const isPastTrip = trip.endDate < today;
+  const isPastTrip = duration.endDate < today;
 
   useEffect(() => {
     if (contentRef.current && dateRangeRef.current && titleRef.current) {
       const monthWidth = contentRef.current.parentElement?.clientWidth || 0;
-      const titleWidth = titleRef.current.scrollWidth + 16; // Add padding
+      const titleWidth = titleRef.current.scrollWidth + 16;
       const dateHeight = dateRangeRef.current.scrollHeight;
       const titleHeight = titleRef.current.scrollHeight;
       const topHalfHeight = height / 2;
       
-      // Check if there's enough space for both title and date
-      const totalTextHeight = titleHeight + dateHeight;
-      setShowDateText(totalTextHeight <= topHalfHeight - 4); // 4px buffer
+      setShowDateText(titleHeight + dateHeight <= topHalfHeight - 4);
       
-      // 1. Calculate natural width based on date range
-      const percentWidth = parseFloat(position.width);
-      const naturalWidth = (monthWidth * percentWidth) / 100;
-
-      // 2. Check if we need to expand for title
-      let finalWidth = naturalWidth;
-      if (naturalWidth < titleWidth) {
+      let finalWidth = (monthWidth * parseFloat(position.width)) / 100;
+      if (finalWidth < titleWidth) {
         finalWidth = titleWidth;
         setMinWidth(`${titleWidth}px`);
       } else {
         setMinWidth(undefined);
       }
 
-      // 3. Check if date range fits in the final width
       if (showDateText) {
         const dateRangeElement = dateRangeRef.current;
-        const dateRangeNeededWidth = dateRangeElement.scrollWidth;
-        setShowFullDateRange(dateRangeNeededWidth <= finalWidth);
+        setShowFullDateRange(dateRangeElement.scrollWidth <= finalWidth);
       }
     }
-  }, [position.width, trip.trip.name, height]);
+  }, [position.width, height, showDateText]);
 
   const formatStartDate = (date: Date) => {
-    const options: Intl.DateTimeFormatOptions = { 
-      month: 'short', 
-      day: 'numeric',
-      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-    };
-    return date.toLocaleDateString('en-US', options);
+    return format(date, 'MMM d');
   };
 
   const formatTooltipDate = (date: Date) => {
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    };
-    return date.toLocaleDateString('en-US', options);
+    return format(date, 'EEE, MMM d, yyyy');
   };
 
-  const tooltipText = `${trip.trip.name}
-${formatTooltipDate(trip.startDate)} - ${formatTooltipDate(trip.endDate)}
-${trip.duration} day${trip.duration !== 1 ? 's' : ''}`;
+  const tooltipText = `${trip.name}
+${formatTooltipDate(duration.startDate)} - ${formatTooltipDate(duration.endDate)}
+${duration.duration} day${duration.duration !== 1 ? 's' : ''}`;
 
   return (
     <Link
-      to={`/trips/${trip.trip._id}`}
-      className="absolute bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow group overflow-hidden"
+      to={`/trips/${duration.tripId}`}
+      className={cn(
+        "absolute bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 group overflow-hidden",
+        isPastTrip ? 'opacity-75' : 'opacity-100'
+      )}
       style={{
         left: position.left,
         width: position.width,
@@ -205,27 +227,35 @@ ${trip.duration} day${trip.duration !== 1 ? 's' : ''}`;
       }}
       title={tooltipText}
     >
-      {/* Top half - Text content */}
-      <div ref={contentRef} className="absolute top-0 left-0 right-0 h-1/2 bg-white p-1.5 z-10">
-        <div ref={titleRef} className={`font-medium text-xs ${isPastTrip ? 'text-gray-600' : 'text-gray-900'} whitespace-nowrap`}>
-          {trip.trip.name}
+      <div ref={contentRef} className="absolute top-0 left-0 right-0 h-1/2 bg-white/95 backdrop-blur-sm p-1.5 z-10">
+        <div ref={titleRef} className={cn(
+          "font-medium text-xs whitespace-nowrap",
+          isPastTrip ? 'text-gray-600' : 'text-gray-900'
+        )}>
+          {trip.name}
         </div>
         {showDateText && (
-          <div ref={dateRangeRef} className={`text-xs ${isPastTrip ? 'text-gray-400' : 'text-gray-500'} truncate`}>
+          <div ref={dateRangeRef} className={cn(
+            "text-xs truncate",
+            isPastTrip ? 'text-gray-400' : 'text-gray-500'
+          )}>
             {showFullDateRange 
-              ? formatDateRange(trip.startDate, trip.endDate)
-              : formatStartDate(trip.startDate)
+              ? formatDateRange(duration.startDate, duration.endDate)
+              : formatStartDate(duration.startDate)
             }
           </div>
         )}
       </div>
       
-      {/* Bottom half - Thumbnail */}
       <div className="absolute bottom-0 left-0 right-0 h-1/2 overflow-hidden">
         <img
-          src={trip.thumbnail}
-          alt={trip.trip.name}
-          className={`w-full h-full object-cover ${isPastTrip ? 'grayscale' : ''}`}
+          src={trip.thumbnailUrl || PREDEFINED_THUMBNAILS.default}
+          alt={trip.name}
+          className={cn(
+            "w-full h-full object-cover transition-all duration-200",
+            isPastTrip ? 'grayscale' : '',
+            "group-hover:scale-105"
+          )}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.src = PREDEFINED_THUMBNAILS.default;
@@ -233,103 +263,126 @@ ${trip.duration} day${trip.duration !== 1 ? 's' : ''}`;
         />
       </div>
 
-      {/* Hover overlay */}
       <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-10 transition-opacity z-20"></div>
     </Link>
   );
 };
 
-const Calendar: React.FC = () => {
-  const { state } = useTrip();
-  const [tripDurations, setTripDurations] = useState<TripDuration[]>([]);
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+// Add this helper function at the top level
+const parseSafeDate = (dateStr: string | undefined): Date | null => {
+  if (!dateStr) return null;
+  try {
+    const date = new Date(dateStr);
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    return date;
+  } catch (e) {
+    return null;
+  }
+};
 
-  const calculateTripDurations = async (trips: Trip[]): Promise<TripDuration[]> => {
-    const durations = await Promise.all(trips.map(async trip => {
-      let startDate: Date | null = null;
-      let endDate: Date | null = null;
-
-      // Parse dates without timezone conversion
-      const parseDate = (dateStr: string) => {
-        const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
-        return new Date(year, month - 1, day);
-      };
-
-      const sortedEvents = [...trip.events].sort((a, b) => {
-        const dateA = a.type === 'stay' ? parseDate((a as StayEvent).checkIn) : parseDate(a.date);
-        const dateB = b.type === 'stay' ? parseDate((b as StayEvent).checkIn) : parseDate(b.date);
-        return dateA.getTime() - dateB.getTime();
-      });
-
-      sortedEvents.forEach(event => {
-        const eventDate = event.type === 'stay' 
-          ? parseDate((event as StayEvent).checkIn)
-          : parseDate(event.date);
-
-        if (!startDate || eventDate < startDate) {
-          startDate = eventDate;
-        }
-
-        if (event.type === 'stay') {
-          const checkoutDate = parseDate((event as StayEvent).checkOut);
-          if (!endDate || checkoutDate > endDate) {
-            endDate = checkoutDate;
-          }
-        } else {
-          if (!endDate || eventDate > endDate) {
-            endDate = eventDate;
-          }
-        }
-      });
-
-      // If no events, use trip dates if available, otherwise current date
-      if (!startDate && trip.startDate) {
-        const [year, month, day] = trip.startDate.split('T')[0].split('-').map(Number);
-        startDate = new Date(year, month - 1, day);
-      }
-      if (!endDate && trip.endDate) {
-        const [year, month, day] = trip.endDate.split('T')[0].split('-').map(Number);
-        endDate = new Date(year, month - 1, day);
-      }
-      if (!startDate) startDate = new Date();
-      if (!endDate) endDate = startDate;
-
-      const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // Get thumbnail, using trip's thumbnail if available, otherwise fetch a default one
-      const thumbnail = trip.thumbnailUrl || await getDefaultThumbnail(trip.name);
-
-      return {
-        trip,
-        startDate,
-        endDate,
-        duration,
-        thumbnail
-      };
-    }));
-
-    return durations.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-  };
-
-  useEffect(() => {
-    const loadTripDurations = async () => {
-      const durations = await calculateTripDurations(state.trips);
-      setTripDurations(durations);
-    };
-    loadTripDurations();
-  }, [state.trips]);
-
-  const getMonthName = (month: number) => {
-    return new Date(2000, month).toLocaleString('default', { month: 'long' });
-  };
-
-  const formatDateRange = (start: Date, end: Date) => {
+// Update formatDateRange function
+const formatDateRange = (start: Date, end: Date) => {
+  try {
     const options: Intl.DateTimeFormatOptions = { 
       month: 'short', 
       day: 'numeric',
       year: start.getFullYear() !== end.getFullYear() ? 'numeric' : undefined
     };
     return `${start.toLocaleDateString('en-US', options)} - ${end.toLocaleDateString('en-US', options)}${end.getFullYear() !== start.getFullYear() ? `, ${end.getFullYear()}` : ''}`;
+  } catch (e) {
+    return 'Invalid date range';
+  }
+};
+
+const Calendar: React.FC = () => {
+  const { state } = useTrip();
+  const [tripDurations, setTripDurations] = useState<TripDurations>({});
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  useEffect(() => {
+    const calculateTripDurations = () => {
+      const durations: TripDurations = {};
+      
+      state.trips.forEach(trip => {
+        let startDate: Date | null = null;
+        let endDate: Date | null = null;
+
+        // Sort events by date
+        const sortedEvents = [...trip.events].sort((a, b) => {
+          const getEventDate = (event: Event): Date | null => {
+            if (event.type === 'stay' && (event as StayEvent).checkIn) {
+              return parseSafeDate((event as StayEvent).checkIn);
+            } else if (event.startDate) {
+              return parseSafeDate(event.startDate);
+            }
+            return null;
+          };
+
+          const dateA = getEventDate(a) || new Date(0);
+          const dateB = getEventDate(b) || new Date(0);
+          return dateA.getTime() - dateB.getTime();
+        });
+
+        sortedEvents.forEach(event => {
+          let eventStartDate: Date | null = null;
+          let eventEndDate: Date | null = null;
+
+          if (event.type === 'stay') {
+            eventStartDate = parseSafeDate((event as StayEvent).checkIn);
+            eventEndDate = parseSafeDate((event as StayEvent).checkOut);
+          } else {
+            eventStartDate = parseSafeDate(event.startDate);
+            eventEndDate = parseSafeDate(event.endDate) || eventStartDate;
+          }
+
+          if (eventStartDate && (!startDate || eventStartDate < startDate)) {
+            startDate = eventStartDate;
+          }
+          if (eventEndDate && (!endDate || eventEndDate > endDate)) {
+            endDate = eventEndDate;
+          }
+        });
+
+        // If no valid dates found from events, try trip dates
+        if (!startDate && trip.startDate) {
+          startDate = parseSafeDate(trip.startDate);
+        }
+        if (!endDate && trip.endDate) {
+          endDate = parseSafeDate(trip.endDate);
+        }
+
+        // Final fallback to current date if still no valid dates
+        if (!startDate) startDate = new Date();
+        if (!endDate) endDate = startDate;
+
+        const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        durations[trip._id] = {
+          startDate,
+          endDate,
+          duration: Math.max(duration, 1), // Ensure duration is at least 1 day
+          tripId: trip._id,
+          trip: trip
+        };
+      });
+
+      setTripDurations(durations);
+    };
+
+    calculateTripDurations();
+  }, [state.trips]);
+
+  const getMonthName = (month: number) => {
+    return format(new Date(2000, month), 'MMMM');
+  };
+
+  const formatDateRange = (start: Date, end: Date) => {
+    const sameYear = start.getFullYear() === end.getFullYear();
+    const formatStr = sameYear ? 'MMM d' : 'MMM d, yyyy';
+    return `${format(start, formatStr)} - ${format(end, formatStr)}`;
   };
 
   const calculateTripPosition = (trip: TripDuration, monthStart: Date, monthEnd: Date) => {
@@ -352,7 +405,6 @@ const Calendar: React.FC = () => {
     };
   };
 
-  // Update calculateVerticalPositions to be more strict with overlap detection
   const calculateVerticalPositions = (trips: TripDuration[], monthStart: Date, monthEnd: Date) => {
     if (trips.length <= 1) return { positions: new Map<string, number>(), hasOverlap: false };
 
@@ -389,7 +441,7 @@ const Calendar: React.FC = () => {
             end: left + width,
             width: width
           });
-          positions.set(trip.trip._id, layerIndex);
+          positions.set(trip.tripId, layerIndex);
           foundLayer = true;
         } else {
           layerIndex++;
@@ -406,19 +458,30 @@ const Calendar: React.FC = () => {
     };
   };
 
-  // Update renderMonth function
-  const renderMonth = (month: number) => {
-    const monthStart = new Date(selectedYear, month, 1);
-    const monthEnd = new Date(selectedYear, month + 1, 0);
-    const monthTrips = tripDurations.filter(trip => 
-      trip.startDate <= monthEnd && trip.endDate >= monthStart
-    ).sort((a, b) => {
-      const aDuration = a.endDate.getTime() - a.startDate.getTime();
-      const bDuration = b.endDate.getTime() - b.startDate.getTime();
-      return bDuration - aDuration;
+  // Move monthTrips calculation outside renderMonth
+  const monthTrips = useMemo(() => {
+    const monthTripsMap = new Array(12).fill(null).map((_, month) => {
+      const monthStart = startOfMonth(new Date(selectedYear, month));
+      const monthEnd = endOfMonth(monthStart);
+      
+      return Object.values(tripDurations)
+        .filter(trip => trip.startDate <= monthEnd && trip.endDate >= monthStart)
+        .sort((a, b) => {
+          const aDuration = a.endDate.getTime() - a.startDate.getTime();
+          const bDuration = b.endDate.getTime() - b.startDate.getTime();
+          return bDuration - aDuration;
+        });
     });
+    return monthTripsMap;
+  }, [tripDurations, selectedYear]);
 
-    const { positions: verticalPositions, hasOverlap } = calculateVerticalPositions(monthTrips, monthStart, monthEnd);
+  const renderMonth = (month: number) => {
+    const monthStart = startOfMonth(new Date(selectedYear, month));
+    const monthEnd = endOfMonth(monthStart);
+    
+    const monthTripData = monthTrips[month];
+
+    const { positions: verticalPositions, hasOverlap } = calculateVerticalPositions(monthTripData, monthStart, monthEnd);
     const layerCount = hasOverlap ? 
       Math.max(...Array.from(verticalPositions.values())) + 1 : 
       1;
@@ -438,21 +501,25 @@ const Calendar: React.FC = () => {
 
     // Calculate today's position if it's in this month
     const today = new Date();
-    const isCurrentMonth = today.getMonth() === month && today.getFullYear() === selectedYear;
+    const isCurrentMonth = isSameMonth(today, monthStart);
     const todayPosition = isCurrentMonth ? 
       ((today.getTime() - monthStart.getTime()) / (monthEnd.getTime() - monthStart.getTime())) * 100 : 
       null;
 
     return (
       <div key={month} className="rounded-lg shadow overflow-hidden h-full bg-white">
-        <div className={`p-2 border-b ${seasonColors.border}`}>
-          <h3 className={`text-base font-semibold ${seasonColors.text}`}>
+        <div className={cn("p-2 border-b", seasonColors.border)}>
+          <h3 className={cn("text-base font-semibold", seasonColors.text)}>
             {getMonthName(month)}
           </h3>
         </div>
         <div className="p-2">
-          <div className={`relative rounded-lg ${seasonColors.bg} bg-opacity-75`} 
-               style={{ height: `${availableHeight}px` }}>
+          <div className={cn(
+            "relative rounded-lg transition-colors duration-200",
+            seasonColors.bg,
+            seasonColors.hover
+          )} 
+          style={{ height: `${availableHeight}px` }}>
             {/* Today's date line */}
             {todayPosition !== null && (
               <div 
@@ -467,13 +534,13 @@ const Calendar: React.FC = () => {
                 </div>
               </div>
             )}
-            {monthTrips.map((trip, index) => {
-              const position = calculateTripPosition(trip, monthStart, monthEnd);
-              const verticalPosition = verticalPositions.get(trip.trip._id) || 0;
+            {monthTripData.map((tripDuration, index) => {
+              const position = calculateTripPosition(tripDuration, monthStart, monthEnd);
+              const verticalPosition = verticalPositions.get(tripDuration.tripId) || 0;
               return (
                 <TripBar
-                  key={trip.trip._id}
-                  trip={trip}
+                  key={tripDuration.tripId}
+                  trip={tripDuration.trip}
                   position={{
                     ...position,
                     top: hasOverlap 
@@ -482,10 +549,11 @@ const Calendar: React.FC = () => {
                   }}
                   monthStart={monthStart}
                   monthEnd={monthEnd}
-                  zIndex={monthTrips.length - index}
+                  zIndex={monthTripData.length - index}
                   formatDateRange={formatDateRange}
                   hasOverlap={hasOverlap}
                   height={barHeight}
+                  duration={tripDuration}
                 />
               );
             })}
@@ -497,14 +565,6 @@ const Calendar: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Map View */}
-      <div className="bg-white shadow rounded-lg overflow-hidden relative" style={{ zIndex: 0 }}>
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Trip Locations</h2>
-          <CalendarMap trips={state.trips} />
-        </div>
-      </div>
-
       {/* Trip List */}
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="p-6">
@@ -533,7 +593,7 @@ const Calendar: React.FC = () => {
             </div>
           ) : state.error ? (
             <div className="text-red-600 text-center">{state.error}</div>
-          ) : tripDurations.length === 0 ? (
+          ) : Object.keys(tripDurations).length === 0 ? (
             <div className="text-gray-500 text-center py-8">No trips found</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">

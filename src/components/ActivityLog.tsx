@@ -5,7 +5,7 @@ import { api } from '../services/api';
 import Avatar from './Avatar';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
-import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent } from '../types';
+import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent } from '../types/eventTypes';
 
 interface Activity {
   _id: string;

@@ -11,7 +11,8 @@ export interface Event {
   id: string;
   type: EventType;
   thumbnailUrl?: string;
-  date: string; // YYYY-MM-DD format
+  startDate: string; // ISO 8601 format (e.g., "2024-07-28T10:00:00Z")
+  endDate: string;   // ISO 8601 format (e.g., "2024-07-28T12:00:00Z")
   location?: {
     lat: number;
     lng: number;
@@ -26,17 +27,23 @@ export interface Event {
   updatedAt: string;
   likes?: string[];
   dislikes?: string[];
+  cost?: number;
 }
 
 export interface ArrivalDepartureEvent extends Event {
   type: 'arrival' | 'departure';
   flightNumber?: string;
   airline?: string;
+  date: string; // YYYY-MM-DD format
   time: string; // HH:mm format
   airport: string;
   terminal?: string;
   gate?: string;
   bookingReference?: string;
+  departureDate?: string; // YYYY-MM-DD format
+  departureTime?: string; // HH:mm format
+  arrivalDate?: string; // YYYY-MM-DD format
+  arrivalTime?: string; // HH:mm format
 }
 
 export interface StayEvent extends Event {
@@ -44,14 +51,22 @@ export interface StayEvent extends Event {
   accommodationName: string;
   address?: string;
   checkIn: string; // YYYY-MM-DD format
+  checkInTime: string; // HH:mm format
   checkOut: string; // YYYY-MM-DD format
+  checkOutTime: string; // HH:mm format
   reservationNumber?: string;
   contactInfo?: string;
+  description?: string;
+  cost?: number;
 }
 
 export interface DestinationEvent extends Event {
   type: 'destination';
   placeName: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
   address?: string;
   description?: string;
   openingHours?: string;
@@ -211,6 +226,7 @@ export interface FlightEvent extends Event {
   terminal?: string;
   gate?: string;
   bookingReference?: string;
+  cost?: number;
 }
 
 export interface TrainEvent extends Event {
@@ -224,6 +240,7 @@ export interface TrainEvent extends Event {
   carriageNumber?: string;
   seatNumber?: string;
   bookingReference?: string;
+  cost?: number;
 }
 
 export interface RentalCarEvent extends Event {
@@ -231,12 +248,14 @@ export interface RentalCarEvent extends Event {
   carCompany?: string;
   pickupLocation?: string;
   dropoffLocation?: string;
-  pickupTime?: string;
-  dropoffTime?: string;
-  dropoffDate?: string; // YYYY-MM-DD format
+  date: string; // YYYY-MM-DD format for pickup date
+  pickupTime: string; // HH:mm format
+  dropoffDate: string; // YYYY-MM-DD format
+  dropoffTime: string; // HH:mm format
   carType?: string;
   bookingReference?: string;
   licensePlate?: string;
+  cost?: number;
 }
 
 export interface BusEvent extends Event {
@@ -245,10 +264,13 @@ export interface BusEvent extends Event {
   busOperator?: string;
   departureStation?: string;
   arrivalStation?: string;
+  departureDate?: string;
+  arrivalDate?: string;
   departureTime?: string;
   arrivalTime?: string;
   seatNumber?: string;
   bookingReference?: string;
+  cost?: number;
 }
 
 export interface ActivityEvent extends Event {
@@ -257,6 +279,11 @@ export interface ActivityEvent extends Event {
   activityType: string;
   address?: string;
   description?: string;
+  startDate: string;  // YYYY-MM-DD format
+  startTime: string;  // HH:mm format
+  endDate: string;    // YYYY-MM-DD format
+  endTime: string;    // HH:mm format
+  cost?: number;
 }
 
 export interface AISuggestionHistory {

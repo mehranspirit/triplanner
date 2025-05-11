@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { Trip, User } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Trip, User } from '../types/eventTypes';
 import { api } from '../services/api';
 import Avatar from './Avatar';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { X, Plus, User as UserIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
@@ -18,258 +23,218 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'editor' | 'viewer'>('viewer');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [localTrip, setLocalTrip] = useState(trip);
+
+  useEffect(() => {
+    setLocalTrip(trip);
+  }, [trip]);
 
   if (!isOpen) return null;
 
   const handleAddCollaborator = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     if (!trip._id) {
       setError('Trip ID is missing');
+      setIsLoading(false);
       return;
     }
 
     try {
-      // Make the API call
+      const optimisticCollaborator = {
+        user: { _id: 'temp', name: 'Adding...', email, photoUrl: null },
+        role
+      };
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: [...localTrip.collaborators, optimisticCollaborator]
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       await api.addCollaborator(trip._id, email, role);
-      
-      // Fetch the latest trip data from the server
       const serverTrip = await api.getTrip(trip._id);
-      
-      // Log the updated collaborators
-      //console.log('Updated collaborators after adding:', serverTrip.collaborators);
-      
-      // Update the UI with the server data
+      setLocalTrip(serverTrip);
       onUpdate(serverTrip);
-      
-      // Reset form
       setEmail('');
       setRole('viewer');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add collaborator');
+      setLocalTrip(trip);
+      onUpdate(trip);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleRemoveCollaborator = async (userId: string) => {
-    if (!trip._id) {
-      setError('Trip ID is missing');
-      return;
-    }
-
+    setIsLoading(true);
     try {
-      // Make the API call
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: localTrip.collaborators.filter(c => 
+          isCollaboratorObject(c) && c.user._id !== userId
+        )
+      };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
+
       await api.removeCollaborator(trip._id, userId);
-      
-      // Fetch the latest trip data from the server
       const serverTrip = await api.getTrip(trip._id);
-      
-      // Log the updated collaborators
-      //console.log('Updated collaborators after removing:', serverTrip.collaborators);
-      
-      // Update the UI with the server data
+      setLocalTrip(serverTrip);
       onUpdate(serverTrip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove collaborator');
-      
-      // On error, fetch the latest trip data to ensure consistency
-      try {
-        const latestTrip = await api.getTrip(trip._id);
-        onUpdate(latestTrip);
-      } catch (fetchErr) {
-        console.error('Failed to fetch latest trip data after error:', fetchErr);
-      }
+      setLocalTrip(trip);
+      onUpdate(trip);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleRoleChange = async (userId: string, newRole: 'editor' | 'viewer') => {
-    if (!trip._id) {
-      setError('Trip ID is missing');
-      return;
-    }
-
+    setIsLoading(true);
     try {
-      // console.log('Starting role update:', {
-      //   tripId: trip._id,
-      //   userId,
-      //   newRole,
-      //   currentCollaborators: trip.collaborators
-      //     .filter(isCollaboratorObject)
-      //     .map(c => ({
-      //       userId: c.user._id,
-      //       name: c.user.name,
-      //       role: c.role
-      //     }))
-      // });
-      
-      // Create an optimistic update to maintain the order of collaborators
-      const updatedTrip = {
-        ...trip,
-        collaborators: trip.collaborators
-          .filter(isCollaboratorObject)
-          .map(c => 
-            c.user._id === userId 
-              ? { ...c, role: newRole } 
-              : c
-          )
+      const optimisticTrip = {
+        ...localTrip,
+        collaborators: localTrip.collaborators.map(c => {
+          if (isCollaboratorObject(c) && c.user._id === userId) {
+            return { ...c, role: newRole };
+          }
+          return c;
+        })
       };
-      
-      // Update the UI immediately to prevent visual reordering
-      onUpdate(updatedTrip);
-      
-      // Make the API call in the background
-      await api.updateCollaboratorRole(trip._id, userId, newRole);
-      
-      // Add a small delay to ensure the server has processed the update
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Then fetch the latest trip data from the server
-      try {
-        const serverTrip = await api.getTrip(trip._id);
-        
-        // Log the updated collaborator data
-        const updatedCollaborator = serverTrip.collaborators
-          .filter(isCollaboratorObject)
-          .find(c => c.user._id === userId);
-        
-        // console.log('Updated collaborator data:', {
-        //   userId,
-        //   name: updatedCollaborator?.user.name,
-        //   role: updatedCollaborator?.role,
-        //   roleType: typeof updatedCollaborator?.role
-        // });
-        
-        // Update the UI with the server data, but maintain the order
-        const orderedServerTrip = {
-          ...serverTrip,
-          collaborators: updatedTrip.collaborators.map(localCollab => {
-            // Find the matching collaborator from the server data
-            const serverCollab = serverTrip.collaborators
-              .filter(isCollaboratorObject)
-              .find(sc => sc.user._id === localCollab.user._id);
-            // Use server data but maintain the order from local data
-            return serverCollab || localCollab;
-          })
-        };
-        
-        onUpdate(orderedServerTrip);
-        
-        //console.log('Role update complete');
-      } catch (fetchErr) {
-        console.error('Error fetching updated trip:', fetchErr);
-        // We already updated the UI optimistically, so no need to do it again
-      }
-    } catch (err) {
-      console.error('Error updating role:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update role');
-      
-      // On error, fetch the latest trip data to ensure consistency
-      try {
-        const latestTrip = await api.getTrip(trip._id);
-        onUpdate(latestTrip);
-      } catch (fetchErr) {
-        console.error('Failed to fetch latest trip data after error:', fetchErr);
-      }
-    }
-  };
+      setLocalTrip(optimisticTrip);
+      onUpdate(optimisticTrip);
 
-  const modalStyle = {
-    zIndex: 1000, // Ensure the modal appears above other elements
-    // ... existing styles ...
+      await api.updateCollaboratorRole(trip._id, userId, newRole);
+      const serverTrip = await api.getTrip(trip._id);
+      setLocalTrip(serverTrip);
+      onUpdate(serverTrip);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update role');
+      setLocalTrip(trip);
+      onUpdate(trip);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div style={modalStyle} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-lg w-full max-w-md">
-        <h3 className="text-xl font-semibold mb-4">Manage Collaborators</h3>
-        
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <UserIcon className="w-5 h-5 text-gray-500" />
+            Manage Collaborators
+          </DialogTitle>
+          <DialogDescription>
+            Add or remove collaborators and manage their access levels for this trip.
+          </DialogDescription>
+        </DialogHeader>
+
         {error && (
-          <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
+          <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md text-sm flex-shrink-0">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleAddCollaborator} className="mb-6">
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input"
-              required
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Role</label>
-            <select
+        {/* Add Collaborator Form */}
+        <div className="border-t border-b py-6 flex-shrink-0">
+          <form onSubmit={handleAddCollaborator} className="flex gap-4">
+            <div className="flex-1">
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter collaborator's email"
+                className="w-full"
+                required
+              />
+            </div>
+            <Select
               value={role}
-              onChange={(e) => setRole(e.target.value as 'editor' | 'viewer')}
-              className="input"
+              onValueChange={(value: 'editor' | 'viewer') => setRole(value)}
             >
-              <option value="viewer">Viewer</option>
-              <option value="editor">Editor</option>
-            </select>
-          </div>
-          <button type="submit" className="btn btn-primary w-full">
-            Add Collaborator
-          </button>
-        </form>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="viewer">Viewer</SelectItem>
+                <SelectItem value="editor">Editor</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="shrink-0"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {isLoading ? 'Adding...' : 'Add'}
+            </Button>
+          </form>
+        </div>
 
-        <div className="border-t pt-4">
-          <h4 className="font-medium mb-2">Current Collaborators</h4>
-          <div className="max-h-60 overflow-y-auto pr-1">
-            <ul className="space-y-2">
-              {trip.collaborators
+        {/* Collaborators List */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="py-6 px-1">
+            <h3 className="text-sm font-medium text-gray-500 mb-4 px-3">Current Collaborators</h3>
+            <div className="space-y-3">
+              {localTrip.collaborators
                 .filter(isCollaboratorObject)
                 .map((collaborator) => (
-                <li key={collaborator.user._id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center space-x-3">
-                    <Avatar
-                      photoUrl={collaborator.user.photoUrl || null}
-                      name={collaborator.user.name}
-                      size="sm"
-                      className="ring-2 ring-gray-200"
-                    />
-                    <div>
-                      <p className="font-medium">{collaborator.user.name}</p>
-                      <p className="text-sm text-gray-500">{collaborator.user.email}</p>
+                  <div
+                    key={collaborator.user._id}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-4">
+                      <Avatar
+                        photoUrl={collaborator.user.photoUrl || null}
+                        name={collaborator.user.name}
+                        size="md"
+                        className="ring-2 ring-white"
+                      />
+                      <div>
+                        <div className="font-medium text-gray-900">{collaborator.user.name}</div>
+                        <div className="text-sm text-gray-500">{collaborator.user.email}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Select
+                        value={collaborator.role}
+                        onValueChange={(value: 'editor' | 'viewer') => 
+                          handleRoleChange(collaborator.user._id, value)
+                        }
+                        disabled={isLoading}
+                      >
+                        <SelectTrigger className="w-[120px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="viewer">Viewer</SelectItem>
+                          <SelectItem value="editor">Editor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveCollaborator(collaborator.user._id)}
+                        disabled={isLoading}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={collaborator.role}
-                      onChange={(e) =>
-                        handleRoleChange(
-                          collaborator.user._id,
-                          e.target.value as 'editor' | 'viewer'
-                        )
-                      }
-                      className="input py-1"
-                    >
-                      <option value="viewer">Viewer</option>
-                      <option value="editor">Editor</option>
-                    </select>
-                    <button
-                      onClick={() => handleRemoveCollaborator(collaborator.user._id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                ))}
+            </div>
           </div>
         </div>
-
-        <div className="mt-6 flex justify-end">
-          <button onClick={onClose} className="btn btn-secondary">
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

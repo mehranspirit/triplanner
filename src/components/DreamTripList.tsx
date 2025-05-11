@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { DreamTrip } from '../types/dreamTripTypes';
 import { useAuth } from '../context/AuthContext';
-import { User } from '../types';
+import { User } from '../types/eventTypes';
 
 interface DreamTripListProps {
   trips: DreamTrip[];
