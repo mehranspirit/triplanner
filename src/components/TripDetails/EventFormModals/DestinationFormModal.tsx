@@ -25,6 +25,7 @@ const DestinationFormModal: React.FC<DestinationFormModalProps> = ({ isOpen, onC
         type: 'destination',
         startDate: '',
         endDate: '',
+        status: 'confirmed',
     },
   });
 
@@ -34,6 +35,16 @@ const DestinationFormModal: React.FC<DestinationFormModalProps> = ({ isOpen, onC
         ...eventToEdit,
         startDate: eventToEdit.startDate || '',
         endDate: eventToEdit.endDate || '',
+      });
+    } else {
+      form.reset({
+        type: 'destination',
+        placeName: '',
+        description: '',
+        startDate: '',
+        endDate: '',
+        notes: '',
+        status: 'confirmed',
       });
     }
   }, [eventToEdit, form]);

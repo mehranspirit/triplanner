@@ -14,6 +14,7 @@ import {
 // Cache for storing thumbnail URLs
 const thumbnailCache: { [key: string]: string } = {};
 
+// Default thumbnails for each event type
 const DEFAULT_THUMBNAILS: { [key: string]: string } = {
   arrival: 'https://images.pexels.com/photos/358319/pexels-photo-358319.jpeg?auto=compress&cs=tinysrgb&w=300',
   departure: 'https://images.pexels.com/photos/723240/pexels-photo-723240.jpeg?auto=compress&cs=tinysrgb&w=300',
@@ -23,10 +24,11 @@ const DEFAULT_THUMBNAILS: { [key: string]: string } = {
   train: 'https://images.pexels.com/photos/302428/pexels-photo-302428.jpeg?auto=compress&cs=tinysrgb&w=300',
   rental_car: 'https://images.pexels.com/photos/30292047/pexels-photo-30292047.jpeg?auto=compress&cs=tinysrgb&w=300',
   bus: 'https://images.pexels.com/photos/3608967/pexels-photo-3608967.jpeg?auto=compress&cs=tinysrgb&w=300',
-  activity: 'https://images.pexels.com/photos/1659438/pexels-photo-1659438.jpeg?auto=compress&cs=tinysrgb&w=300'
+  activity: 'https://images.pexels.com/photos/1659438/pexels-photo-1659438.jpeg?auto=compress&cs=tinysrgb&w=300',
+  default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=300'
 };
 
-// Predefined thumbnails as fallback
+// Predefined thumbnails for common scenarios
 const PREDEFINED_THUMBNAILS: { [key: string]: string } = {
   beach: 'https://images.pexels.com/photos/1032650/pexels-photo-1032650.jpeg?auto=compress&cs=tinysrgb&w=800',
   mountain: 'https://images.pexels.com/photos/417173/pexels-photo-417173.jpeg?auto=compress&cs=tinysrgb&w=800',
@@ -47,48 +49,79 @@ const PREDEFINED_THUMBNAILS: { [key: string]: string } = {
   default: 'https://images.pexels.com/photos/1051073/pexels-photo-1051073.jpeg?auto=compress&cs=tinysrgb&w=800'
 };
 
-export const getEventThumbnail = async (event: Event): Promise<string> => {
-  let searchTerm = '';
-  
-  // Determine search term based on event type
+const getSearchTerm = (event: Event): string => {
   switch (event.type) {
     case 'stay':
-      searchTerm = (event as StayEvent).accommodationName || 'hotel accommodation';
-      break;
+      return (event as StayEvent).accommodationName || 'hotel accommodation';
     case 'destination':
-      searchTerm = (event as DestinationEvent).placeName || 'travel destination';
-      break;
+      return (event as DestinationEvent).placeName || 'travel destination';
     case 'arrival':
     case 'departure':
-      searchTerm = (event as ArrivalDepartureEvent).airport || 'airport terminal';
-      break;
+      return (event as ArrivalDepartureEvent).airport || 'airport terminal';
     case 'flight':
-      searchTerm = (event as FlightEvent).arrivalAirport || (event as FlightEvent).departureAirport || 'airplane';
-      break;
+      return (event as FlightEvent).arrivalAirport || (event as FlightEvent).departureAirport || 'airplane';
     case 'train':
-      searchTerm = (event as TrainEvent).arrivalStation || (event as TrainEvent).departureStation || 'train station';
-      break;
+      return (event as TrainEvent).arrivalStation || (event as TrainEvent).departureStation || 'train station';
     case 'rental_car':
-      searchTerm = (event as RentalCarEvent).pickupLocation || (event as RentalCarEvent).dropoffLocation || 'car rental';
-      break;
+      return (event as RentalCarEvent).pickupLocation || (event as RentalCarEvent).dropoffLocation || 'car rental';
     case 'bus':
-      searchTerm = (event as BusEvent).departureStation || (event as BusEvent).arrivalStation || 'bus station';
-      break;
+      return (event as BusEvent).departureStation || (event as BusEvent).arrivalStation || 'bus station';
     case 'activity': {
       const activityEvent = event as ActivityEvent;
-      // Use both title and type for better image matching
-      searchTerm = `${activityEvent.activityType} ${activityEvent.title}`.trim() || 'outdoor activity';
-      break;
+      return `${activityEvent.activityType} ${activityEvent.title}`.trim() || 'outdoor activity';
     }
+    default:
+      return 'travel destination';
+  }
+};
+
+const fetchFromPexels = async (searchTerm: string): Promise<string | null> => {
+  try {
+    const response = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchTerm)}&per_page=1&orientation=landscape`,
+      {
+        headers: {
+          'Authorization': import.meta.env.VITE_PEXELS_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch from Pexels');
+    }
+
+    const data = await response.json();
+    if (data.photos && data.photos.length > 0) {
+      return data.photos[0].src.large2x;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch from Pexels:', error);
+  }
+  return null;
+};
+
+export const getEventThumbnail = async (event: Event): Promise<string> => {
+  // 1. Check for user-provided thumbnail URL
+  if (event.thumbnailUrl) {
+    return event.thumbnailUrl;
   }
 
-  // Check cache first
+  const searchTerm = getSearchTerm(event);
   const cacheKey = `${event.type}-${searchTerm}`;
+
+  // Check cache
   if (thumbnailCache[cacheKey]) {
     return thumbnailCache[cacheKey];
   }
 
-  // Check predefined thumbnails
+  // 2. Try Pexels API
+  const pexelsImage = await fetchFromPexels(searchTerm);
+  if (pexelsImage) {
+    thumbnailCache[cacheKey] = pexelsImage;
+    return pexelsImage;
+  }
+
+  // 3. Check predefined thumbnails
   const lowercaseName = searchTerm.toLowerCase();
   for (const [keyword, url] of Object.entries(PREDEFINED_THUMBNAILS)) {
     if (lowercaseName.includes(keyword)) {
@@ -97,41 +130,10 @@ export const getEventThumbnail = async (event: Event): Promise<string> => {
     }
   }
 
-  try {
-    // Remove common words and get keywords from place name
-    const keywords = searchTerm
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .split(' ')
-      .filter(word => !['hotel', 'airport', 'the', 'a', 'an', 'in', 'at', 'of'].includes(word))
-      .join(' ');
-
-    // Try to fetch from Pexels API
-    const response = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(keywords)}&per_page=1&orientation=landscape`,
-      {
-        headers: {
-          'Authorization': import.meta.env.VITE_PEXELS_API_KEY
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch from Pexels');
-    }
-
-    const data = await response.json();
-    if (data.photos && data.photos.length > 0) {
-      const imageUrl = data.photos[0].src.large2x;
-      thumbnailCache[cacheKey] = imageUrl;
-      return imageUrl;
-    }
-  } catch (error) {
-    console.warn('Failed to fetch custom thumbnail:', error);
-  }
-
-  // Fallback to default event type thumbnail
-  return DEFAULT_THUMBNAILS[event.type as EventType] || DEFAULT_THUMBNAILS.default; // Ensure fallback
+  // 4. Fallback to default event type thumbnail
+  const defaultThumbnail = DEFAULT_THUMBNAILS[event.type as EventType] || DEFAULT_THUMBNAILS.default;
+  thumbnailCache[cacheKey] = defaultThumbnail;
+  return defaultThumbnail;
 };
 
 export const getDefaultThumbnail = async (tripName: string): Promise<string> => {
@@ -140,7 +142,14 @@ export const getDefaultThumbnail = async (tripName: string): Promise<string> => 
     return thumbnailCache[tripName];
   }
 
-  // Check predefined thumbnails
+  // 1. Try Pexels API
+  const pexelsImage = await fetchFromPexels(tripName);
+  if (pexelsImage) {
+    thumbnailCache[tripName] = pexelsImage;
+    return pexelsImage;
+  }
+
+  // 2. Check predefined thumbnails
   const lowercaseName = tripName.toLowerCase();
   for (const [keyword, url] of Object.entries(PREDEFINED_THUMBNAILS)) {
     if (lowercaseName.includes(keyword)) {
@@ -149,42 +158,11 @@ export const getDefaultThumbnail = async (tripName: string): Promise<string> => 
     }
   }
 
-  try {
-    // Remove common words and get keywords from trip name
-    const keywords = tripName
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .split(' ')
-      .filter(word => !['trip', 'to', 'in', 'at', 'the', 'a', 'an'].includes(word))
-      .join(' ');
-
-    // Try to fetch from Pexels API
-    const response = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(keywords)}&per_page=1&orientation=landscape`,
-      {
-        headers: {
-          'Authorization': import.meta.env.VITE_PEXELS_API_KEY
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch from Pexels');
-    }
-
-    const data = await response.json();
-    if (data.photos && data.photos.length > 0) {
-      const imageUrl = data.photos[0].src.large2x;
-      thumbnailCache[tripName] = imageUrl;
-      return imageUrl;
-    }
-  } catch (error) {
-    console.warn('Failed to fetch custom thumbnail:', error);
-  }
-
-  // Fallback to default travel image
-  return PREDEFINED_THUMBNAILS.default;
+  // 3. Fallback to default travel image
+  const defaultThumbnail = PREDEFINED_THUMBNAILS.default;
+  thumbnailCache[tripName] = defaultThumbnail;
+  return defaultThumbnail;
 };
 
-// Export constants for potential use elsewhere, though registry might provide defaults
+// Export constants for potential use elsewhere
 export { DEFAULT_THUMBNAILS, PREDEFINED_THUMBNAILS };

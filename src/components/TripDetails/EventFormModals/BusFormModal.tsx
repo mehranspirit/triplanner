@@ -31,7 +31,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
         departureTime: '',
         arrivalDate: '',
         arrivalTime: '',
-        status: 'exploring',
+        status: 'confirmed',
     },
   });
 
@@ -64,7 +64,7 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
         seatNumber: '',
         bookingReference: '',
         notes: '',
-        status: 'exploring',
+        status: 'confirmed',
       });
     }
   }, [eventToEdit, form, isOpen]);

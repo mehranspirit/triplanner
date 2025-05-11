@@ -28,7 +28,7 @@ const DepartureFormModal: React.FC<DepartureFormModalProps> = ({ isOpen, onClose
         type: 'departure',
         departureDate: '',
         departureTime: '',
-        status: 'exploring',
+        status: 'confirmed',
     },
   });
 
@@ -59,7 +59,7 @@ const DepartureFormModal: React.FC<DepartureFormModalProps> = ({ isOpen, onClose
         departureDate: '',
         departureTime: '',
         notes: '',
-        status: 'exploring',
+        status: 'confirmed',
         flightNumber: '',
         airline: '',
         terminal: '',

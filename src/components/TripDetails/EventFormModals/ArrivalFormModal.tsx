@@ -24,7 +24,7 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
         type: 'arrival',
         arrivalDate: '',
         arrivalTime: '',
-        status: 'exploring',
+        status: 'confirmed',
     },
   });
 
@@ -43,7 +43,7 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
         arrivalDate: '',
         arrivalTime: '',
         notes: '',
-        status: 'exploring',
+        status: 'confirmed',
         flightNumber: '',
         airline: '',
         terminal: '',

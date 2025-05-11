@@ -9,7 +9,7 @@ export const eventColors = {
   destination: 'pink',
   flight: 'blue',
   train: 'orange',
-  rental_car: 'yellow',
+  rental_car: 'red',
   bus: 'purple',
   activity: 'indigo'
 } as const;

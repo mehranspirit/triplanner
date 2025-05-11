@@ -31,7 +31,7 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
         checkInTime: '14:00', // Default check-in time
         checkOutDate: '',
         checkOutTime: '11:00', // Default check-out time
-        status: 'exploring',
+        status: 'confirmed',
     },
   });
 
@@ -64,7 +64,7 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
         checkOutDate: '',
         checkOutTime: '11:00',
         notes: '',
-        status: 'exploring',
+        status: 'confirmed',
         reservationNumber: '',
         contactInfo: '',
       });

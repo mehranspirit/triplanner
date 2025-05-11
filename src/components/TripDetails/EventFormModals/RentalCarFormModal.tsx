@@ -29,6 +29,7 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
         pickupTime: '',
         dropoffDate: '',
         dropoffTime: '',
+        status: 'confirmed',
     },
   });
 
@@ -69,7 +70,7 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
         licensePlate: '',
         bookingReference: '',
         notes: '',
-        status: 'exploring',
+        status: 'confirmed',
       });
     }
   }, [eventToEdit, form, isOpen]);

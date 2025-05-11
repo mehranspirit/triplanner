@@ -29,7 +29,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
         departureTime: '',
         arrivalDate: '',
         arrivalTime: '',
-        status: 'exploring',
+        status: 'confirmed',
     },
   });
 
@@ -63,7 +63,7 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
         seatNumber: '',
         bookingReference: '',
         notes: '',
-        status: 'exploring',
+        status: 'confirmed',
       });
     }
   }, [eventToEdit, form, isOpen]);

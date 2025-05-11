@@ -67,7 +67,7 @@ const FlightFormModal: React.FC<FlightFormModalProps> = ({ isOpen, onClose, onSa
         gate: '',
         bookingReference: '',
         notes: '',
-        status: 'exploring',
+        status: 'confirmed',
       });
     }
   }, [eventToEdit, form, isOpen]);
