@@ -364,7 +364,7 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
           </div>
           
           <GlowingIcon
-            icon={<FaTrain />}
+            icon={<FaTrain className="text-orange-500" />}
             isActive={isActive}
             isExploring={isExploring}
             eventType="train"
@@ -601,7 +601,7 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
             
             {/* Notes Section */}
             {event.notes && (
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 space-y-2 relative z-30">
                 <CollapsibleContent
                   content={event.notes}
                   label="Notes"
