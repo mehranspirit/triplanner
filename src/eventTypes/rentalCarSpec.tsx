@@ -300,6 +300,20 @@ const renderRentalCarFormFields = (form: UseFormReturn<RentalCarFormData>): Reac
                 )}
                 />
         </div>
+        {/* Cost */}
+        <FormField
+            control={control}
+            name="cost"
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Cost</FormLabel>
+                    <FormControl>
+                        <Input type="number" min={0} step="0.01" placeholder="Enter cost (optional)" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
         <FormField
             control={control}
             name="thumbnailUrl"
