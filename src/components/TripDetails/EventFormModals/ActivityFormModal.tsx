@@ -52,7 +52,7 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({ isOpen, onClose, 
         startTime: '',
         endDate: '',
         endTime: '',
-        location: '',
+        location: undefined,
         notes: '',
         status: 'confirmed',
       });
