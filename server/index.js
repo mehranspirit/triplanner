@@ -1575,6 +1575,44 @@ app.delete('/api/trips/:id/events/:eventId/vote', auth, async (req, res) => {
   }
 });
 
+// --- CHECKLIST ENDPOINTS ---
+
+// Get shared checklist (bins)
+app.get('/api/trips/:id/checklist/shared', auth, async (req, res) => {
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) return res.status(404).json({ message: 'Trip not found' });
+  res.json(trip.checklistShared || []);
+});
+
+// Update shared checklist (bins)
+app.post('/api/trips/:id/checklist/shared', auth, async (req, res) => {
+  const { bins } = req.body; // bins: ChecklistBin[]
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) return res.status(404).json({ message: 'Trip not found' });
+  trip.checklistShared = bins;
+  await trip.save();
+  res.json(trip.checklistShared);
+});
+
+// Get personal checklist (bins)
+app.get('/api/trips/:id/checklist/personal', auth, async (req, res) => {
+  const userId = req.user._id.toString();
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) return res.status(404).json({ message: 'Trip not found' });
+  res.json(trip.checklistPersonal.get(userId) || []);
+});
+
+// Update personal checklist (bins)
+app.post('/api/trips/:id/checklist/personal', auth, async (req, res) => {
+  const userId = req.user._id.toString();
+  const { bins } = req.body; // bins: ChecklistBin[]
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) return res.status(404).json({ message: 'Trip not found' });
+  trip.checklistPersonal.set(userId, bins);
+  await trip.save();
+  res.json(trip.checklistPersonal.get(userId));
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

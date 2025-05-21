@@ -72,7 +72,7 @@ const getSearchTerm = (event: Event): string => {
     }
     default:
       return 'travel destination';
-  }
+    }
 };
 
 const fetchFromPexels = async (searchTerm: string): Promise<string | null> => {

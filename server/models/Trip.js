@@ -164,6 +164,18 @@ const tripNoteSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+const ChecklistItemSchema = new mongoose.Schema({
+  id: String,
+  text: String,
+  completed: Boolean,
+}, { _id: false });
+
+const ChecklistBinSchema = new mongoose.Schema({
+  id: String,
+  title: String,
+  items: [ChecklistItemSchema],
+}, { _id: false });
+
 const tripSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -200,7 +212,13 @@ const tripSchema = new mongoose.Schema({
   shareableLink: {
     type: String,
     sparse: true
-  }
+  },
+  checklistShared: [ChecklistBinSchema],
+  checklistPersonal: {
+    type: Map,
+    of: [ChecklistBinSchema],
+    default: {},
+  },
 }, {
   timestamps: true,
   toJSON: {
