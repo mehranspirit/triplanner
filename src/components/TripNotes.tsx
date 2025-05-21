@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TaskList from '@tiptap/extension-task-list';
@@ -14,6 +14,22 @@ interface TripNotesProps {
   tripId: string;
   canEdit: boolean;
 }
+
+// Cache structure with metadata
+interface CacheEntry {
+  data: TripNote;
+  timestamp: number;
+  version: number;
+}
+
+interface NotesCache {
+  [tripId: string]: CacheEntry;
+}
+
+// Module-level cache with metadata
+const notesCache: NotesCache = {};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_VERSION = 1;
 
 // Generate a pastel color based on user ID
 const generateUserColor = (userId: string) => {
@@ -110,6 +126,23 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Check if cache is valid
+  const isCacheValid = useCallback((entry: CacheEntry | undefined) => {
+    if (!entry) return false;
+    const now = Date.now();
+    return (
+      now - entry.timestamp < CACHE_DURATION &&
+      entry.version === CACHE_VERSION
+    );
+  }, []);
+
+  // Clear cache for current trip
+  const clearCache = useCallback(() => {
+    if (notesCache[tripId]) {
+      delete notesCache[tripId];
+    }
+  }, [tripId]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -151,6 +184,12 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
     try {
       const updatedNote = await api.updateTripNotes(tripId, content);
       setNote(updatedNote);
+      // Update cache
+      notesCache[tripId] = {
+        data: updatedNote,
+        timestamp: Date.now(),
+        version: CACHE_VERSION
+      };
     } catch (err) {
       console.error('Error updating notes:', err);
       setError(err instanceof Error ? err.message : 'Failed to update notes');
@@ -162,21 +201,45 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
       try {
         setIsLoading(true);
         setError(null);
+
+        // Check cache first
+        if (notesCache[tripId] && isCacheValid(notesCache[tripId])) {
+          setNote(notesCache[tripId].data);
+          if (editor) {
+            editor.commands.setContent(notesCache[tripId].data.content);
+          }
+          setIsLoading(false);
+          return;
+        }
+
         const tripNote = await api.getTripNotes(tripId);
         setNote(tripNote);
         if (editor) {
           editor.commands.setContent(tripNote.content);
         }
+        // Update cache
+        notesCache[tripId] = {
+          data: tripNote,
+          timestamp: Date.now(),
+          version: CACHE_VERSION
+        };
       } catch (err) {
         console.error('Error fetching notes:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch notes');
+        // If we have stale cache data, use it
+        if (notesCache[tripId]) {
+          setNote(notesCache[tripId].data);
+          if (editor) {
+            editor.commands.setContent(notesCache[tripId].data.content);
+          }
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchNotes();
-  }, [tripId, editor]);
+  }, [tripId, editor, isCacheValid]);
 
   if (isLoading) {
     return (

@@ -338,7 +338,7 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
                 <FormDescription>
                     Optional. Enter the cost for this activity (in your default currency).
                 </FormDescription>
-                <FormMessage />
+                    <FormMessage />
                 </FormItem>
             )}
         />

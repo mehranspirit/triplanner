@@ -23,8 +23,9 @@ import { cn } from '@/lib/utils';
 import { getDefaultThumbnail } from './thumbnailHelpers';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripMap from '@/components/TripMap';
-import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2 } from 'lucide-react';
+import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare } from 'lucide-react';
 import TripNotes from '@/components/TripNotes';
+import TripChecklist from '@/components/TripDetails/TripChecklist';
 
 // Import icons
 import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
@@ -105,6 +106,7 @@ const NewTripDetails: React.FC = () => {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [generatedSuggestions, setGeneratedSuggestions] = useState<Event[]>([]);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   const handleAddEventClick = (type: EventType) => {
     setEditingEvent(null);
@@ -712,7 +714,7 @@ const NewTripDetails: React.FC = () => {
           </div>
           
           {/* Trip Title */}
-          <div className="absolute bottom-6 left-6 right-6 text-white z-10">
+          <div className="absolute bottom-6 left-6 right-6 text-white z-5">
             <div className="flex flex-col">
               <div className="mb-4">
                 <h1 className="text-3xl font-bold text-white drop-shadow-lg">{trip.name}</h1>
@@ -861,7 +863,8 @@ const NewTripDetails: React.FC = () => {
 
                   return Object.entries(groupedEvents).map(([dateKey, events]) => (
                     <div key={dateKey} className="relative">
-                      <div className="sticky top-0 bg-white z-10 py-2 mb-4">
+                      {/* Sticky Date Headers */}
+                      <div className="sticky top-0 bg-white z-50 py-2 mb-4">
                         <div className="inline-block px-4 py-2 bg-gray-100 rounded-full text-sm font-semibold text-gray-800 shadow-sm border border-gray-200">
                           {(() => {
                             try {
@@ -943,20 +946,26 @@ const NewTripDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Map Toggle Button */}
+      {/* Checklist Toggle Button */}
       <Button
         variant="outline"
         size="icon"
         className={cn(
-          "fixed bottom-6 right-6 z-50 rounded-full shadow-lg transition-all duration-200 w-14 h-14",
-          showMap ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
+          "fixed bottom-[170px] right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          showChecklist ? "bg-green-500 text-white hover:bg-green-600" : "bg-white hover:bg-gray-50"
         )}
-        onClick={() => setShowMap(!showMap)}
+        onClick={() => {
+          setShowChecklist(!showChecklist);
+          if (!showChecklist) {
+            setShowNotes(false);
+            setShowMap(false);
+          }
+        }}
       >
-        {showMap ? (
+        {showChecklist ? (
           <X className="h-8 w-8" />
         ) : (
-          <MapPin className="h-8 w-8 text-blue-500" />
+          <CheckSquare className="h-8 w-8 text-green-500" />
         )}
       </Button>
 
@@ -965,10 +974,16 @@ const NewTripDetails: React.FC = () => {
         variant="outline"
         size="icon"
         className={cn(
-          "fixed bottom-24 right-6 z-50 rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          "fixed bottom-24 right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
           showNotes ? "bg-purple-500 text-white hover:bg-purple-600" : "bg-white hover:bg-gray-50"
         )}
-        onClick={() => setShowNotes(!showNotes)}
+        onClick={() => {
+          setShowNotes(!showNotes);
+          if (!showNotes) {
+            setShowChecklist(false);
+            setShowMap(false);
+          }
+        }}
       >
         {showNotes ? (
           <X className="h-8 w-8" />
@@ -977,17 +992,47 @@ const NewTripDetails: React.FC = () => {
         )}
       </Button>
 
-      {/* Trip Map */}
-      {showMap && (
-        <div className="fixed bottom-24 right-6 z-40 w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
-          <TripMap trip={trip} />
+      {/* Map Toggle Button */}
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "fixed bottom-6 right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          showMap ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
+        )}
+        onClick={() => {
+          setShowMap(!showMap);
+          if (!showMap) {
+            setShowChecklist(false);
+            setShowNotes(false);
+          }
+        }}
+      >
+        {showMap ? (
+          <X className="h-8 w-8" />
+        ) : (
+          <MapPin className="h-8 w-8 text-blue-500" />
+        )}
+      </Button>
+
+      {/* Trip Checklist */}
+      {showChecklist && (
+        <div className="fixed bottom-[220px] right-6 z-[9999] w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
+          <TripChecklist tripId={trip._id} canEdit={canEdit} />
         </div>
       )}
 
       {/* Trip Notes */}
       {showNotes && (
-        <div className="fixed bottom-24 right-6 z-40 w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
+        <div className="fixed bottom-24 right-6 z-[100] w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
           <TripNotes tripId={trip._id} canEdit={canEdit} />
+        </div>
+      )}
+
+      {/* Trip Map */}
+      {showMap && (
+        <div className="fixed bottom-6 right-6 z-[100] w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
+          <TripMap trip={trip} />
         </div>
       )}
 

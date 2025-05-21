@@ -399,7 +399,7 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
             )}
           </div>
         </div>
-
+        
         {/* Mobile Thumbnail */}
         <div className="absolute top-2 right-2 w-16 h-16 md:hidden block">
           <div className="relative w-full h-full rounded-lg overflow-hidden">

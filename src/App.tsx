@@ -59,9 +59,9 @@ const ExpensesPageWrapper: React.FC = () => {
 
   return (
     <EventProvider initialEvents={trip.events}>
-      <ExpenseProvider tripId={tripId!}>
-        <ExpensesPage />
-      </ExpenseProvider>
+    <ExpenseProvider tripId={tripId!}>
+      <ExpensesPage />
+    </ExpenseProvider>
     </EventProvider>
   );
 };

@@ -78,11 +78,16 @@ interface RouteInfo {
   type: 'driving' | 'train' | 'flight';
   departureTime?: string;
   arrivalTime?: string;
+  timestamp: number;
 }
 
 // Create module-level caches that persist across component mounts/unmounts
 const routeCache: Record<string, RouteInfo> = {};
-const locationCache: Record<string, { lat: number, lon: number, displayName: string }> = {};
+const locationCache: Record<string, { lat: number, lon: number, displayName: string, timestamp: number }> = {};
+
+// Cache duration constants
+const LOCATION_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const ROUTE_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Function to get a cache key for a route
 const getRouteCacheKey = (startLat: number, startLon: number, endLat: number, endLon: number): string => {
@@ -94,20 +99,23 @@ const getLocationCacheKey = (query: string): string => {
   return `loc_${query.toLowerCase().trim()}`;
 };
 
+// Function to check if cache entry is valid
+const isCacheValid = (timestamp: number, duration: number): boolean => {
+  return Date.now() - timestamp < duration;
+};
+
 // Load cached data from localStorage on module initialization
 try {
   const savedRoutes = localStorage.getItem('tripMapRouteCache');
   if (savedRoutes) {
     const parsedRoutes = JSON.parse(savedRoutes);
     Object.assign(routeCache, parsedRoutes);
-    //console.log('Loaded route cache from localStorage:', Object.keys(parsedRoutes).length, 'routes');
   }
   
   const savedLocations = localStorage.getItem('tripMapLocationCache');
   if (savedLocations) {
     const parsedLocations = JSON.parse(savedLocations);
     Object.assign(locationCache, parsedLocations);
-    //console.log('Loaded location cache from localStorage:', Object.keys(parsedLocations).length, 'locations');
   }
 } catch (err) {
   console.warn('Failed to load cache from localStorage:', err);
@@ -116,7 +124,16 @@ try {
 // Function to save route cache to localStorage
 const saveRouteCache = () => {
   try {
-    localStorage.setItem('tripMapRouteCache', JSON.stringify(routeCache));
+    // Clean up expired routes before saving
+    const now = Date.now();
+    const validRoutes = Object.entries(routeCache).reduce((acc, [key, value]) => {
+      if (isCacheValid(value.timestamp || now, ROUTE_CACHE_DURATION)) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Record<string, RouteInfo>);
+    
+    localStorage.setItem('tripMapRouteCache', JSON.stringify(validRoutes));
   } catch (err) {
     console.warn('Failed to save route cache to localStorage:', err);
   }
@@ -125,7 +142,16 @@ const saveRouteCache = () => {
 // Function to save location cache to localStorage
 const saveLocationCache = () => {
   try {
-    localStorage.setItem('tripMapLocationCache', JSON.stringify(locationCache));
+    // Clean up expired locations before saving
+    const now = Date.now();
+    const validLocations = Object.entries(locationCache).reduce((acc, [key, value]) => {
+      if (isCacheValid(value.timestamp, LOCATION_CACHE_DURATION)) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Record<string, typeof locationCache[string]>);
+    
+    localStorage.setItem('tripMapLocationCache', JSON.stringify(validLocations));
   } catch (err) {
     console.warn('Failed to save location cache to localStorage:', err);
   }
@@ -176,23 +202,29 @@ const extractMapRelevantData = (trip: Trip) => {
   };
 };
 
-// Add rate limiting configuration
-const RATE_LIMIT_DELAY = 1000; // 1 second between requests
+// Update rate limiting configuration
+const RATE_LIMIT_DELAY = 2000; // 2 seconds between requests
 const MAX_RETRIES = 3;
+const BACKOFF_FACTOR = 1.5; // Exponential backoff factor
 
-// Add retry function for fetch requests
-const fetchWithRetry = async (url: string, retries = MAX_RETRIES): Promise<Response> => {
+// Add retry function for fetch requests with exponential backoff
+const fetchWithRetry = async (url: string, retries = MAX_RETRIES, delay = RATE_LIMIT_DELAY): Promise<Response> => {
   try {
     const response = await fetch(url);
     if (!response.ok) {
+      if (response.status === 429) { // Too Many Requests
+        throw new Error('RATE_LIMITED');
+      }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return response;
   } catch (error) {
     if (retries > 0) {
-      //console.log(`Retrying request to ${url}, ${retries} attempts remaining`);
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      return fetchWithRetry(url, retries - 1);
+      const isRateLimited = error instanceof Error && error.message === 'RATE_LIMITED';
+      const nextDelay = isRateLimited ? delay * BACKOFF_FACTOR : delay;
+      console.log(`Retrying request to ${url}, ${retries} attempts remaining, delay: ${nextDelay}ms`);
+      await new Promise(resolve => setTimeout(resolve, nextDelay));
+      return fetchWithRetry(url, retries - 1, nextDelay);
     }
     throw error;
   }
@@ -204,6 +236,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const mapRef = useRef<LeafletMap | null>(null);
+  const loadingRef = useRef<boolean>(true); // Add ref to track loading state
   
   // Extract only the data needed for the map to prevent unnecessary re-renders
   const mapRelevantData = useMemo(() => extractMapRelevantData(trip), [
@@ -211,6 +244,14 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     trip.name,
     trip.events.map(event => `${event.id}-${event.status}-${event.type}-${event.startDate}-${event.endDate}-${event.location?.lat}-${event.location?.lng}`).join(',')
   ]);
+
+  // Add cleanup effect
+  useEffect(() => {
+    return () => {
+      // Set loading ref to false when component unmounts
+      loadingRef.current = false;
+    };
+  }, []);
 
   // Add a useEffect to handle trip updates
   useEffect(() => {
@@ -272,9 +313,10 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   const fetchRoute = async (start: Location, end: Location, type: 'driving' | 'train' | 'flight' = 'driving'): Promise<RouteInfo | null> => {
     try {
       const cacheKey = getRouteCacheKey(start.lat, start.lon, end.lat, end.lon);
-      if (routeCache[cacheKey]) {
-        //console.log(`Using cached route data for: ${start.displayName} to ${end.displayName}`);
-        return { ...routeCache[cacheKey], type };
+      const cachedRoute = routeCache[cacheKey];
+      
+      if (cachedRoute && isCacheValid(cachedRoute.timestamp, ROUTE_CACHE_DURATION)) {
+        return { ...cachedRoute, type };
       }
       
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
@@ -296,7 +338,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           coordinates: data.routes[0].geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]] as [number, number]),
           duration: data.routes[0].duration,
           distance: data.routes[0].distance,
-          type: 'driving'
+          type: 'driving',
+          timestamp: Date.now()
         };
 
         // Cache the result
@@ -312,7 +355,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           distance,
           type: 'flight',
           departureTime: new Date().toISOString(),
-          arrivalTime: new Date(Date.now() + Math.round(distance / 800 * 60) * 60000).toISOString()
+          arrivalTime: new Date(Date.now() + Math.round(distance / 800 * 60) * 60000).toISOString(),
+          timestamp: Date.now()
         };
       } else {
         // For train routes, use a simple straight line
@@ -320,7 +364,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           coordinates: [[start.lat, start.lon], [end.lat, end.lon]],
           duration: 0,
           distance: calculateDistance(start.lat, start.lon, end.lat, end.lon),
-          type: 'train'
+          type: 'train',
+          timestamp: Date.now()
         };
       }
       
@@ -332,7 +377,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         coordinates: [[start.lat, start.lon], [end.lat, end.lon]],
         duration: 0,
         distance: calculateDistance(start.lat, start.lon, end.lat, end.lon),
-        type
+        type,
+        timestamp: Date.now()
       };
     }
   };
@@ -415,8 +461,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         .join(' ');
         
       const cacheKey = getLocationCacheKey(keywords);
-      if (locationCache[cacheKey]) {
-        //console.log(`Using cached location data for trip: ${tripName}`);
+      if (locationCache[cacheKey] && isCacheValid(locationCache[cacheKey].timestamp, LOCATION_CACHE_DURATION)) {
         return {
           ...locationCache[cacheKey],
           event: {
@@ -435,293 +480,318 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
       }
 
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      const response = await fetchWithRetry(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keywords)}`
-      );
-
-      const data = await response.json();
       
-      if (data && data.length > 0) {
-        const locationData = {
-          lat: parseFloat(data[0].lat),
-          lon: parseFloat(data[0].lon),
-          displayName: data[0].display_name
-        };
+      try {
+        const response = await fetchWithRetry(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keywords)}`
+        );
+
+        const data = await response.json();
         
-        locationCache[cacheKey] = locationData;
-        saveLocationCache();
-        
-        return {
-          ...locationData,
-          event: {
-            id: 'trip-location',
-            type: 'destination',
-            startDate: new Date().toISOString(),
-            endDate: new Date().toISOString(),
-            placeName: trip.name,
-            status: 'exploring',
-            createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-            updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          } as Event
-        };
+        if (data && data.length > 0) {
+          const locationData = {
+            lat: parseFloat(data[0].lat),
+            lon: parseFloat(data[0].lon),
+            displayName: data[0].display_name,
+            timestamp: Date.now()
+          };
+          
+          locationCache[cacheKey] = locationData;
+          saveLocationCache();
+          
+          return {
+            ...locationData,
+            event: {
+              id: 'trip-location',
+              type: 'destination',
+              startDate: new Date().toISOString(),
+              endDate: new Date().toISOString(),
+              placeName: trip.name,
+              status: 'exploring',
+              createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+              updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            } as Event
+          };
+        }
+        return null;
+      } catch (err) {
+        console.warn(`Error fetching location for trip name:`, err);
+        return null;
       }
-      return null;
     } catch (err) {
-      console.warn(`Error fetching location for trip name:`, err);
+      console.warn(`Error in fetchTripLocation:`, err);
       return null;
     }
   };
 
   useEffect(() => {
-    //console.log('TripMap: Fetching locations for events');
     const fetchLocations = async () => {
       try {
         setIsLoading(true);
         setError(null);
+        loadingRef.current = true; // Reset loading ref when starting new fetch
         
-        if (mapRelevantData.events.length === 0) {
-          // If no events, try to get location from trip name
-          const tripLocation = await fetchTripLocation(mapRelevantData.name);
-          if (tripLocation) {
-            setLocations([tripLocation]);
-            if (mapRef.current) {
-              mapRef.current.setView([tripLocation.lat, tripLocation.lon], 10);
+        // Process locations sequentially to avoid rate limiting
+        const processLocations = async () => {
+          const results: (Location | Location[] | null)[] = [];
+          
+          for (const event of mapRelevantData.events) {
+            // Check if loading should continue
+            if (!loadingRef.current) {
+              console.log('Loading stopped - map module closed');
+              return results;
+            }
+
+            try {
+              let searchQuery = '';
+              let departureLocation = null;
+              let arrivalLocation = null;
+              
+              // If event has direct coordinates, use them
+              if (event.location?.lat && event.location?.lng) {
+                let displayName = 'Location';
+                
+                switch (event.type) {
+                  case 'stay':
+                    displayName = ((event as unknown) as StayEvent).accommodationName || 'Stay';
+                    break;
+                  case 'destination':
+                    displayName = ((event as unknown) as DestinationEvent).placeName || 'Destination';
+                    break;
+                  default:
+                    displayName = event.location.address || 'Location';
+                }
+                
+                results.push({
+                  lat: event.location.lat,
+                  lon: event.location.lng,
+                  displayName,
+                  event: {
+                    ...event,
+                    createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                    updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  } as Event
+                });
+                continue;
+              }
+
+              // Build search query based on event type
+              switch (event.type) {
+                case 'arrival':
+                case 'departure':
+                  searchQuery = ((event as unknown) as ArrivalDepartureEvent).airport || '';
+                  break;
+                case 'stay':
+                  searchQuery = `${((event as unknown) as StayEvent).accommodationName || ''} ${((event as unknown) as StayEvent).address || ''}`.trim();
+                  break;
+                case 'destination':
+                  searchQuery = `${((event as unknown) as DestinationEvent).placeName || ''} ${((event as unknown) as DestinationEvent).address || ''}`.trim();
+                  break;
+                case 'flight': {
+                  const flightEvent = (event as unknown) as FlightEvent;
+                  departureLocation = await fetchTripLocation(flightEvent.departureAirport || '');
+                  await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+                  arrivalLocation = await fetchTripLocation(flightEvent.arrivalAirport || '');
+                  if (departureLocation && arrivalLocation) {
+                    results.push([departureLocation, arrivalLocation]);
+                  }
+                  continue;
+                }
+                case 'train': {
+                  const trainEvent = (event as unknown) as TrainEvent;
+                  departureLocation = await fetchTripLocation(trainEvent.departureStation || '');
+                  await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+                  arrivalLocation = await fetchTripLocation(trainEvent.arrivalStation || '');
+                  if (departureLocation && arrivalLocation) {
+                    departureLocation.event = {
+                      ...event,
+                      ...trainEvent,
+                      createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    } as Event;
+                    arrivalLocation.event = {
+                      ...event,
+                      ...trainEvent,
+                      createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    } as Event;
+                    results.push([departureLocation, arrivalLocation]);
+                  }
+                  continue;
+                }
+                case 'rental_car': {
+                  const carEvent = (event as unknown) as RentalCarEvent;
+                  departureLocation = await fetchTripLocation(carEvent.pickupLocation || '');
+                  await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+                  arrivalLocation = await fetchTripLocation(carEvent.dropoffLocation || '');
+                  if (departureLocation && arrivalLocation) {
+                    results.push([departureLocation, arrivalLocation]);
+                  }
+                  continue;
+                }
+                case 'bus': {
+                  const busEvent = (event as unknown) as BusEvent;
+                  departureLocation = await fetchTripLocation(busEvent.departureStation || '');
+                  await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+                  arrivalLocation = await fetchTripLocation(busEvent.arrivalStation || '');
+                  if (departureLocation && arrivalLocation) {
+                    departureLocation.event = {
+                      ...event,
+                      ...busEvent,
+                      createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    } as Event;
+                    arrivalLocation.event = {
+                      ...event,
+                      ...busEvent,
+                      createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    } as Event;
+                    results.push([departureLocation, arrivalLocation]);
+                  }
+                  continue;
+                }
+              }
+
+              if (!searchQuery) continue;
+              
+              // Check cache first
+              const cacheKey = getLocationCacheKey(searchQuery);
+              if (locationCache[cacheKey] && isCacheValid(locationCache[cacheKey].timestamp, LOCATION_CACHE_DURATION)) {
+                results.push({
+                  ...locationCache[cacheKey],
+                  event: {
+                    ...event,
+                    createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                    updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  } as Event
+                });
+                continue;
+              }
+
+              try {
+                // Check if loading should continue before making API call
+                if (!loadingRef.current) {
+                  console.log('Loading stopped before API call - map module closed');
+                  return results;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+                
+                const response = await fetchWithRetry(
+                  `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`
+                );
+                
+                // Check if loading should continue after API call
+                if (!loadingRef.current) {
+                  console.log('Loading stopped after API call - map module closed');
+                  return results;
+                }
+
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                  const locationData = {
+                    lat: parseFloat(data[0].lat),
+                    lon: parseFloat(data[0].lon),
+                    displayName: data[0].display_name,
+                    timestamp: Date.now()
+                  };
+                  
+                  locationCache[cacheKey] = locationData;
+                  saveLocationCache();
+                  
+                  results.push({
+                    ...locationData,
+                    event: {
+                      ...event,
+                      createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    } as Event
+                  });
+                }
+              } catch (err) {
+                console.warn(`Error fetching location for ${searchQuery}:`, err);
+              }
+            } catch (err) {
+              console.warn(`Error processing event:`, err);
             }
           }
-          setIsLoading(false);
-          return;
-        }
+          
+          return results;
+        };
+
+        const results = await processLocations();
         
-        const locationPromises = mapRelevantData.events.map(async (event) => {
-          let searchQuery = '';
-          let departureLocation = null;
-          let arrivalLocation = null;
-          
-          // If event has direct coordinates, use them
-          if (event.location?.lat && event.location?.lng) {
-            let displayName = 'Location';
-            
-            // Get appropriate display name based on event type
-            switch (event.type) {
-              case 'stay':
-                displayName = ((event as unknown) as StayEvent).accommodationName || 'Stay';
-                break;
-              case 'destination':
-                displayName = ((event as unknown) as DestinationEvent).placeName || 'Destination';
-                break;
-              default:
-                displayName = event.location.address || 'Location';
-            }
-            
-            return {
-              lat: event.location.lat,
-              lon: event.location.lng,
-              displayName,
-              event: {
-                ...event,
-                createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              } as Event
-            };
-          }
+        // Only update state if loading wasn't stopped
+        if (loadingRef.current) {
+          const validLocations = results.flat().filter((loc): loc is Location => loc !== null);
+          setLocations(validLocations);
 
-          // Build search query based on event type
-          switch (event.type) {
-            case 'arrival':
-            case 'departure':
-              searchQuery = ((event as unknown) as ArrivalDepartureEvent).airport || '';
+          // Filter to only include confirmed events for routes
+          const confirmedLocations = validLocations.filter(
+            loc => !loc.event.status || loc.event.status === 'confirmed'
+          );
+          
+          // Fetch routes between consecutive confirmed locations
+          const routePromises: Promise<RouteInfo | null>[] = [];
+          for (let i = 0; i < confirmedLocations.length - 1; i++) {
+            // Check if loading should continue
+            if (!loadingRef.current) {
+              console.log('Loading stopped during route fetching - map module closed');
               break;
-            case 'stay':
-              searchQuery = `${((event as unknown) as StayEvent).accommodationName || ''} ${((event as unknown) as StayEvent).address || ''}`.trim();
-              break;
-            case 'destination':
-              searchQuery = `${((event as unknown) as DestinationEvent).placeName || ''} ${((event as unknown) as DestinationEvent).address || ''}`.trim();
-              break;
-            case 'flight': {
-              const flightEvent = (event as unknown) as FlightEvent;
-              departureLocation = await fetchTripLocation(flightEvent.departureAirport || '');
-              arrivalLocation = await fetchTripLocation(flightEvent.arrivalAirport || '');
-              if (departureLocation && arrivalLocation) {
-                return [departureLocation, arrivalLocation];
-              }
-              return null;
             }
-            case 'train': {
-              const trainEvent = (event as unknown) as TrainEvent;
-              departureLocation = await fetchTripLocation(trainEvent.departureStation || '');
-              arrivalLocation = await fetchTripLocation(trainEvent.arrivalStation || '');
-              if (departureLocation && arrivalLocation) {
-                // Preserve all train event information in both locations
-                departureLocation.event = {
-                  ...event,
-                  ...trainEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                arrivalLocation.event = {
-                  ...event,
-                  ...trainEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                return [departureLocation, arrivalLocation];
-              }
-              return null;
-            }
-            case 'rental_car': {
-              const carEvent = (event as unknown) as RentalCarEvent;
-              departureLocation = await fetchTripLocation(carEvent.pickupLocation || '');
-              arrivalLocation = await fetchTripLocation(carEvent.dropoffLocation || '');
-              if (departureLocation && arrivalLocation) {
-                return [departureLocation, arrivalLocation];
-              }
-              return null;
-            }
-            case 'bus': {
-              const busEvent = (event as unknown) as BusEvent;
-              departureLocation = await fetchTripLocation(busEvent.departureStation || '');
-              arrivalLocation = await fetchTripLocation(busEvent.arrivalStation || '');
-              if (departureLocation && arrivalLocation) {
-                // Preserve all bus event information in both locations
-                departureLocation.event = {
-                  ...event,
-                  ...busEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                arrivalLocation.event = {
-                  ...event,
-                  ...busEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                return [departureLocation, arrivalLocation];
-              }
-              return null;
-            }
-          }
 
-          if (!searchQuery) return null;
-          
-          // Check cache first
-          const cacheKey = getLocationCacheKey(searchQuery);
-          if (locationCache[cacheKey]) {
-            //console.log(`Using cached location data for: ${searchQuery}`);
-            return {
-              ...locationCache[cacheKey],
-              event: {
-                ...event,
-                createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              } as Event
-            };
-          }
-
-          try {
-            // Add a small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 100));
+            const currentEvent = confirmedLocations[i].event;
+            const nextEvent = confirmedLocations[i + 1].event;
             
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`
-            );
+            let routeType: 'driving' | 'train' | 'flight' = 'driving';
             
-            if (!response.ok) {
-              throw new Error(`Failed to fetch location for ${searchQuery}`);
+            if (currentEvent.type === 'train' || nextEvent.type === 'train') {
+              routeType = 'train';
+            } else if (currentEvent.type === 'flight' || nextEvent.type === 'flight') {
+              routeType = 'flight';
             }
-
-            const data = await response.json();
             
-            if (data && data.length > 0) {
-              const locationData = {
-                lat: parseFloat(data[0].lat),
-                lon: parseFloat(data[0].lon),
-                displayName: data[0].display_name
-              };
-              
-              // Cache the result
-              locationCache[cacheKey] = locationData;
-              
-              // Save updated cache to localStorage
-              saveLocationCache();
-              
-              return {
-                ...locationData,
-                event: {
-                  ...event,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event
-              };
+            if (confirmedLocations[i] && confirmedLocations[i + 1]) {
+              routePromises.push(fetchRoute(confirmedLocations[i], confirmedLocations[i + 1], routeType));
             }
-            return null;
-          } catch (err) {
-            console.warn(`Error fetching location for ${searchQuery}:`, err);
-            return null;
           }
-        });
 
-        const results = await Promise.all(locationPromises);
-        const validLocations = results.flat().filter((loc): loc is Location => loc !== null);
-        setLocations(validLocations);
+          const routeResults = await Promise.all(routePromises);
+          const validRoutes = routeResults.filter((route): route is RouteInfo => route !== null);
+          setRoutes(validRoutes);
 
-        // Filter to only include confirmed events for routes
-        const confirmedLocations = validLocations.filter(
-          loc => !loc.event.status || loc.event.status === 'confirmed'
-        );
-        //console.log('Confirmed locations for routes:', confirmedLocations.length);
-        
-        // Fetch routes between consecutive confirmed locations
-        const routePromises: Promise<RouteInfo | null>[] = [];
-        for (let i = 0; i < confirmedLocations.length - 1; i++) {
-          const currentEvent = confirmedLocations[i].event;
-          const nextEvent = confirmedLocations[i + 1].event;
-          
-          // Determine route type based on event types
-          let routeType: 'driving' | 'train' | 'flight' = 'driving';
-          
-          // Check if either event is a train or flight
-          if (currentEvent.type === 'train' || nextEvent.type === 'train') {
-            routeType = 'train';
-          } else if (currentEvent.type === 'flight' || nextEvent.type === 'flight') {
-            routeType = 'flight';
+          // If we have locations, fit the map bounds to show all markers and routes
+          if (validLocations.length > 0 && mapRef.current) {
+            const bounds = L.latLngBounds(validLocations.map(loc => [loc.lat, loc.lon]));
+            mapRef.current.fitBounds(bounds, { padding: [50, 50] });
           }
-          
-          // Only fetch route if we have valid locations
-          if (confirmedLocations[i] && confirmedLocations[i + 1]) {
-            routePromises.push(fetchRoute(confirmedLocations[i], confirmedLocations[i + 1], routeType));
-          }
-        }
-
-        const routeResults = await Promise.all(routePromises);
-        const validRoutes = routeResults.filter((route): route is RouteInfo => route !== null);
-        console.log('Valid routes:', validRoutes.map(r => r.type));
-        setRoutes(validRoutes);
-
-        // If we have locations, fit the map bounds to show all markers and routes
-        if (validLocations.length > 0 && mapRef.current) {
-          const bounds = L.latLngBounds(validLocations.map(loc => [loc.lat, loc.lon]));
-          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch locations');
+        if (loadingRef.current) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch locations');
+        }
       } finally {
-        setIsLoading(false);
+        if (loadingRef.current) {
+          setIsLoading(false);
+        }
       }
     };
 
