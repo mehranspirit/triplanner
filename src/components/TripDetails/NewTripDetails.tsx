@@ -863,7 +863,6 @@ const NewTripDetails: React.FC = () => {
 
                   return Object.entries(groupedEvents).map(([dateKey, events]) => (
                     <div key={dateKey} className="relative">
-                      {/* Sticky Date Headers */}
                       <div className="sticky top-0 bg-white z-50 py-2 mb-4">
                         <div className="inline-block px-4 py-2 bg-gray-100 rounded-full text-sm font-semibold text-gray-800 shadow-sm border border-gray-200">
                           {(() => {
