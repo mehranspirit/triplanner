@@ -13,6 +13,7 @@ export interface Event {
   thumbnailUrl?: string;
   startDate: string; // ISO 8601 format (e.g., "2024-07-28T10:00:00Z")
   endDate: string;   // ISO 8601 format (e.g., "2024-07-28T12:00:00Z")
+  selected?: boolean;
   location?: {
     lat: number;
     lng: number;

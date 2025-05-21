@@ -105,8 +105,10 @@ const NewTripDetails: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [generatedSuggestions, setGeneratedSuggestions] = useState<Event[]>([]);
-  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [deletingEvents, setDeletingEvents] = useState<Set<string>>(new Set());
   const [showChecklist, setShowChecklist] = useState(false);
+  const [isAddingSuggestions, setIsAddingSuggestions] = useState(false);
+  const [addingProgress, setAddingProgress] = useState(0);
 
   const handleAddEventClick = (type: EventType) => {
     setEditingEvent(null);
@@ -166,25 +168,41 @@ const NewTripDetails: React.FC = () => {
   };
   
   const handleDeleteEvent = async (eventId: string) => {
+    if (!trip) return;
+    
     if (window.confirm('Are you sure you want to delete this event?')) {
       try {
-        setDeletingEventId(eventId);
+        // Add event to deleting set
+        setDeletingEvents(prev => new Set(prev).add(eventId));
         
-        // Wait for animation to complete (300ms) before actually deleting
+        // Wait for animation to complete (300ms)
         await new Promise(resolve => setTimeout(resolve, 300));
         
+        // Delete the event from the backend
         await deleteEvent(eventId);
         
         // Update the local state after successful deletion
-        if (trip) {
-          const updatedEvents = trip.events.filter(event => event.id !== eventId);
-          trip.events = updatedEvents;
-        }
+        const updatedEvents = trip.events.filter(event => event.id !== eventId);
+        
+        // Update the trip object with the new events array
+        const updatedTrip = {
+          ...trip,
+          events: updatedEvents
+        };
+        
+        // Update the trip state without refetching
+        await handleTripUpdate(updatedTrip);
+        
       } catch (error) {
         console.error('Error deleting event:', error);
         alert('Failed to delete event. Please try again.');
       } finally {
-        setDeletingEventId(null);
+        // Remove event from deleting set
+        setDeletingEvents(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(eventId);
+          return newSet;
+        });
       }
     } 
   };
@@ -278,23 +296,43 @@ const NewTripDetails: React.FC = () => {
         }
       );
 
-      // Add suggestions to trip
-      const updatedTrip = {
-        ...trip,
-        events: [...trip.events, ...suggestions]
-      };
-
-      await handleTripUpdate(updatedTrip);
-      
       // Store suggestions for the success dialog
       setGeneratedSuggestions(suggestions);
       setShowSuccessDialog(true);
-      
+
     } catch (error) {
       console.error('Error generating suggestions:', error);
       setSuccess('Failed to generate suggestions. Please try again.');
     } finally {
       setIsGeneratingSuggestions(false);
+    }
+  };
+
+  const handleAddSelectedSuggestions = async (selectedSuggestions: Event[]) => {
+    if (!trip) return;
+
+    try {
+      setIsAddingSuggestions(true);
+      setAddingProgress(0);
+      
+      const selectedEvents = selectedSuggestions.filter(s => s.selected);
+      const totalEvents = selectedEvents.length;
+      
+      // Add each selected suggestion to the trip
+      for (let i = 0; i < selectedEvents.length; i++) {
+        const suggestion = selectedEvents[i];
+        await handleSaveEvent(suggestion);
+        setAddingProgress(((i + 1) / totalEvents) * 100);
+      }
+      
+      setShowSuccessDialog(false);
+      setGeneratedSuggestions([]);
+    } catch (error) {
+      console.error('Error adding selected suggestions:', error);
+      alert('Failed to add some suggestions. Please try again.');
+    } finally {
+      setIsAddingSuggestions(false);
+      setAddingProgress(0);
     }
   };
 
@@ -325,7 +363,7 @@ const NewTripDetails: React.FC = () => {
     const registryItem = EVENT_TYPES[event.type];
     if (!registryItem) return null;
 
-    const isDeleting = deletingEventId === event.id;
+    const isDeleting = deletingEvents.has(event.id);
     const isExploring = event.status === 'exploring';
     const isActive = isEventCurrentlyActive(event);
 
@@ -911,7 +949,7 @@ const NewTripDetails: React.FC = () => {
 
                             if (!EventCardComponent) return <div key={event.id}>No card component for {event.type}</div>;
 
-                            const isDeleting = deletingEventId === event.id;
+                            const isDeleting = deletingEvents.has(event.id);
 
                             return (
                               <div 
@@ -1162,29 +1200,36 @@ const NewTripDetails: React.FC = () => {
 
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-yellow-500" />
               AI Suggestions Added Successfully
             </DialogTitle>
             <DialogDescription>
-              The following suggestions have been added to your trip:
+              Select the suggestions you want to add to your trip:
             </DialogDescription>
           </DialogHeader>
           
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-4 overflow-y-auto flex-1 pr-2 min-h-0">
             {generatedSuggestions.map((suggestion, index) => (
               <div key={suggestion.id} className="p-4 bg-muted rounded-lg">
                 <div className="flex items-start gap-3">
-                  <div className="mt-1">
-                    {suggestion.type === 'activity' ? (
-                      <FaMountain className="h-5 w-5 text-blue-500" />
-                    ) : (
-                      <FaMapMarkerAlt className="h-5 w-5 text-red-500" />
-                    )}
-                  </div>
-                  <div className="flex-1">
+                  <input
+                    type="checkbox"
+                    id={`suggestion-${index}`}
+                    checked={suggestion.selected}
+                    onChange={(e) => {
+                      const updatedSuggestions = [...generatedSuggestions];
+                      updatedSuggestions[index] = {
+                        ...suggestion,
+                        selected: e.target.checked
+                      };
+                      setGeneratedSuggestions(updatedSuggestions);
+                    }}
+                    disabled={isAddingSuggestions}
+                  />
+                  <label htmlFor={`suggestion-${index}`} className="flex-1">
                     <h4 className="font-medium">
                       {suggestion.type === 'activity' 
                         ? (suggestion as ActivityEvent).title 
@@ -1202,15 +1247,46 @@ const NewTripDetails: React.FC = () => {
                         {format(new Date(suggestion.startDate), 'h:mm a')}
                       </span>
                     </div>
-                  </div>
+                  </label>
                 </div>
               </div>
             ))}
           </div>
 
+          {isAddingSuggestions && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Adding events...</span>
+                <span>{Math.round(addingProgress)}%</span>
+              </div>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-300 ease-in-out"
+                  style={{ width: `${addingProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <DialogFooter className="mt-6">
-            <Button onClick={() => setShowSuccessDialog(false)}>
-              Close
+            <Button 
+              onClick={() => handleAddSelectedSuggestions(generatedSuggestions)}
+              disabled={!generatedSuggestions.some(s => s.selected) || isAddingSuggestions}
+            >
+              {isAddingSuggestions ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
+                  Adding Events...
+                </div>
+              ) : (
+                'Add Selected Suggestions'
+              )}
+            </Button>
+            <Button 
+              onClick={() => setShowSuccessDialog(false)}
+              disabled={isAddingSuggestions}
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
