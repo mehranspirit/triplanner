@@ -7,6 +7,7 @@ import Avatar from '../Avatar';
 import { EXPENSE_EMOJIS } from '../../utils/expenseEmojis';
 import { getMainCategory } from '../../utils/categorySuggestions';
 import { cn } from '@/lib/utils';
+import { EditExpense } from './EditExpense';
 
 // Define expense categories
 const EXPENSE_CATEGORIES = {
@@ -44,6 +45,15 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
   const { expenses, deleteExpense, refreshData } = useExpense();
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
   const [deletingExpenses, setDeletingExpenses] = useState<Set<string>>(new Set());
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+
+  // Add debug logging
+  console.log('ExpenseList props:', {
+    tripId,
+    participants,
+    currentUser,
+    expenses
+  });
 
   const handleDelete = async (expenseId: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
@@ -83,6 +93,35 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
 
   return (
     <div className="space-y-4">
+      {editingExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Debug logging before rendering EditExpense */}
+              {(() => {
+                console.log('Rendering EditExpense with:', {
+                  expense: editingExpense,
+                  participants,
+                  currentUser
+                });
+                return null;
+              })()}
+              <EditExpense
+                tripId={tripId}
+                expense={editingExpense}
+                participants={participants}
+                currentUser={currentUser}
+                onExpenseUpdated={() => {
+                  setEditingExpense(null);
+                  refreshData(tripId);
+                }}
+                onCancel={() => setEditingExpense(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {expenses.map((expense) => (
         <div
           key={expense._id}
@@ -113,17 +152,30 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
                 <span className="text-sm font-medium text-gray-900">
                   {formatCurrency(expense.amount, expense.currency)}
                 </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(expense._id);
-                  }}
-                  className="text-gray-400 hover:text-red-500"
-                >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingExpense(expense);
+                    }}
+                    className="text-gray-400 hover:text-blue-500"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(expense._id);
+                    }}
+                    className="text-gray-400 hover:text-red-500"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

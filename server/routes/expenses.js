@@ -108,7 +108,12 @@ router.put('/trips/:tripId/expenses/:expenseId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
-    if (expense.paidBy.toString() !== req.user._id.toString()) {
+    // Allow both the expense payer and trip collaborators to update the expense
+    const isPayer = expense.paidBy.toString() === req.user._id.toString();
+    const isCollaborator = trip.collaborators.some(c => c.user.toString() === req.user._id.toString());
+    const isOwner = trip.owner.toString() === req.user._id.toString();
+
+    if (!isPayer && !isCollaborator && !isOwner) {
       return res.status(403).json({ message: 'Not authorized to update this expense' });
     }
 
