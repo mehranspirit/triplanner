@@ -6,6 +6,7 @@ import { formatCurrency } from '../../utils/format';
 import Avatar from '../Avatar';
 import { EXPENSE_EMOJIS } from '../../utils/expenseEmojis';
 import { getMainCategory } from '../../utils/categorySuggestions';
+import { cn } from '@/lib/utils';
 
 // Define expense categories
 const EXPENSE_CATEGORIES = {
@@ -42,15 +43,28 @@ const renderSplitDetails = (participant: ExpenseParticipant, expense: Expense) =
 export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, currentUser }) => {
   const { expenses, deleteExpense, refreshData } = useExpense();
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
+  const [deletingExpenses, setDeletingExpenses] = useState<Set<string>>(new Set());
 
   const handleDelete = async (expenseId: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
+        // Add to deleting set
+        setDeletingExpenses(prev => new Set(prev).add(expenseId));
+        
+        // Wait for animation to complete (300ms)
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         await deleteExpense(tripId, expenseId);
         console.log('Expense deleted successfully');
       } catch (error) {
         console.error('Failed to delete expense:', error);
         alert('Failed to delete expense. Please try again.');
+        // Remove from deleting set if there was an error
+        setDeletingExpenses(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(expenseId);
+          return newSet;
+        });
       }
     }
   };
@@ -72,7 +86,10 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
       {expenses.map((expense) => (
         <div
           key={expense._id}
-          className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+          className={cn(
+            "bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all duration-300",
+            deletingExpenses.has(expense._id) && "opacity-0 transform -translate-x-4"
+          )}
         >
           <div
             className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"

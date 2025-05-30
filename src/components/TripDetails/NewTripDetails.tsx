@@ -182,7 +182,7 @@ const NewTripDetails: React.FC = () => {
         await deleteEvent(eventId);
         
         // Update the local state after successful deletion
-        const updatedEvents = trip.events.filter(event => event.id !== eventId);
+          const updatedEvents = trip.events.filter(event => event.id !== eventId);
         
         // Update the trip object with the new events array
         const updatedTrip = {
@@ -295,11 +295,11 @@ const NewTripDetails: React.FC = () => {
           photoUrl: user.photoUrl || null
         }
       );
-
+      
       // Store suggestions for the success dialog
       setGeneratedSuggestions(suggestions);
       setShowSuccessDialog(true);
-
+      
     } catch (error) {
       console.error('Error generating suggestions:', error);
       setSuccess('Failed to generate suggestions. Please try again.');

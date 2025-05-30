@@ -148,30 +148,12 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
         setSelectedSubcategory(subcat);
         setTitle(getEventTitle(event));
         setDescription(getEventDescription(event));
-
-        // Check for duplicate expenses using the ExpenseContext
-        const eventTitle = getEventTitle(event);
-        const eventCost = event.cost;
-        if (eventTitle && eventCost) {
-          const duplicateExpense = expenses.find(exp => 
-            exp.title === eventTitle && 
-            exp.amount === eventCost &&
-            exp.category === subcat
-          );
-
-          if (duplicateExpense) {
-            setDuplicateWarning(`Warning: An expense for "${eventTitle}" with the same amount (${eventCost}) and category (${subcat}) already exists.`);
-          } else {
-            setDuplicateWarning(null);
-          }
-        }
       }
     }
     if (expenseSource === 'manual') {
       setSelectedEventId('');
-      setDuplicateWarning(null);
     }
-  }, [expenseSource, selectedEventId, expenses]);
+  }, [expenseSource, selectedEventId]);
 
   const validateSplits = () => {
     if (splitMethod === 'equal') return true;
@@ -216,6 +198,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // First validate splits
     if (!validateSplits()) {
       const warning = getSplitWarning();
       if (warning) {
@@ -224,11 +207,21 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       }
     }
 
-    // If there's a duplicate warning and the user is trying to add an expense from an event,
-    // ask for confirmation
-    if (duplicateWarning && expenseSource === 'event') {
+    // Check for duplicates before proceeding
+    const duplicateExpense = expenses.find(exp => {
+      // Check if the expense is from the same event
+      const isSameEvent = exp.title === title;
+      // Check if the amount matches (with a small tolerance for floating point differences)
+      const isSameAmount = Math.abs(exp.amount - parseFloat(amount)) < 0.01;
+      // Check if the category matches
+      const isSameCategory = exp.category === (selectedSubcategory || selectedCategory);
+      
+      return isSameEvent && isSameAmount && isSameCategory;
+    });
+
+    if (duplicateExpense) {
       const confirmed = window.confirm(
-        `${duplicateWarning}\n\nAre you sure you want to add this expense anyway?`
+        `Warning: An expense for "${title}" with the same amount (${amount}) and category (${selectedSubcategory || selectedCategory}) already exists.\n\nAre you sure you want to add this expense anyway?`
       );
       if (!confirmed) {
         return;
@@ -287,7 +280,6 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       setSelectedParticipants(participants.map(p => p._id));
       setSelectedCategory('');
       setSelectedSubcategory('');
-      setDuplicateWarning(null);
       
       if (onExpenseAdded) {
         onExpenseAdded();
