@@ -22,6 +22,7 @@ import ExpensesPage from './pages/ExpensesPage';
 import { DreamTripsPage } from './pages/DreamTripsPage';
 import DreamTripDetails from './components/DreamTripDetails';
 import NewTripDetails from './components/TripDetails/NewTripDetails';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 // Import the registry first
 import './eventTypes/registry';
@@ -71,6 +72,7 @@ const App: React.FC = () => {
     <Router>
       <AuthProvider>
         <TripProvider>
+          <OfflineIndicator />
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
