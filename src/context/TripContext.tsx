@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Trip, Event } from '@/types/eventTypes';
 import { api } from '../services/api';
+import { networkAwareApi } from '../services/networkAwareApi';
 import { useAuth } from './AuthContext';
 
 interface TripState {
@@ -131,9 +132,39 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
         console.log('Fetching trips for user:', user._id);
-        const trips = await api.getTrips();
+        const trips = await networkAwareApi.getTrips();
         console.log('Fetched trips:', trips);
         dispatch({ type: 'SET_TRIPS', payload: trips });
+
+        // Preload additional data for all trips in the background when online
+        if (navigator.onLine && trips.length > 0) {
+          console.log('Preloading additional data for', trips.length, 'trips...');
+          
+          // Preload data for all trips in parallel (but limit to avoid overwhelming)
+          const preloadPromises = trips.slice(0, 10).map(async (trip) => {
+            try {
+              // Preload all related data in parallel for each trip
+              await Promise.all([
+                networkAwareApi.getExpenses(trip._id).catch(err => console.warn(`Failed to preload expenses for trip ${trip._id}:`, err)),
+                networkAwareApi.getNotes(trip._id).catch(err => console.warn(`Failed to preload notes for trip ${trip._id}:`, err)),
+                networkAwareApi.getChecklist(trip._id, 'shared').catch(err => console.warn(`Failed to preload shared checklist for trip ${trip._id}:`, err)),
+                networkAwareApi.getChecklist(trip._id, 'personal').catch(err => console.warn(`Failed to preload personal checklist for trip ${trip._id}:`, err)),
+                networkAwareApi.getSettlements(trip._id).catch(err => console.warn(`Failed to preload settlements for trip ${trip._id}:`, err)),
+                networkAwareApi.getExpenseSummary(trip._id).catch(err => console.warn(`Failed to preload expense summary for trip ${trip._id}:`, err))
+              ]);
+              console.log(`Preloaded data for trip: ${trip.name}`);
+            } catch (error) {
+              console.warn(`Failed to preload data for trip ${trip._id}:`, error);
+            }
+          });
+
+          // Execute preloading in background
+          Promise.all(preloadPromises).then(() => {
+            console.log('Background preloading completed for', Math.min(trips.length, 10), 'trips');
+          }).catch(error => {
+            console.warn('Some preloading operations failed:', error);
+          });
+        }
       } catch (error) {
         console.error('Error fetching trips:', error);
         dispatch({ type: 'SET_ERROR', payload: 'Failed to fetch trips' });
@@ -172,7 +203,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateTrip = async (trip: Trip) => {
     try {
-      const updatedTrip = await api.updateTrip(trip);
+      const updatedTrip = await networkAwareApi.updateTrip(trip);
       dispatch({ type: 'UPDATE_TRIP', payload: updatedTrip });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to update trip' });
@@ -182,7 +213,7 @@ export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteTrip = async (tripId: string) => {
     dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      await api.deleteTrip(tripId);
+      await networkAwareApi.deleteTrip(tripId);
       dispatch({ type: 'DELETE_TRIP', payload: tripId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete trip';

@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-87a8cbd3'], (function (workbox) { 'use strict';
+define(['./workbox-524de8a6'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -82,12 +82,66 @@ define(['./workbox-87a8cbd3'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "index.html",
-    "revision": "0.ulomq388j1g"
+    "revision": "0.618bq9dvu8o"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
     allowlist: [/^\/$/]
   }));
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips$/, new workbox.NetworkFirst({
+    "cacheName": "trips-api-cache",
+    "networkTimeoutSeconds": 10,
+    plugins: [new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    }), new workbox.BackgroundSyncPlugin("trips-background-sync", {
+      maxRetentionTime: 1440
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+$/, new workbox.NetworkFirst({
+    "cacheName": "trip-details-cache",
+    "networkTimeoutSeconds": 10,
+    plugins: [new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    }), new workbox.BackgroundSyncPlugin("trip-details-sync", {
+      maxRetentionTime: 1440
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/expenses/, new workbox.NetworkFirst({
+    "cacheName": "expenses-api-cache",
+    "networkTimeoutSeconds": 8,
+    plugins: [new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    }), new workbox.BackgroundSyncPlugin("expenses-background-sync", {
+      maxRetentionTime: 1440
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/settlements/, new workbox.NetworkFirst({
+    "cacheName": "settlements-api-cache",
+    "networkTimeoutSeconds": 8,
+    plugins: [new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    }), new workbox.BackgroundSyncPlugin("settlements-background-sync", {
+      maxRetentionTime: 1440
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/notes/, new workbox.NetworkFirst({
+    "cacheName": "notes-api-cache",
+    "networkTimeoutSeconds": 8,
+    plugins: [new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    }), new workbox.BackgroundSyncPlugin("notes-background-sync", {
+      maxRetentionTime: 1440
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/checklist/, new workbox.NetworkFirst({
+    "cacheName": "checklist-api-cache",
+    "networkTimeoutSeconds": 8,
+    plugins: [new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    }), new workbox.BackgroundSyncPlugin("checklist-background-sync", {
+      maxRetentionTime: 1440
+    })]
+  }), 'GET');
   workbox.registerRoute(/^https?:\/\/.*\/api\//, new workbox.NetworkFirst({
     "cacheName": "api-cache",
     "networkTimeoutSeconds": 10,
@@ -97,11 +151,25 @@ define(['./workbox-87a8cbd3'], (function (workbox) { 'use strict';
       maxRetentionTime: 1440
     })]
   }), 'GET');
-  workbox.registerRoute(/\.(?:png|jpg|jpeg|svg|gif|webp)$/, new workbox.CacheFirst({
+  workbox.registerRoute(/\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/, new workbox.CacheFirst({
     "cacheName": "images-cache",
     plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 100,
+      maxEntries: 200,
       maxAgeSeconds: 2592000
+    })]
+  }), 'GET');
+  workbox.registerRoute(/\.(?:woff|woff2|ttf|eot)$/, new workbox.CacheFirst({
+    "cacheName": "fonts-cache",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 50,
+      maxAgeSeconds: 31536000
+    })]
+  }), 'GET');
+  workbox.registerRoute(/\.(?:css|js)$/, new workbox.StaleWhileRevalidate({
+    "cacheName": "static-resources-cache",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 100,
+      maxAgeSeconds: 604800
     })]
   }), 'GET');
 

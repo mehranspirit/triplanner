@@ -1,228 +1,204 @@
 import React, { useState, useEffect } from 'react';
-import { WifiIcon, CloudArrowUpIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { networkAwareApi } from '../services/networkAwareApi';
 
-interface StorageInfo {
-  used: number;
-  quota: number;
-  pendingSync: number;
+interface OfflineIndicatorProps {
+  className?: string;
 }
 
-export const OfflineIndicator: React.FC = () => {
+export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({ className = '' }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [hasPendingSync, setHasPendingSync] = useState(false);
-  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [storageInfo, setStorageInfo] = useState<{ used: number; quota: number } | null>(null);
 
   useEffect(() => {
-    const updateOnlineStatus = () => {
-      setIsOnline(navigator.onLine);
-    };
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
-    const checkPendingSync = async () => {
-      try {
-        const pending = await networkAwareApi.hasPendingSync();
-        setHasPendingSync(pending);
-        
-        const storage = await networkAwareApi.getStorageInfo();
-        setStorageInfo(storage);
-      } catch (error) {
-        console.error('Failed to check pending sync:', error);
-      }
-    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
-    // Set up event listeners
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
+    // Load initial sync status
+    loadSyncStatus();
 
-    // Check pending sync periodically
-    checkPendingSync();
-    const interval = setInterval(checkPendingSync, 10000); // Check every 10 seconds
+    // Update sync status periodically
+    const interval = setInterval(loadSyncStatus, 5000);
 
     return () => {
-      window.removeEventListener('online', updateOnlineStatus);
-      window.removeEventListener('offline', updateOnlineStatus);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
   }, []);
 
-  const handleForceSync = async () => {
-    if (isOnline) {
-      try {
-        await networkAwareApi.forcSync();
-        setHasPendingSync(false);
-      } catch (error) {
-        console.error('Force sync failed:', error);
-      }
+  const loadSyncStatus = async () => {
+    try {
+      const hasPending = await networkAwareApi.hasPendingSync();
+      const info = await networkAwareApi.getStorageInfo();
+      setPendingSyncCount(info.pendingSync);
+      setStorageInfo({ used: info.used, quota: info.quota });
+    } catch (error) {
+      console.warn('Failed to load sync status:', error);
     }
   };
 
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
+  const handleForceSync = async () => {
+    try {
+      await networkAwareApi.forcSync();
+      await loadSyncStatus();
+    } catch (error) {
+      console.error('Force sync failed:', error);
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Don't show anything if online and no pending sync
-  if (isOnline && !hasPendingSync) {
-    return null;
+  if (isOnline && pendingSyncCount === 0) {
+    return null; // Don't show indicator when online and no pending syncs
   }
 
   return (
-    <div className="relative">
-      {/* Main Indicator */}
-      <div
-        className={`fixed top-4 right-4 z-50 flex items-center space-x-2 px-4 py-2 rounded-lg shadow-lg cursor-pointer transition-all duration-300 ${
-          !isOnline
-            ? 'bg-red-100 border border-red-300 text-red-800'
-            : hasPendingSync
-            ? 'bg-yellow-100 border border-yellow-300 text-yellow-800'
-            : 'bg-green-100 border border-green-300 text-green-800'
-        }`}
-        onClick={() => setShowDetails(!showDetails)}
+    <div className={`fixed top-4 right-4 z-[9999] ${className}`}>
+      <div 
+        className={`
+          backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl shadow-2xl
+          transition-all duration-300 ease-in-out cursor-pointer
+          ${isExpanded ? 'w-80 p-4' : 'w-auto px-4 py-2'}
+          hover:bg-white/15 hover:scale-105
+        `}
+        onClick={() => setIsExpanded(!isExpanded)}
       >
-        {!isOnline ? (
-          <>
-            <WifiIcon className="h-5 w-5" />
-            <span className="font-medium">You're offline</span>
-          </>
-        ) : hasPendingSync ? (
-          <>
-            <CloudArrowUpIcon className="h-5 w-5" />
-            <span className="font-medium">
-              {storageInfo?.pendingSync || 0} changes to sync
+        {/* Compact View */}
+        <div className="flex items-center gap-3">
+          {/* Status Indicator */}
+          <div className="relative flex items-center">
+            <div 
+              className={`
+                w-3 h-3 rounded-full transition-all duration-300
+                ${isOnline 
+                  ? 'bg-gradient-to-r from-blue-400 to-blue-600 shadow-lg shadow-blue-500/50' 
+                  : 'bg-gradient-to-r from-red-400 to-red-600 shadow-lg shadow-red-500/50'
+                }
+              `}
+            >
+              {/* Pulse animation for offline */}
+              {!isOnline && (
+                <div className="absolute inset-0 w-3 h-3 bg-red-400 rounded-full animate-ping opacity-75"></div>
+              )}
+            </div>
+          </div>
+
+          {/* Status Text */}
+          <div className="flex flex-col">
+            <span className="text-white font-medium text-sm leading-tight">
+              {isOnline ? 'Syncing...' : 'Offline Mode'}
             </span>
-          </>
-        ) : (
-          <>
-            <CloudArrowUpIcon className="h-5 w-5 text-green-600" />
-            <span className="font-medium">All synced</span>
-          </>
-        )}
-      </div>
-
-      {/* Details Panel */}
-      {showDetails && (
-        <div className="fixed top-16 right-4 z-50 bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-80 max-w-sm">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Offline Status</h3>
-              <button
-                onClick={() => setShowDetails(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Network Status */}
-            <div className="flex items-center space-x-3">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  isOnline ? 'bg-green-500' : 'bg-red-500'
-                }`}
-              />
-              <span className="text-sm text-gray-700">
-                {isOnline ? 'Connected' : 'Offline'}
+            {pendingSyncCount > 0 && (
+              <span className="text-white/70 text-xs leading-tight">
+                {pendingSyncCount} pending
               </span>
-            </div>
-
-            {/* Pending Sync Info */}
-            {hasPendingSync && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                <div className="flex items-center space-x-2">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600" />
-                  <span className="text-sm font-medium text-yellow-800">
-                    {storageInfo?.pendingSync || 0} operations pending sync
-                  </span>
-                </div>
-                <p className="text-xs text-yellow-700 mt-1">
-                  Changes will automatically sync when you're back online
-                </p>
-                {isOnline && (
-                  <button
-                    onClick={handleForceSync}
-                    className="mt-2 text-xs bg-yellow-600 text-white px-3 py-1 rounded-md hover:bg-yellow-700 transition-colors"
-                  >
-                    Sync Now
-                  </button>
-                )}
-              </div>
             )}
+          </div>
+
+          {/* Expand Icon */}
+          <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+            <svg 
+              className="w-4 h-4 text-white/70" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Expanded View */}
+        {isExpanded && (
+          <div className="mt-4 space-y-3 border-t border-white/20 pt-3">
+            {/* Capabilities */}
+            <div className="space-y-2">
+              <h4 className="text-white font-semibold text-sm">Available Features:</h4>
+              <div className="grid grid-cols-1 gap-1 text-xs text-white/80">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+                  <span>Full expense management</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+                  <span>Settlement tracking & debt optimization</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+                  <span>Notes & checklists collaboration</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+                  <span>Event planning & management</span>
+                </div>
+              </div>
+            </div>
 
             {/* Storage Info */}
             {storageInfo && (
-              <div className="border-t border-gray-200 pt-3">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">
-                  Storage Usage
-                </h4>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <div className="flex justify-between">
-                    <span>Used:</span>
-                    <span>{formatBytes(storageInfo.used)}</span>
-                  </div>
-                  {storageInfo.quota > 0 && (
-                    <div className="flex justify-between">
-                      <span>Available:</span>
-                      <span>{formatBytes(storageInfo.quota)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Pending operations:</span>
-                    <span>{storageInfo.pendingSync}</span>
-                  </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-white/80">
+                  <span>Storage Used:</span>
+                  <span>{formatBytes(storageInfo.used)} / {formatBytes(storageInfo.quota)}</span>
                 </div>
-                
-                {/* Storage Progress Bar */}
-                {storageInfo.quota > 0 && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{
-                          width: `${Math.min(
-                            (storageInfo.used / storageInfo.quota) * 100,
-                            100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {(
-                        (storageInfo.used / storageInfo.quota) * 100
-                      ).toFixed(1)}% used
-                    </p>
-                  </div>
-                )}
+                <div className="w-full bg-white/20 rounded-full h-1.5">
+                  <div 
+                    className="bg-gradient-to-r from-blue-400 to-purple-500 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min((storageInfo.used / storageInfo.quota) * 100, 100)}%` }}
+                  ></div>
+                </div>
               </div>
             )}
 
-            {/* Offline Features Info */}
+            {/* Sync Controls */}
+            {isOnline && pendingSyncCount > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleForceSync();
+                }}
+                className="
+                  w-full bg-gradient-to-r from-blue-500 to-purple-600 
+                  text-white text-xs font-medium py-2 px-3 rounded-lg
+                  hover:from-blue-600 hover:to-purple-700 
+                  transition-all duration-200 transform hover:scale-105
+                  shadow-lg hover:shadow-xl
+                "
+              >
+                Sync Now ({pendingSyncCount} items)
+              </button>
+            )}
+
+            {/* Offline Message */}
             {!isOnline && (
-              <div className="border-t border-gray-200 pt-3">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">
-                  Available Offline
-                </h4>
-                <ul className="text-xs text-gray-600 space-y-1">
-                  <li>• View and edit trips</li>
-                  <li>• Add and manage events</li>
-                  <li>• Full expense management (add/edit/delete)</li>
-                  <li>• Settlement tracking & debt simplification</li>
-                  <li>• Expense settlements & participant management</li>
-                  <li>• Edit trip notes</li>
-                  <li>• Manage shared & personal checklists</li>
-                  <li>• View all cached data</li>
-                </ul>
-                <p className="text-xs text-gray-500 mt-2">
-                  Changes will sync automatically when you reconnect
-                </p>
+              <div className="bg-amber-500/20 border border-amber-400/30 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <svg className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <p className="text-white text-xs font-medium">You're working offline</p>
+                    <p className="text-white/70 text-xs mt-1">
+                      Changes will sync automatically when you're back online.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }; 

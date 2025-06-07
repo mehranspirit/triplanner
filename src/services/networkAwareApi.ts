@@ -1208,6 +1208,47 @@ class NetworkAwareApiService {
       console.warn('Cache warming failed:', error);
     }
   }
+
+  // Comprehensive preload for a specific trip
+  async preloadTripData(tripId: string): Promise<void> {
+    if (!this.isOnline) {
+      console.log('Cannot preload trip data while offline');
+      return;
+    }
+
+    try {
+      console.log(`Preloading comprehensive data for trip ${tripId}...`);
+      
+      // Load all trip-related data in parallel
+      const [trip, expenses, settlements, expenseSummary, notes, sharedChecklist, personalChecklist] = await Promise.allSettled([
+        this.getTrip(tripId),
+        this.getExpenses(tripId),
+        this.getSettlements(tripId),
+        this.getExpenseSummary(tripId),
+        this.getNotes(tripId),
+        this.getChecklist(tripId, 'shared'),
+        this.getChecklist(tripId, 'personal')
+      ]);
+
+      // Log results
+      const successful = [trip, expenses, settlements, expenseSummary, notes, sharedChecklist, personalChecklist]
+        .filter(result => result.status === 'fulfilled').length;
+      
+      console.log(`Preloaded ${successful}/7 data types for trip ${tripId}`);
+      
+      // Log any failures for debugging
+      if (trip.status === 'rejected') console.warn('Failed to preload trip:', trip.reason);
+      if (expenses.status === 'rejected') console.warn('Failed to preload expenses:', expenses.reason);
+      if (settlements.status === 'rejected') console.warn('Failed to preload settlements:', settlements.reason);
+      if (expenseSummary.status === 'rejected') console.warn('Failed to preload expense summary:', expenseSummary.reason);
+      if (notes.status === 'rejected') console.warn('Failed to preload notes:', notes.reason);
+      if (sharedChecklist.status === 'rejected') console.warn('Failed to preload shared checklist:', sharedChecklist.reason);
+      if (personalChecklist.status === 'rejected') console.warn('Failed to preload personal checklist:', personalChecklist.reason);
+
+    } catch (error) {
+      console.error(`Failed to preload trip data for ${tripId}:`, error);
+    }
+  }
 }
 
 export const networkAwareApi = new NetworkAwareApiService(); 

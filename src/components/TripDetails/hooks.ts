@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
+import { networkAwareApi } from '@/services/networkAwareApi';
 // import { Trip, Event, EventType, User } from '@/types/eventTypes'; // Original import
 import { Trip, Event, EventType, User } from '@/types/eventTypes'; // Ensure this points to the correct file
 import { useAuth } from '@/context/AuthContext';
@@ -36,7 +37,13 @@ export const useTripDetails = () => {
     setLoading(true);
     setError(null);
     try {
-      const tripData = await api.getTrip(id);
+      const tripData = await networkAwareApi.getTrip(id);
+      if (!tripData) {
+        setError('Trip not found');
+        setTrip(null);
+        return;
+      }
+      
       setTrip(tripData);
       
       // Load trip thumbnail
@@ -87,7 +94,7 @@ export const useTripDetails = () => {
       if (tripContext?.updateTrip) {
         await tripContext.updateTrip(fullUpdatedTrip);
       } else {
-        await api.updateTrip(fullUpdatedTrip);
+        await networkAwareApi.updateTrip(fullUpdatedTrip);
       }
     } catch (err) {
       console.error('Error updating trip:', err);
