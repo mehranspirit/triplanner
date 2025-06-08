@@ -4,7 +4,7 @@ import { Expense, SplitMethod, SplitDetails } from '../../types/expenseTypes';
 import { User } from '../../types/eventTypes';
 import Avatar from '../Avatar';
 import { suggestCategory, CategorySuggestion } from '../../utils/categorySuggestions';
-import { createParticipantWithSplitDetails } from '../../utils/expenseUtils';
+import { createParticipantWithSplitDetails, calculateEqualShare } from '../../utils/expenseUtils';
 import { useEvent } from '../../contexts/EventContext';
 import { EVENT_TYPES } from '../../eventTypes/registry';
 import { getEventTypeLabel } from '../../config/eventTypes';
@@ -359,7 +359,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
         selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: 1 }), {})
       );
     } else {
-      const equalAmount = parseFloat(amount) / numParticipants;
+      const equalAmount = calculateEqualShare(parseFloat(amount), numParticipants);
       setParticipantShares(
         selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: equalAmount }), {})
       );

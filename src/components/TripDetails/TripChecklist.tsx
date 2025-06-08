@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Trash2, Loader2, RefreshCw, AlertCircle, X } from 'lucide-react';
 import { io } from 'socket.io-client';
-import debounce from 'lodash/debounce';
+import { debounce } from 'lodash';
+import { networkAwareApi } from '../../services/networkAwareApi';
 
 interface ChecklistItem {
   id: string;
@@ -91,19 +92,7 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit }) => {
         return;
       }
 
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/checklist/${endpoint}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch checklist: ${response.statusText}`);
-      }
-
-      const data = await response.json();
+      const data = await networkAwareApi.getChecklist(tripId, endpoint);
       if (Array.isArray(data)) {
         setBins(data);
         // Update cache
@@ -133,26 +122,13 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit }) => {
     debounce(async (nextBins: Checklist) => {
       setIsSyncing(true);
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/checklist/${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ bins: nextBins }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to sync checklist: ${response.statusText}`);
-        }
-
+        const updatedBins = await networkAwareApi.updateChecklist(tripId, endpoint, nextBins);
         // Update cache on successful sync
         if (!checklistCache[tripId]) {
           checklistCache[tripId] = {};
         }
         checklistCache[tripId][endpoint] = {
-          data: nextBins,
+          data: updatedBins,
           timestamp: Date.now(),
           version: CACHE_VERSION
         };

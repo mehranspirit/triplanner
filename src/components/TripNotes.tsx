@@ -3,12 +3,13 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import { api, TripNote } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Avatar from './Avatar';
 import { debounce } from 'lodash';
 import { UserHighlight } from '../extensions/UserHighlight';
 import '../styles/TripNotes.css';
+import { networkAwareApi } from '../services/networkAwareApi';
+import { TripNote } from '../services/offlineService';
 
 interface TripNotesProps {
   tripId: string;
@@ -182,7 +183,7 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
   // Debounced function to update notes
   const debouncedUpdateNotes = debounce(async (content: string) => {
     try {
-      const updatedNote = await api.updateTripNotes(tripId, content);
+      const updatedNote = await networkAwareApi.updateNotes(tripId, content);
       setNote(updatedNote);
       // Update cache
       notesCache[tripId] = {
@@ -212,17 +213,19 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
           return;
         }
 
-        const tripNote = await api.getTripNotes(tripId);
-        setNote(tripNote);
-        if (editor) {
-          editor.commands.setContent(tripNote.content);
+        const tripNote = await networkAwareApi.getNotes(tripId);
+        if (tripNote) {
+          setNote(tripNote);
+          if (editor) {
+            editor.commands.setContent(tripNote.content);
+          }
+          // Update cache
+          notesCache[tripId] = {
+            data: tripNote,
+            timestamp: Date.now(),
+            version: CACHE_VERSION
+          };
         }
-        // Update cache
-        notesCache[tripId] = {
-          data: tripNote,
-          timestamp: Date.now(),
-          version: CACHE_VERSION
-        };
       } catch (err) {
         console.error('Error fetching notes:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch notes');
@@ -275,7 +278,7 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
       {note?.lastEditedBy && (
         <div className="flex-none border-t border-gray-200 p-4 flex items-center space-x-2 text-sm text-gray-500 bg-white">
           <Avatar
-            photoUrl={note.lastEditedBy.photoUrl}
+            photoUrl={note.lastEditedBy.photoUrl || null}
             name={note.lastEditedBy.name}
             size="sm"
           />

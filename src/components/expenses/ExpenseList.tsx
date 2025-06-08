@@ -47,12 +47,30 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
   const [deletingExpenses, setDeletingExpenses] = useState<Set<string>>(new Set());
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
+  // Filter out temporary expenses that have corresponding real expenses
+  const filteredExpenses = React.useMemo(() => {
+    const realExpenses = expenses.filter(e => !e._id.startsWith('temp-'));
+    const tempExpenses = expenses.filter(e => e._id.startsWith('temp-'));
+    
+    // Remove temp expenses that have a corresponding real expense with same title and amount
+    const validTempExpenses = tempExpenses.filter(tempExpense => {
+      return !realExpenses.some(realExpense => 
+        realExpense.title === tempExpense.title && 
+        realExpense.amount === tempExpense.amount &&
+        Math.abs(new Date(realExpense.createdAt).getTime() - new Date(tempExpense.createdAt).getTime()) < 60000 // Within 1 minute
+      );
+    });
+    
+    return [...realExpenses, ...validTempExpenses];
+  }, [expenses]);
+
   // Add debug logging
   console.log('ExpenseList props:', {
     tripId,
     participants,
     currentUser,
-    expenses
+    allExpenses: expenses,
+    filteredExpenses
   });
 
   const handleDelete = async (expenseId: string) => {
@@ -122,7 +140,7 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
         </div>
       )}
 
-      {expenses.map((expense) => (
+      {filteredExpenses.map((expense) => (
         <div
           key={expense._id}
           className={cn(

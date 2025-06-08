@@ -4,7 +4,7 @@ import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
 
 export interface SyncOperation {
   id?: number;
-  type: 'CREATE_TRIP' | 'UPDATE_TRIP' | 'DELETE_TRIP' | 'CREATE_EVENT' | 'UPDATE_EVENT' | 'DELETE_EVENT' | 'CREATE_EXPENSE' | 'UPDATE_EXPENSE' | 'DELETE_EXPENSE' | 'SETTLE_EXPENSE' | 'CREATE_SETTLEMENT' | 'UPDATE_SETTLEMENT' | 'UPDATE_NOTES' | 'UPDATE_CHECKLIST';
+  type: 'CREATE_TRIP' | 'UPDATE_TRIP' | 'DELETE_TRIP' | 'CREATE_EVENT' | 'UPDATE_EVENT' | 'DELETE_EVENT' | 'CREATE_EXPENSE' | 'UPDATE_EXPENSE' | 'DELETE_EXPENSE' | 'SETTLE_EXPENSE' | 'UPDATE_NOTES' | 'UPDATE_CHECKLIST';
   data: any;
   timestamp: number;
   tripId?: string;

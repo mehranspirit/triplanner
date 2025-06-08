@@ -95,11 +95,16 @@ expenseSchema.index({ tripId: 1 });
 expenseSchema.index({ paidBy: 1 });
 expenseSchema.index({ date: 1 });
 
+// Helper function to round monetary values to 2 decimal places
+const roundToTwoDecimals = (value) => {
+  return parseFloat(value.toFixed(2));
+};
+
 // Add a pre-save middleware to validate participant shares
 expenseSchema.pre('save', function(next) {
   try {
     if (this.splitMethod === 'equal') {
-      const share = this.amount / this.participants.length;
+      const share = roundToTwoDecimals(this.amount / this.participants.length);
       this.participants.forEach(participant => {
         participant.share = share;
       });
@@ -111,7 +116,7 @@ expenseSchema.pre('save', function(next) {
       // Calculate actual shares based on percentages
       this.participants.forEach(participant => {
         const percentage = participant.splitDetails.percentage?.value || 0;
-        participant.share = (this.amount * percentage) / 100;
+        participant.share = roundToTwoDecimals((this.amount * percentage) / 100);
       });
     } else if (this.splitMethod === 'shares') {
       const totalShares = this.participants.reduce((sum, p) => sum + (p.splitDetails.shares?.value || 0), 0);
@@ -121,7 +126,7 @@ expenseSchema.pre('save', function(next) {
       // Calculate actual shares based on share ratio
       this.participants.forEach(participant => {
         const shareValue = participant.splitDetails.shares?.value || 0;
-        participant.share = (this.amount * shareValue) / totalShares;
+        participant.share = roundToTwoDecimals((this.amount * shareValue) / totalShares);
       });
     } else if (this.splitMethod === 'custom') {
       // For custom splits, validate that the sum equals the total amount
@@ -131,7 +136,7 @@ expenseSchema.pre('save', function(next) {
       }
       // Set the final share to the custom amount
       this.participants.forEach(participant => {
-        participant.share = participant.splitDetails.custom?.amount || 0;
+        participant.share = roundToTwoDecimals(participant.splitDetails.custom?.amount || 0);
       });
     }
     next();

@@ -3,7 +3,8 @@ import { useExpense } from '../../context/ExpenseContext';
 import { Settlement } from '../../types/expenseTypes';
 import { User } from '../../types/eventTypes';
 import { formatCurrency } from '../../utils/format';
-import { api } from '../../services/api';
+import { networkAwareApi } from '../../services/networkAwareApi';
+
 import { simplifyDebts } from '../../utils/debtSimplification';
 
 interface SettlementManagementProps {
@@ -17,7 +18,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
   participants,
   currentUser
 }) => {
-  const { settlements, addSettlement, updateSettlement, refreshData, expenseSummary } = useExpense();
+  const { settlements, addSettlement, updateSettlement, deleteSettlement, refreshData, expenseSummary } = useExpense();
   const [fromUserId, setFromUserId] = useState('');
   const [toUserId, setToUserId] = useState('');
   const [amount, setAmount] = useState('');
@@ -88,8 +89,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
     }
 
     try {
-      await api.deleteSettlement(tripId, settlement._id);
-      await refreshData(tripId);
+      await deleteSettlement(tripId, settlement._id);
     } catch (error) {
       console.error('Failed to delete settlement:', error);
     }
@@ -144,6 +144,29 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
 
   const pendingSettlements = settlements.filter(s => s.status === 'pending');
   const completedSettlements = settlements.filter(s => s.status === 'completed');
+  const isOnline = networkAwareApi.getIsOnline();
+
+  // Show offline message if not online
+  if (!isOnline) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <div className="flex items-center justify-center mb-4">
+            <svg className="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Settlements Not Available Offline</h3>
+          <p className="text-yellow-700 mb-4">
+            Settlement management requires an internet connection. Please connect to the internet to view and manage settlements.
+          </p>
+          <p className="text-sm text-yellow-600">
+            You can still view and manage expenses while offline.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

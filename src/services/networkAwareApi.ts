@@ -7,6 +7,7 @@ class NetworkAwareApiService {
   private isOnline = navigator.onLine;
   private syncInProgress = false;
   private pendingOperations: Set<string> = new Set();
+  private syncTimeout: NodeJS.Timeout | null = null;
 
   constructor() {
     // Initialize offline service
@@ -16,7 +17,7 @@ class NetworkAwareApiService {
     window.addEventListener('online', () => {
       console.log('Network: Back online');
       this.isOnline = true;
-      this.processSyncQueue();
+      this.debouncedSync();
     });
 
     window.addEventListener('offline', () => {
@@ -34,6 +35,18 @@ class NetworkAwareApiService {
 
   private async initializeService() {
     await offlineService.init();
+  }
+
+  // Debounced sync to prevent multiple sync processes
+  private debouncedSync() {
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+    }
+    
+    this.syncTimeout = setTimeout(() => {
+      this.processSyncQueue();
+      this.syncTimeout = null;
+    }, 1000); // Wait 1 second before syncing
   }
 
   // Network status methods
@@ -280,13 +293,27 @@ class NetworkAwareApiService {
         }
 
         const realExpense = await response.json();
+        
+        // Remove the temporary expense from cache if it exists
+        const cachedExpenses = await offlineService.getCachedExpenses(tripId);
+        const tempExpense = cachedExpenses.find(e => 
+          e.title === expenseData.title && 
+          e.amount === expenseData.amount && 
+          e._id.startsWith('temp-expense-')
+        );
+        
+        if (tempExpense) {
+          await offlineService.deleteCachedExpense(tempExpense._id);
+          console.log(`Removed temporary expense ${tempExpense._id} after creating real expense ${realExpense._id}`);
+        }
+        
         await offlineService.updateCachedExpense(tripId, realExpense);
         return realExpense;
       } catch (error) {
         console.error('Failed to add expense via API, queuing for sync:', error);
         await offlineService.addToSyncQueue({
           type: 'CREATE_EXPENSE',
-          data: expenseData,
+          data: { ...expenseData, tempId },
           tripId,
           timestamp: Date.now(),
           retryCount: 0
@@ -297,7 +324,7 @@ class NetworkAwareApiService {
       console.log('Offline: Queuing expense creation for sync');
       await offlineService.addToSyncQueue({
         type: 'CREATE_EXPENSE',
-        data: expenseData,
+        data: { ...expenseData, tempId },
         tripId,
         timestamp: Date.now(),
         retryCount: 0
@@ -453,140 +480,81 @@ class NetworkAwareApiService {
     }
   }
 
-  // Settlement Management
+  // Settlement Management - Online Only
   async getSettlements(tripId: string): Promise<Settlement[]> {
-    if (this.isOnline) {
-      try {
-        console.log(`Fetching settlements for trip ${tripId} via API...`);
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/settlements`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch settlements: ${response.statusText}`);
-        }
-
-        const settlements = await response.json();
-        await offlineService.cacheSettlements(tripId, settlements);
-        return settlements;
-      } catch (error) {
-        console.error('Failed to fetch settlements via API, using cached version:', error);
-        return await offlineService.getCachedSettlements(tripId);
-      }
-    } else {
-      console.log('Offline: Using cached settlements');
-      return await offlineService.getCachedSettlements(tripId);
+    if (!this.isOnline) {
+      throw new Error('Settlements are not available offline. Please connect to the internet to manage settlements.');
     }
+
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/settlements`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch settlements: ${response.statusText}`);
+    }
+
+    return await response.json();
   }
 
   async addSettlement(tripId: string, settlementData: Omit<Settlement, '_id'>): Promise<Settlement> {
-    const tempId = `temp-settlement-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const tempSettlement: Settlement = {
-      ...settlementData,
-      _id: tempId
-    };
-
-    // Cache immediately for optimistic UI
-    await offlineService.updateCachedSettlement(tempSettlement);
-
-    if (this.isOnline) {
-      try {
-        console.log(`Adding settlement to trip ${tripId} via API...`);
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/settlements`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(settlementData),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to add settlement: ${response.statusText}`);
-        }
-
-        const realSettlement = await response.json();
-        await offlineService.updateCachedSettlement(realSettlement);
-        return realSettlement;
-      } catch (error) {
-        console.error('Failed to add settlement via API, queuing for sync:', error);
-        await offlineService.addToSyncQueue({
-          type: 'CREATE_SETTLEMENT',
-          data: settlementData,
-          tripId,
-          timestamp: Date.now(),
-          retryCount: 0
-        });
-        return tempSettlement;
-      }
-    } else {
-      console.log('Offline: Queuing settlement creation for sync');
-      await offlineService.addToSyncQueue({
-        type: 'CREATE_SETTLEMENT',
-        data: settlementData,
-        tripId,
-        timestamp: Date.now(),
-        retryCount: 0
-      });
-      return tempSettlement;
+    if (!this.isOnline) {
+      throw new Error('Settlements are not available offline. Please connect to the internet to manage settlements.');
     }
+
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/settlements`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(settlementData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to add settlement: ${response.statusText}`);
+    }
+
+    return await response.json();
   }
 
   async updateSettlement(tripId: string, settlementId: string, updates: Partial<Settlement>): Promise<Settlement> {
-    // Get current settlement and apply updates
-    const settlements = await offlineService.getCachedSettlements(tripId);
-    const currentSettlement = settlements.find(s => s._id === settlementId);
-    if (!currentSettlement) {
-      throw new Error('Settlement not found');
+    if (!this.isOnline) {
+      throw new Error('Settlements are not available offline. Please connect to the internet to manage settlements.');
     }
 
-    const updatedSettlement = { ...currentSettlement, ...updates };
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/settlements/${settlementId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updates),
+    });
 
-    // Cache immediately for optimistic UI
-    await offlineService.updateCachedSettlement(updatedSettlement);
+    if (!response.ok) {
+      throw new Error(`Failed to update settlement: ${response.statusText}`);
+    }
 
-    if (this.isOnline) {
-      try {
-        console.log(`Updating settlement ${settlementId} for trip ${tripId} via API...`);
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/settlements/${settlementId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(updates),
-        });
+    return await response.json();
+  }
 
-        if (!response.ok) {
-          throw new Error(`Failed to update settlement: ${response.statusText}`);
-        }
+  async deleteSettlement(tripId: string, settlementId: string): Promise<void> {
+    if (!this.isOnline) {
+      throw new Error('Settlements are not available offline. Please connect to the internet to manage settlements.');
+    }
 
-        const realSettlement = await response.json();
-        await offlineService.updateCachedSettlement(realSettlement);
-        return realSettlement;
-      } catch (error) {
-        console.error('Failed to update settlement via API, queuing for sync:', error);
-        await offlineService.addToSyncQueue({
-          type: 'UPDATE_SETTLEMENT',
-          data: { settlementId, updates },
-          tripId,
-          timestamp: Date.now(),
-          retryCount: 0
-        });
-        return updatedSettlement;
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/settlements/${settlementId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
-    } else {
-      console.log('Offline: Queuing settlement update for sync');
-      await offlineService.addToSyncQueue({
-        type: 'UPDATE_SETTLEMENT',
-        data: { settlementId, updates },
-        tripId,
-        timestamp: Date.now(),
-        retryCount: 0
-      });
-      return updatedSettlement;
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete settlement: ${response.statusText}`);
     }
   }
 
@@ -608,11 +576,75 @@ class NetworkAwareApiService {
         await offlineService.cacheExpenseSummary(tripId, summary);
         return summary;
       } catch (error) {
-        console.error('Failed to fetch expense summary via API, using cached version:', error);
-        return await offlineService.getCachedExpenseSummary(tripId);
+        console.error('Failed to fetch expense summary via API, calculating locally:', error);
+        return await this.calculateExpenseSummaryLocally(tripId);
       }
     } else {
-      console.log('Offline: Using cached expense summary');
+      console.log('Offline: Calculating expense summary locally');
+      return await this.calculateExpenseSummaryLocally(tripId);
+    }
+  }
+
+  // Calculate expense summary locally from cached expenses
+  private async calculateExpenseSummaryLocally(tripId: string): Promise<ExpenseSummary | undefined> {
+    try {
+      const expenses = await offlineService.getCachedExpenses(tripId);
+      
+      if (expenses.length === 0) {
+        return {
+          totalAmount: 0,
+          perPersonBalances: {},
+          unsettledAmount: 0,
+          currency: 'USD'
+        };
+      }
+
+      // Calculate total amount and per-person balances
+      let totalAmount = 0;
+      const perPersonBalances: Record<string, number> = {};
+      const currency = expenses[0]?.currency || 'USD';
+
+      // Process expenses
+      for (const expense of expenses) {
+        totalAmount += expense.amount;
+        
+        // Add amount paid by payer
+        if (!perPersonBalances[expense.paidBy._id]) {
+          perPersonBalances[expense.paidBy._id] = 0;
+        }
+        perPersonBalances[expense.paidBy._id] += expense.amount;
+
+        // Subtract each participant's share
+        for (const participant of expense.participants) {
+          if (!perPersonBalances[participant.userId]) {
+            perPersonBalances[participant.userId] = 0;
+          }
+          if (!participant.settled) {
+            perPersonBalances[participant.userId] -= participant.share;
+          }
+        }
+      }
+      
+      // Calculate unsettled amount (sum of all negative balances)
+      // Note: When offline, settlements are not processed, so this shows the full unsettled amount
+      const unsettledAmount = Object.values(perPersonBalances)
+        .filter(balance => balance < 0)
+        .reduce((sum, balance) => sum + Math.abs(balance), 0);
+
+      const summary = {
+        totalAmount,
+        perPersonBalances,
+        unsettledAmount,
+        currency
+      };
+
+      // Cache the calculated summary
+      await offlineService.cacheExpenseSummary(tripId, summary);
+      
+      return summary;
+    } catch (error) {
+      console.error('Failed to calculate expense summary locally:', error);
+      // Try to return cached summary as fallback
       return await offlineService.getCachedExpenseSummary(tripId);
     }
   }
@@ -688,8 +720,41 @@ class NetworkAwareApiService {
     }
   }
 
+  private async getCurrentUserSafely(): Promise<any> {
+    // Get user data from localStorage instead of API call to avoid fetch errors when offline
+    try {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        return JSON.parse(storedUser);
+      } else {
+        // Fallback: try to get from API if online
+        if (this.isOnline) {
+          return await api.getCurrentUser();
+        } else {
+          // Use default user data if offline and no stored user
+          return {
+            _id: 'offline-user',
+            name: 'Offline User',
+            email: 'offline@example.com',
+            photoUrl: null
+          };
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to get user data:', error);
+      // Use default user data if parsing fails
+      return {
+        _id: 'offline-user',
+        name: 'Offline User',
+        email: 'offline@example.com',
+        photoUrl: null
+      };
+    }
+  }
+
   async updateNotes(tripId: string, content: string): Promise<TripNote> {
-    const user = await api.getCurrentUser(); // Assume we have this
+    const user = await this.getCurrentUserSafely();
+
     const tempNotes: TripNote = {
       content,
       lastEditedAt: new Date().toISOString(),
@@ -816,7 +881,7 @@ class NetworkAwareApiService {
 
   // Event API methods
   async createEvent(tripId: string, eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>): Promise<Event> {
-    const user = await api.getCurrentUser();
+    const user = await this.getCurrentUserSafely();
     const tempId = `temp-event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const tempEvent: Event = {
       ...eventData,
@@ -946,15 +1011,31 @@ class NetworkAwareApiService {
     console.log('Processing sync queue...');
 
     try {
-      const syncQueue = await offlineService.getSyncQueue();
+      let syncQueue = await offlineService.getSyncQueue();
+      
+      if (syncQueue.length === 0) {
+        console.log('Sync queue is empty');
+        return;
+      }
+      
+      // Optimize sync queue by removing conflicting operations for temporary items
+      syncQueue = await this.optimizeSyncQueue(syncQueue);
       
       for (const operation of syncQueue) {
         try {
+          // Ensure operation has an ID
+          if (!operation.id) {
+            console.error(`Operation ${operation.type} has no ID, skipping`);
+            continue;
+          }
+          
           await this.processSyncOperation(operation);
+          
+          // Remove operation from sync queue (operation.id is guaranteed to exist due to check above)
           await offlineService.removeSyncOperation(operation.id!);
-          console.log(`Synced operation: ${operation.type}`);
+          console.log(`✓ Synced and removed operation: ${operation.type} (ID: ${operation.id})`);
         } catch (error) {
-          console.error(`Failed to sync operation ${operation.type}:`, error);
+          console.error(`Failed to sync operation ${operation.type} (ID: ${operation.id}):`, error);
           
           // Update retry count
           operation.retryCount++;
@@ -962,7 +1043,9 @@ class NetworkAwareApiService {
           // Remove from queue if too many retries
           if (operation.retryCount >= 3) {
             console.warn(`Removing operation ${operation.type} after 3 failed attempts`);
-            await offlineService.removeSyncOperation(operation.id!);
+            if (operation.id) {
+              await offlineService.removeSyncOperation(operation.id);
+            }
           } else {
             await offlineService.updateSyncOperation(operation);
           }
@@ -973,6 +1056,66 @@ class NetworkAwareApiService {
     } finally {
       this.syncInProgress = false;
     }
+  }
+
+  // Optimize sync queue by removing conflicting operations for temporary items
+  private async optimizeSyncQueue(syncQueue: SyncOperation[]): Promise<SyncOperation[]> {
+    const optimizedQueue: SyncOperation[] = [];
+    const tempItemOperations = new Map<string, SyncOperation[]>();
+
+    // Group operations by temporary item ID
+    for (const operation of syncQueue) {
+      let tempId: string | null = null;
+      
+      if (operation.type === 'CREATE_EXPENSE' && operation.data.tempId) {
+        tempId = operation.data.tempId;
+      } else if (operation.type === 'DELETE_EXPENSE' && operation.data.expenseId?.startsWith('temp-expense-')) {
+        tempId = operation.data.expenseId;
+      } else if (operation.type === 'UPDATE_EXPENSE' && operation.data._id?.startsWith('temp-expense-')) {
+        tempId = operation.data._id;
+      } else if (operation.type === 'SETTLE_EXPENSE' && operation.data.expenseId?.startsWith('temp-expense-')) {
+        tempId = operation.data.expenseId;
+      }
+
+      if (tempId) {
+        if (!tempItemOperations.has(tempId)) {
+          tempItemOperations.set(tempId, []);
+        }
+        tempItemOperations.get(tempId)!.push(operation);
+      } else {
+        // Keep non-temporary operations
+        optimizedQueue.push(operation);
+      }
+    }
+
+    // Process temporary item operations
+    for (const [tempId, operations] of tempItemOperations) {
+      const hasCreate = operations.some(op => op.type.startsWith('CREATE_'));
+      const hasDelete = operations.some(op => op.type.startsWith('DELETE_'));
+      
+      if (hasCreate && hasDelete) {
+        // If both create and delete exist, skip all operations for this temp item
+        console.log(`Skipping sync for temporary item ${tempId} (created and deleted offline)`);
+        
+        // Remove the temporary item from cache as well
+        if (tempId.startsWith('temp-expense-')) {
+          await offlineService.deleteCachedExpense(tempId);
+          console.log(`Removed temporary expense ${tempId} from cache (created and deleted offline)`);
+        }
+        
+        // Remove these operations from the sync queue
+        for (const operation of operations) {
+          if (operation.id) {
+            await offlineService.removeSyncOperation(operation.id);
+          }
+        }
+      } else {
+        // Keep operations that don't have both create and delete
+        optimizedQueue.push(...operations);
+      }
+    }
+
+    return optimizedQueue;
   }
 
   private async processSyncOperation(operation: SyncOperation): Promise<void> {
@@ -992,40 +1135,65 @@ class NetworkAwareApiService {
         break;
         
       case 'CREATE_EXPENSE':
-        const createdExpense = await api.addExpense(operation.tripId!, operation.data);
+        // Remove tempId from data before sending to API
+        const { tempId: operationTempId, ...expenseDataForAPI } = operation.data;
+        const createdExpense = await api.addExpense(operation.tripId!, expenseDataForAPI);
+        
+        // Remove the temporary expense from cache if tempId is available
+        if (operationTempId) {
+          await offlineService.deleteCachedExpense(operationTempId);
+          console.log(`Removed temporary expense ${operationTempId} after creating real expense ${createdExpense._id}`);
+        } else {
+          // Fallback: find by matching title and amount
+          const cachedExpenses = await offlineService.getCachedExpenses(operation.tripId!);
+          const tempExpense = cachedExpenses.find(e => 
+            e.title === operation.data.title && 
+            e.amount === operation.data.amount && 
+            e._id.startsWith('temp-expense-')
+          );
+          
+          if (tempExpense) {
+            await offlineService.deleteCachedExpense(tempExpense._id);
+            console.log(`Removed temporary expense ${tempExpense._id} after creating real expense ${createdExpense._id}`);
+          }
+        }
+        
         await offlineService.updateCachedExpense(operation.tripId!, createdExpense);
         break;
         
       case 'UPDATE_EXPENSE':
+        // Skip updating expenses with temporary IDs
+        if (operation.data.expenseId && operation.data.expenseId.startsWith('temp-expense-')) {
+          console.log(`Skipping update of temporary expense: ${operation.data.expenseId}`);
+          break;
+        }
         const updatedExpense = await api.updateExpense(
           operation.tripId!, 
-          operation.data._id, 
-          operation.data
+          operation.data.expenseId, 
+          operation.data.updates
         );
         await offlineService.updateCachedExpense(operation.tripId!, updatedExpense);
         break;
         
       case 'DELETE_EXPENSE':
+        // Skip deleting temporary expenses since they never existed on the server
+        if (operation.data.expenseId.startsWith('temp-expense-')) {
+          console.log(`Skipping delete of temporary expense: ${operation.data.expenseId}`);
+          break;
+        }
         await api.deleteExpense(operation.tripId!, operation.data.expenseId);
         break;
         
       case 'SETTLE_EXPENSE':
+        // Skip settling expenses with temporary IDs
+        if (operation.data.expenseId.startsWith('temp-expense-')) {
+          console.log(`Skipping settle of temporary expense: ${operation.data.expenseId}`);
+          break;
+        }
         await api.settleExpense(operation.tripId!, operation.data.expenseId, operation.data.participantId);
         break;
         
-      case 'CREATE_SETTLEMENT':
-        const createdSettlement = await api.addSettlement(operation.tripId!, operation.data);
-        await offlineService.updateCachedSettlement(createdSettlement);
-        break;
-        
-      case 'UPDATE_SETTLEMENT':
-        const updatedSettlement = await api.updateSettlement(
-          operation.tripId!, 
-          operation.data.settlementId, 
-          operation.data.updates
-        );
-        await offlineService.updateCachedSettlement(updatedSettlement);
-        break;
+
 
       case 'UPDATE_NOTES':
         const updatedNotes = await api.updateTripNotes(operation.tripId!, operation.data.content);

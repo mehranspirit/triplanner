@@ -4,7 +4,7 @@ import { Expense, SplitMethod, SplitDetails } from '../../types/expenseTypes';
 import { User } from '../../types/eventTypes';
 import Avatar from '../Avatar';
 import { suggestCategory, CategorySuggestion } from '../../utils/categorySuggestions';
-import { createParticipantWithSplitDetails } from '../../utils/expenseUtils';
+import { createParticipantWithSplitDetails, calculateEqualShare, roundToTwoDecimals } from '../../utils/expenseUtils';
 
 // Define expense categories
 const EXPENSE_CATEGORIES: { [key: string]: string[] } = {
@@ -237,18 +237,18 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
       }
     });
 
-    // For percentage splits, ensure the total is exactly 100%
-    if (expense.splitMethod === 'percentage') {
-      const total = Object.values(initialShares).reduce((sum, share) => sum + (share || 0), 0);
-      if (Math.abs(total - 100) > 0.1) {
-        // If total is not 100%, adjust the last participant's share
-        const lastId = initialSelectedParticipants[initialSelectedParticipants.length - 1];
-        const otherTotal = Object.entries(initialShares)
-          .filter(([id]) => id !== lastId)
-          .reduce((sum, [_, share]) => sum + (share || 0), 0);
-        initialShares[lastId] = Math.round((100 - otherTotal) * 10) / 10;
+          // For percentage splits, ensure the total is exactly 100%
+      if (expense.splitMethod === 'percentage') {
+        const total = Object.values(initialShares).reduce((sum, share) => sum + (share || 0), 0);
+        if (Math.abs(total - 100) > 0.1) {
+          // If total is not 100%, adjust the last participant's share
+          const lastId = initialSelectedParticipants[initialSelectedParticipants.length - 1];
+          const otherTotal = Object.entries(initialShares)
+            .filter(([id]) => id !== lastId)
+            .reduce((sum, [_, share]) => sum + (share || 0), 0);
+          initialShares[lastId] = roundToTwoDecimals(100 - otherTotal);
+        }
       }
-    }
 
     console.log('Calculated initial shares:', initialShares);
     setParticipantShares(initialShares);
@@ -410,7 +410,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
 
             if (newSplitMethod === 'equal') {
               // Calculate equal share for each participant
-              const equalShare = parseFloat(amount) / numParticipants;
+              const equalShare = calculateEqualShare(parseFloat(amount), numParticipants);
               const newShares: { [key: string]: number } = {};
               selectedParticipants.forEach(id => {
                 newShares[id] = equalShare;
@@ -432,7 +432,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
               // Set the last participant's share to make total 100%
               const lastId = selectedParticipants[numParticipants - 1];
               const otherTotal = Object.values(shares).reduce((sum, share) => sum + share, 0);
-              shares[lastId] = Math.round((100 - otherTotal) * 10) / 10;
+              shares[lastId] = roundToTwoDecimals(100 - otherTotal);
               
               console.log('Recalculated shares for percentage split:', shares);
               setParticipantShares(shares);
@@ -441,7 +441,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
                 selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: 1 }), {})
               );
             } else if (newSplitMethod === 'custom') {
-              const equalAmount = parseFloat(amount) / numParticipants;
+              const equalAmount = calculateEqualShare(parseFloat(amount), numParticipants);
               setParticipantShares(
                 selectedParticipants.reduce((acc, id) => ({ ...acc, [id]: equalAmount }), {})
               );
@@ -495,7 +495,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
 
                       if (splitMethod === 'equal') {
                         // Calculate equal share for each participant
-                        const equalShare = parseFloat(amount) / numSelected;
+                        const equalShare = calculateEqualShare(parseFloat(amount), numSelected);
                         const newShares: { [key: string]: number } = {};
                         newSelected.forEach(id => {
                           newShares[id] = equalShare;
@@ -517,7 +517,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
                         // Set the last participant's share to make total 100%
                         const lastId = newSelected[numSelected - 1];
                         const otherTotal = Object.values(newShares).reduce((sum, share) => sum + share, 0);
-                        newShares[lastId] = Math.round((100 - otherTotal) * 10) / 10;
+                        newShares[lastId] = roundToTwoDecimals(100 - otherTotal);
                         
                         console.log('Recalculated shares after participant toggle:', newShares);
                         setParticipantShares(newShares);
@@ -526,7 +526,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
                           newSelected.reduce((acc, id) => ({ ...acc, [id]: 1 }), {})
                         );
                       } else if (splitMethod === 'custom') {
-                        const equalAmount = parseFloat(amount) / numSelected;
+                        const equalAmount = calculateEqualShare(parseFloat(amount), numSelected);
                         setParticipantShares(
                           newSelected.reduce((acc, id) => ({ ...acc, [id]: equalAmount }), {})
                         );

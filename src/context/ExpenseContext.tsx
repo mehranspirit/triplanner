@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { api } from '../services/api';
+import { networkAwareApi } from '../services/networkAwareApi';
 import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
 
 interface ExpenseContextType {
@@ -16,6 +17,7 @@ interface ExpenseContextType {
   settleExpense: (tripId: string, expenseId: string, participantId: string) => Promise<void>;
   addSettlement: (tripId: string, settlement: Omit<Settlement, '_id'>) => Promise<void>;
   updateSettlement: (tripId: string, settlementId: string, updates: Partial<Settlement>) => Promise<void>;
+  deleteSettlement: (tripId: string, settlementId: string) => Promise<void>;
   refreshData: (tripId: string) => Promise<void>;
 }
 
@@ -38,16 +40,22 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
       setLoading(true);
       setError(null);
       
-      // Fetch expenses and settlements
-      const [expensesData, settlementsData, summaryData] = await Promise.all([
-        api.getExpenses(tripId),
-        api.getSettlements(tripId),
-        api.getExpenseSummary(tripId)
-      ]);
-
+      // Fetch expenses (always available offline)
+      const expensesData = await networkAwareApi.getExpenses(tripId);
       setExpenses(expensesData);
-      setSettlements(settlementsData);
-      setExpenseSummary(summaryData);
+
+      // Try to fetch settlements (online only)
+      try {
+        const settlementsData = await networkAwareApi.getSettlements(tripId);
+        setSettlements(settlementsData);
+      } catch (settlementError) {
+        // If settlements fail (offline), set empty array
+        setSettlements([]);
+      }
+
+      // Fetch the summary
+      const summaryData = await networkAwareApi.getExpenseSummary(tripId);
+      setExpenseSummary(summaryData || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch expense data');
     } finally {
@@ -57,9 +65,12 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 
   const addExpense = async (tripId: string, expense: Omit<Expense, '_id'>) => {
     try {
-      const newExpense = await api.addExpense(tripId, expense);
+      const newExpense = await networkAwareApi.addExpense(tripId, expense);
       setExpenses(prev => [...prev, newExpense]);
-      await refreshData(tripId); // Refresh summary
+      
+      // Refresh summary immediately to reflect changes
+      const updatedSummary = await networkAwareApi.getExpenseSummary(tripId);
+      setExpenseSummary(updatedSummary || null);
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to add expense');
     }
@@ -67,11 +78,14 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 
   const updateExpense = async (tripId: string, expenseId: string, updates: Partial<Expense>) => {
     try {
-      const updatedExpense = await api.updateExpense(tripId, expenseId, updates);
+      const updatedExpense = await networkAwareApi.updateExpense(tripId, expenseId, updates);
       setExpenses(prev => prev.map(exp => 
         exp._id === expenseId ? updatedExpense : exp
       ));
-      await refreshData(tripId); // Refresh summary
+      
+      // Refresh summary immediately to reflect changes
+      const updatedSummary = await networkAwareApi.getExpenseSummary(tripId);
+      setExpenseSummary(updatedSummary || null);
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to update expense');
     }
@@ -79,9 +93,12 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 
   const deleteExpense = async (tripId: string, expenseId: string) => {
     try {
-      await api.deleteExpense(tripId, expenseId);
+      await networkAwareApi.deleteExpense(tripId, expenseId);
       setExpenses(prev => prev.filter(exp => exp._id !== expenseId));
-      await refreshData(tripId); // Refresh summary
+      
+      // Refresh summary immediately to reflect changes
+      const updatedSummary = await networkAwareApi.getExpenseSummary(tripId);
+      setExpenseSummary(updatedSummary || null);
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to delete expense');
     }
@@ -89,8 +106,10 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 
   const settleExpense = async (tripId: string, expenseId: string, participantId: string) => {
     try {
-      await api.settleExpense(tripId, expenseId, participantId);
-      await refreshData(tripId); // Refresh all data
+      await networkAwareApi.settleExpense(tripId, expenseId, participantId);
+      
+      // Refresh all data including summary
+      await refreshData(tripId);
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to settle expense');
     }
@@ -98,9 +117,10 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 
   const addSettlement = async (tripId: string, settlement: Omit<Settlement, '_id'>) => {
     try {
-      const newSettlement = await api.addSettlement(tripId, settlement);
-      setSettlements(prev => [...prev, newSettlement]);
-      await refreshData(tripId); // Refresh summary
+      await networkAwareApi.addSettlement(tripId, settlement);
+      
+      // Refresh all data to reflect settlement changes
+      await refreshData(tripId);
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to add settlement');
     }
@@ -108,13 +128,23 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
 
   const updateSettlement = async (tripId: string, settlementId: string, updates: Partial<Settlement>) => {
     try {
-      const updatedSettlement = await api.updateSettlement(tripId, settlementId, updates);
-      setSettlements(prev => prev.map(sett => 
-        sett._id === settlementId ? updatedSettlement : sett
-      ));
-      await refreshData(tripId); // Refresh summary
+      await networkAwareApi.updateSettlement(tripId, settlementId, updates);
+      
+      // Refresh all data to reflect settlement changes
+      await refreshData(tripId);
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to update settlement');
+    }
+  };
+
+  const deleteSettlement = async (tripId: string, settlementId: string) => {
+    try {
+      await networkAwareApi.deleteSettlement(tripId, settlementId);
+      
+      // Refresh all data to reflect settlement changes
+      await refreshData(tripId);
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to delete settlement');
     }
   };
 
@@ -131,6 +161,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode; tripId: stri
       settleExpense,
       addSettlement,
       updateSettlement,
+      deleteSettlement,
       refreshData
     }}>
       {children}

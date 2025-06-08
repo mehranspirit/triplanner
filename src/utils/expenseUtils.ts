@@ -1,6 +1,16 @@
 import { SplitMethod, SplitDetails, ExpenseParticipant } from '../types/expenseTypes';
 import { User } from '../types/eventTypes';
 
+// Utility function to round monetary values to 2 decimal places
+export const roundToTwoDecimals = (value: number): number => {
+  return parseFloat(value.toFixed(2));
+};
+
+// Utility function to calculate equal share with proper rounding
+export const calculateEqualShare = (amount: number, participantCount: number): number => {
+  return roundToTwoDecimals(amount / participantCount);
+};
+
 // Map participant shares from _id to userId format
 export const mapParticipantShares = (participantShares: { [key: string]: number }, participants: User[]) => {
   return participants.reduce((acc, p) => {
@@ -37,13 +47,13 @@ export const createParticipantWithSplitDetails = (
   const splitDetails: SplitDetails = {};
 
   if (splitMethod === 'equal') {
-    share = amount / selectedParticipants.length;
+    share = calculateEqualShare(amount, selectedParticipants.length);
     splitDetails.equal = {
       splitCount: selectedParticipants.length
     };
   } else if (splitMethod === 'percentage') {
     const percentage = participantShare;
-    share = (amount * percentage) / 100;
+    share = roundToTwoDecimals((amount * percentage) / 100);
     splitDetails.percentage = {
       value: percentage
     };
@@ -52,22 +62,22 @@ export const createParticipantWithSplitDetails = (
       (sum, id) => sum + (participantShares[id] || 0),
       0
     );
-    share = (amount * participantShare) / totalShares;
+    share = roundToTwoDecimals((amount * participantShare) / totalShares);
     splitDetails.shares = {
       value: participantShare,
       totalShares: totalShares
     };
   } else {
-    share = participantShare;
+    share = roundToTwoDecimals(participantShare);
     splitDetails.custom = {
-      amount: participantShare
+      amount: roundToTwoDecimals(participantShare)
     };
   }
 
   return {
     userId: participant._id,
     name: participant.name,
-    share: parseFloat(share.toFixed(2)),
+    share: share,
     splitDetails,
     settled: false
   };
