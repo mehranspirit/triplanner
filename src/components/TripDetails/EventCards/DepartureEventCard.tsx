@@ -481,7 +481,7 @@ const DepartureEventCard: React.FC<DepartureEventCardProps> = ({ event, thumbnai
           <div className="flex-grow space-y-2 relative">
             <div className="flex justify-between items-start">
               <CardTitle className={cn(
-                "text-lg transition-all duration-200",
+                "text-lg transition-all duration-200 md:pr-0 pr-20",
                 isExploring ? "text-gray-600" : "text-gray-900"
               )}>
                 Departure from {event.airport}

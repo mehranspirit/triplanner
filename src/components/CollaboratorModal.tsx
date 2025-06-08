@@ -72,7 +72,13 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
 
   const handleRemoveCollaborator = async (userId: string) => {
     setIsLoading(true);
+    setError('');
+    
+    // Store original state for rollback
+    const originalTrip = localTrip;
+    
     try {
+      // Apply optimistic update
       const optimisticTrip = {
         ...localTrip,
         collaborators: localTrip.collaborators.filter(c => 
@@ -82,14 +88,46 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
       setLocalTrip(optimisticTrip);
       onUpdate(optimisticTrip);
 
+      // Attempt to remove collaborator
       await api.removeCollaborator(trip._id, userId);
+      
+      // Fetch fresh data from server to ensure consistency
       const serverTrip = await api.getTrip(trip._id);
       setLocalTrip(serverTrip);
       onUpdate(serverTrip);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove collaborator');
-      setLocalTrip(trip);
-      onUpdate(trip);
+      console.error('Error removing collaborator:', err);
+      
+      // Rollback optimistic update
+      setLocalTrip(originalTrip);
+      onUpdate(originalTrip);
+      
+            // Handle different error types
+      if (err instanceof Error) {
+        const hasVersionConflict = (err as any).code === 'VERSION_CONFLICT' || 
+                                   err.message.includes('VERSION_CONFLICT') || 
+                                   err.message.includes('modified by another user');
+        
+        if (hasVersionConflict) {
+          setError('The trip was updated by another user. The page will refresh with the latest data.');
+          // Auto-refresh after a short delay
+          setTimeout(async () => {
+            try {
+              const freshTrip = await api.getTrip(trip._id);
+              setLocalTrip(freshTrip);
+              onUpdate(freshTrip);
+              setError('');
+            } catch (refreshErr) {
+              console.error('Error refreshing trip data:', refreshErr);
+              setError('Failed to refresh trip data. Please reload the page.');
+            }
+          }, 2000);
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('Failed to remove collaborator');
+      }
     } finally {
       setIsLoading(false);
     }

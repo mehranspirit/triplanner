@@ -924,147 +924,207 @@ app.post('/api/trips/:id/collaborators', auth, async (req, res) => {
 
 // Remove a collaborator from a trip
 app.delete('/api/trips/:id/collaborators/:userId', auth, async (req, res) => {
-  try {
-    console.log('Remove collaborator request received:', {
-      tripId: req.params.id,
-      collaboratorId: req.params.userId,
-      requestingUserId: req.user._id
-    });
+  const maxRetries = 3;
+  let attempt = 0;
 
-    // Find the trip
-    const trip = await Trip.findById(req.params.id)
-      .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email');
-    
-    if (!trip) {
-      console.log('Trip not found:', req.params.id);
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    // Check if user is the owner
-    if (!trip.owner._id.equals(req.user._id)) {
-      console.log('Remove collaborator permission denied:', {
-        tripOwner: trip.owner._id,
-        requestingUser: req.user._id
-      });
-      return res.status(403).json({ message: 'Only the trip owner can remove collaborators' });
-    }
-
-    // Check if the collaborator exists
-    const collaboratorIndex = trip.collaborators.findIndex(c => 
-      c.user._id.toString() === req.params.userId
-    );
-
-    if (collaboratorIndex === -1) {
-      console.log('Collaborator not found:', {
+  const removeCollaboratorWithRetry = async () => {
+    try {
+      console.log(`Remove collaborator attempt ${attempt + 1}:`, {
         tripId: req.params.id,
-        collaboratorId: req.params.userId
-      });
-      return res.status(404).json({ message: 'Collaborator not found' });
-    }
-
-    // Store collaborator info before removing
-    const collaborator = trip.collaborators[collaboratorIndex];
-    const collaboratorUser = await User.findById(req.params.userId);
-    const collaboratorName = collaboratorUser ? collaboratorUser.name : 'Unknown user';
-
-    // Remove the collaborator
-    trip.collaborators.splice(collaboratorIndex, 1);
-
-    // Save and populate the updated trip
-    const updatedTrip = await trip.save();
-    const populatedTrip = await Trip.findById(updatedTrip._id)
-      .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email');
-
-    console.log('Collaborator removed successfully:', {
-      tripId: populatedTrip._id,
-      collaboratorId: req.params.userId,
-      remainingCollaborators: populatedTrip.collaborators.length
-    });
-
-    // Log activity
-    await logActivity({
-      userId: req.user._id,
-      tripId: trip._id,
-      actionType: 'collaborator_remove',
-      description: `Removed ${collaboratorName} from trip "${trip.name}"`,
-      details: {
-        tripName: trip.name,
         collaboratorId: req.params.userId,
-        collaboratorName,
-        role: collaborator.role
-      }
-    });
+        requestingUserId: req.user._id
+      });
 
-    res.json(populatedTrip);
-  } catch (error) {
-    console.error('Error removing collaborator:', error);
-    res.status(500).json({ message: error.message });
-  }
+      // Find the trip with fresh data on each attempt
+      const trip = await Trip.findById(req.params.id)
+        .populate('owner', 'name email')
+        .populate('collaborators.user', 'name email');
+      
+      if (!trip) {
+        console.log('Trip not found:', req.params.id);
+        return res.status(404).json({ message: 'Trip not found' });
+      }
+
+      // Check if user is the owner
+      if (!trip.owner._id.equals(req.user._id)) {
+        console.log('Remove collaborator permission denied:', {
+          tripOwner: trip.owner._id,
+          requestingUser: req.user._id
+        });
+        return res.status(403).json({ message: 'Only the trip owner can remove collaborators' });
+      }
+
+      // Check if the collaborator exists
+      const collaboratorIndex = trip.collaborators.findIndex(c => 
+        c.user._id.toString() === req.params.userId
+      );
+
+      if (collaboratorIndex === -1) {
+        console.log('Collaborator not found:', {
+          tripId: req.params.id,
+          collaboratorId: req.params.userId
+        });
+        return res.status(404).json({ message: 'Collaborator not found' });
+      }
+
+      // Store collaborator info before removing
+      const collaborator = trip.collaborators[collaboratorIndex];
+      const collaboratorUser = await User.findById(req.params.userId);
+      const collaboratorName = collaboratorUser ? collaboratorUser.name : 'Unknown user';
+
+      // Remove the collaborator
+      trip.collaborators.splice(collaboratorIndex, 1);
+
+      // Save and populate the updated trip
+      const updatedTrip = await trip.save();
+      const populatedTrip = await Trip.findById(updatedTrip._id)
+        .populate('owner', 'name email')
+        .populate('collaborators.user', 'name email');
+
+      console.log('Collaborator removed successfully:', {
+        tripId: populatedTrip._id,
+        collaboratorId: req.params.userId,
+        remainingCollaborators: populatedTrip.collaborators.length,
+        attempt: attempt + 1
+      });
+
+      // Log activity
+      await logActivity({
+        userId: req.user._id,
+        tripId: trip._id,
+        actionType: 'collaborator_remove',
+        description: `Removed ${collaboratorName} from trip "${trip.name}"`,
+        details: {
+          tripName: trip.name,
+          collaboratorId: req.params.userId,
+          collaboratorName,
+          role: collaborator.role
+        }
+      });
+
+      res.json(populatedTrip);
+    } catch (error) {
+      // Check if this is a versioning conflict error
+      if (error.name === 'VersionError' || 
+          (error.message && error.message.includes('No matching document found')) ||
+          (error.message && error.message.includes('version')) ||
+          (error.message && error.message.includes('modifiedPaths'))) {
+        
+        attempt++;
+        if (attempt < maxRetries) {
+          console.log(`Version conflict detected, retrying... (attempt ${attempt + 1}/${maxRetries})`);
+          // Wait a short time before retrying
+          await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+          return removeCollaboratorWithRetry();
+        } else {
+          console.error('Max retries reached for version conflict:', error);
+          return res.status(409).json({ 
+            message: 'The trip was modified by another user. Please refresh and try again.',
+            code: 'VERSION_CONFLICT'
+          });
+        }
+      }
+      
+      console.error('Error removing collaborator:', error);
+      return res.status(500).json({ message: error.message });
+    }
+  };
+
+  // Start the retry process
+  await removeCollaboratorWithRetry();
 });
 
 // Leave a trip (self-removal)
 app.post('/api/trips/:id/leave', auth, async (req, res) => {
-  try {
-    console.log('Leave trip request received:', {
-      tripId: req.params.id,
-      userId: req.user._id
-    });
+  const maxRetries = 3;
+  let attempt = 0;
 
-    // Find the trip
-    const trip = await Trip.findById(req.params.id)
-      .populate('owner', 'name email')
-      .populate('collaborators.user', 'name email');
-    
-    if (!trip) {
-      console.log('Trip not found:', req.params.id);
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    // Check that the user is not the owner
-    if (trip.owner._id.equals(req.user._id)) {
-      console.log('Owner attempted to leave their own trip:', {
-        tripId: req.params.id,
-        ownerId: req.user._id
-      });
-      return res.status(403).json({ message: 'The owner cannot leave their own trip' });
-    }
-
-    // Find the user's collaborator entry
-    const collaboratorIndex = trip.collaborators.findIndex(c => 
-      c.user._id.toString() === req.user._id.toString()
-    );
-
-    if (collaboratorIndex === -1) {
-      console.log('User is not a collaborator:', {
+  const leaveTripWithRetry = async () => {
+    try {
+      console.log(`Leave trip attempt ${attempt + 1}:`, {
         tripId: req.params.id,
         userId: req.user._id
       });
-      return res.status(404).json({ message: 'You are not a collaborator on this trip' });
+
+      // Find the trip with fresh data on each attempt
+      const trip = await Trip.findById(req.params.id)
+        .populate('owner', 'name email')
+        .populate('collaborators.user', 'name email');
+      
+      if (!trip) {
+        console.log('Trip not found:', req.params.id);
+        return res.status(404).json({ message: 'Trip not found' });
+      }
+
+      // Check that the user is not the owner
+      if (trip.owner._id.equals(req.user._id)) {
+        console.log('Owner attempted to leave their own trip:', {
+          tripId: req.params.id,
+          ownerId: req.user._id
+        });
+        return res.status(403).json({ message: 'The owner cannot leave their own trip' });
+      }
+
+      // Find the user's collaborator entry
+      const collaboratorIndex = trip.collaborators.findIndex(c => 
+        c.user._id.toString() === req.user._id.toString()
+      );
+
+      if (collaboratorIndex === -1) {
+        console.log('User is not a collaborator:', {
+          tripId: req.params.id,
+          userId: req.user._id
+        });
+        return res.status(404).json({ message: 'You are not a collaborator on this trip' });
+      }
+
+      // Remove the user from collaborators
+      trip.collaborators.splice(collaboratorIndex, 1);
+
+      // Save the updated trip
+      await trip.save();
+
+      console.log('Successfully left trip:', {
+        tripId: req.params.id,
+        userId: req.user._id,
+        attempt: attempt + 1
+      });
+
+      res.json({ message: 'Successfully left the trip' });
+    } catch (error) {
+      // Check if this is a versioning conflict error
+      if (error.name === 'VersionError' || 
+          (error.message && error.message.includes('No matching document found')) ||
+          (error.message && error.message.includes('version')) ||
+          (error.message && error.message.includes('modifiedPaths'))) {
+        
+        attempt++;
+        if (attempt < maxRetries) {
+          console.log(`Version conflict detected while leaving trip, retrying... (attempt ${attempt + 1}/${maxRetries})`);
+          // Wait a short time before retrying
+          await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+          return leaveTripWithRetry();
+        } else {
+          console.error('Max retries reached for version conflict while leaving trip:', error);
+          return res.status(409).json({ 
+            message: 'The trip was modified by another user. Please refresh and try again.',
+            code: 'VERSION_CONFLICT'
+          });
+        }
+      }
+
+      console.error('Error leaving trip:', {
+        error: error.message,
+        stack: error.stack,
+        tripId: req.params.id,
+        userId: req.user._id
+      });
+      return res.status(500).json({ message: 'Failed to leave trip' });
     }
+  };
 
-    // Remove the user from collaborators
-    trip.collaborators.splice(collaboratorIndex, 1);
-
-    // Save the updated trip
-    await trip.save();
-
-    console.log('Successfully left trip:', {
-      tripId: req.params.id,
-      userId: req.user._id
-    });
-
-    res.json({ message: 'Successfully left the trip' });
-  } catch (error) {
-    console.error('Error leaving trip:', {
-      error: error.message,
-      stack: error.stack,
-      tripId: req.params.id,
-      userId: req.user._id
-    });
-    res.status(500).json({ message: 'Failed to leave trip' });
-  }
+  // Start the retry process
+  await leaveTripWithRetry();
 });
 
 // Generate a share link for a trip

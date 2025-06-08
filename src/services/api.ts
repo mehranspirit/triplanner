@@ -401,6 +401,12 @@ export const api: API = {
     });
     if (!response.ok) {
       const errorData = await response.json();
+      // Handle version conflicts specifically
+      if (response.status === 409 && errorData.code === 'VERSION_CONFLICT') {
+        const error = new Error(errorData.message || 'The trip was modified by another user. Please refresh and try again.');
+        (error as any).code = 'VERSION_CONFLICT';
+        throw error;
+      }
       throw new Error(errorData.message || 'Failed to leave trip');
     }
   },
@@ -414,6 +420,12 @@ export const api: API = {
     });
     if (!response.ok) {
       const errorData = await response.json();
+      // Handle version conflicts specifically
+      if (response.status === 409 && errorData.code === 'VERSION_CONFLICT') {
+        const error = new Error(errorData.message || 'The trip was modified by another user. Please refresh and try again.');
+        (error as any).code = 'VERSION_CONFLICT';
+        throw error;
+      }
       throw new Error(errorData.message || 'Failed to remove collaborator');
     }
   },
