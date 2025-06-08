@@ -32,11 +32,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = React.useState<User | null>(null);
   const [token, setToken] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const initRef = React.useRef(false);
 
   React.useEffect(() => {
+    // Prevent duplicate initialization in React Strict Mode
+    if (initRef.current) return;
+    initRef.current = true;
+    
     const validateToken = async () => {
+      let storedToken: string | null = null;
+      let parsedUser: User | null = null;
+      
       try {
-        const storedToken = localStorage.getItem('token');
+        storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
 
         console.log('AuthProvider - Stored credentials:', { 
@@ -51,7 +59,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        let parsedUser: User;
         try {
           parsedUser = JSON.parse(storedUser);
           setToken(storedToken);
@@ -59,6 +66,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (e) {
           console.error('Failed to parse stored user:', e);
           throw new Error('Invalid stored user data');
+        }
+
+        // Check offline status BEFORE making network request
+        if (!navigator.onLine) {
+          console.log('⚠️ Offline: Using cached credentials without validation');
+          setToken(storedToken);
+          setUser(parsedUser);
+          setIsLoading(false);
+          return;
         }
 
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/validate`, {
@@ -90,10 +106,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(data.user);
         }
 
-      } catch (error) {
+      } catch (error: any) {
         console.error('Authentication error:', error);
+        
+        // Handle offline scenarios gracefully
+        if (!navigator.onLine) {
+          console.log('⚠️ Offline: Skipping token validation, using cached auth');
+          // Keep existing stored credentials when offline
+          if (storedToken && parsedUser) {
+            setToken(storedToken);
+            setUser(parsedUser);
+          }
+          setIsLoading(false);
+          return;
+        }
+        
+        // Only clear credentials for actual auth errors when online
         if (error instanceof Error && 
             (error.message.includes('token') || error.message.includes('auth'))) {
+          console.log('🔐 Clearing invalid credentials');
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           setToken(null);

@@ -116,63 +116,98 @@ function tripReducer(state: TripState, action: TripAction): TripState {
 export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = React.useReducer(tripReducer, {
     trips: [],
-    loading: false,
+    loading: false, // Start with loading false for cached data
     error: null,
   });
 
   const { user } = useAuth();
+  const [initialLoadComplete, setInitialLoadComplete] = React.useState(false);
 
+  // Load cached data immediately when user is available
   React.useEffect(() => {
-    const fetchTrips = async () => {
-      // Only fetch trips if we have a logged-in user
-      if (!user) {
-        return;
-      }
-
-      dispatch({ type: 'SET_LOADING', payload: true });
+    const loadCachedData = async () => {
+      if (!user || initialLoadComplete) return;
+      
       try {
-        console.log('Fetching trips for user:', user._id);
-        const trips = await networkAwareApi.getTrips();
-        console.log('Fetched trips:', trips);
-        dispatch({ type: 'SET_TRIPS', payload: trips });
-
-        // Preload additional data for all trips in the background when online
-        if (navigator.onLine && trips.length > 0) {
-          console.log('Preloading additional data for', trips.length, 'trips...');
-          
-          // Preload data for all trips in parallel (but limit to avoid overwhelming)
-          const preloadPromises = trips.slice(0, 10).map(async (trip) => {
-            try {
-              // Preload all related data in parallel for each trip
-              await Promise.all([
-                networkAwareApi.getExpenses(trip._id).catch(err => console.warn(`Failed to preload expenses for trip ${trip._id}:`, err)),
-                networkAwareApi.getNotes(trip._id).catch(err => console.warn(`Failed to preload notes for trip ${trip._id}:`, err)),
-                networkAwareApi.getChecklist(trip._id, 'shared').catch(err => console.warn(`Failed to preload shared checklist for trip ${trip._id}:`, err)),
-                networkAwareApi.getChecklist(trip._id, 'personal').catch(err => console.warn(`Failed to preload personal checklist for trip ${trip._id}:`, err)),
-                networkAwareApi.getSettlements(trip._id).catch(err => console.warn(`Failed to preload settlements for trip ${trip._id}:`, err)),
-                networkAwareApi.getExpenseSummary(trip._id).catch(err => console.warn(`Failed to preload expense summary for trip ${trip._id}:`, err))
-              ]);
-              console.log(`Preloaded data for trip: ${trip.name}`);
-            } catch (error) {
-              console.warn(`Failed to preload data for trip ${trip._id}:`, error);
-            }
-          });
-
-          // Execute preloading in background
-          Promise.all(preloadPromises).then(() => {
-            console.log('Background preloading completed for', Math.min(trips.length, 10), 'trips');
-          }).catch(error => {
-            console.warn('Some preloading operations failed:', error);
-          });
+        console.log('📦 Loading cached trips for user:', user._id);
+        
+        // Load cached trips immediately - no loading state needed
+        const result = await networkAwareApi.getCacheFirstTrips();
+        
+        console.log(`✅ Loaded ${result.data.length} trips (from ${result.fromCache ? 'cache' : 'network'})`);
+        dispatch({ type: 'SET_TRIPS', payload: result.data });
+        
+        // Start background preloading for cached trips
+        if (result.data.length > 0 && navigator.onLine) {
+          console.log('🔄 Starting background preload...');
+          // Run in background without blocking
+          setTimeout(() => {
+            backgroundPreloadTrips(result.data);
+          }, 500);
         }
+        
+        setInitialLoadComplete(true);
       } catch (error) {
-        console.error('Error fetching trips:', error);
-        dispatch({ type: 'SET_ERROR', payload: 'Failed to fetch trips' });
+        console.error('❌ Error loading data:', error);
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to load data' });
+        setInitialLoadComplete(true); // Always complete even on error
       }
     };
 
-    fetchTrips();
-  }, [user?._id]); // Re-fetch when user ID changes
+    loadCachedData();
+  }, [user?._id, initialLoadComplete]);
+
+  // Listen for background updates
+  React.useEffect(() => {
+    const handleTripsUpdated = (event: CustomEvent) => {
+      console.log('🔄 Background trips update received');
+      dispatch({ type: 'SET_TRIPS', payload: event.detail.trips });
+    };
+
+    const handleTripUpdated = (event: CustomEvent) => {
+      console.log('🔄 Background trip update received for:', event.detail.tripId);
+      dispatch({ type: 'UPDATE_TRIP', payload: event.detail.trip });
+    };
+
+    window.addEventListener('tripsUpdated', handleTripsUpdated as EventListener);
+    window.addEventListener('tripUpdated', handleTripUpdated as EventListener);
+    
+    return () => {
+      window.removeEventListener('tripsUpdated', handleTripsUpdated as EventListener);
+      window.removeEventListener('tripUpdated', handleTripUpdated as EventListener);
+    };
+  }, []);
+
+  // Background preloading function
+  const backgroundPreloadTrips = React.useCallback((trips: Trip[]) => {
+    if (!navigator.onLine || trips.length === 0) return;
+    
+    console.log('🔄 Background preloading additional data for', trips.length, 'trips...');
+    
+    // Preload data for trips in background (limit to avoid overwhelming)
+    const preloadPromises = trips.slice(0, 10).map(async (trip) => {
+      try {
+        // Preload all related data in parallel for each trip
+        await Promise.all([
+          networkAwareApi.getExpenses(trip._id).catch(err => console.warn(`Failed to preload expenses for trip ${trip._id}:`, err)),
+          networkAwareApi.getNotes(trip._id).catch(err => console.warn(`Failed to preload notes for trip ${trip._id}:`, err)),
+          networkAwareApi.getChecklist(trip._id, 'shared').catch(err => console.warn(`Failed to preload shared checklist for trip ${trip._id}:`, err)),
+          networkAwareApi.getChecklist(trip._id, 'personal').catch(err => console.warn(`Failed to preload personal checklist for trip ${trip._id}:`, err)),
+          networkAwareApi.getExpenseSummary(trip._id).catch(err => console.warn(`Failed to preload expense summary for trip ${trip._id}:`, err))
+        ]);
+        console.log(`✅ Preloaded data for trip: ${trip.name}`);
+      } catch (error) {
+        console.warn(`Failed to preload data for trip ${trip._id}:`, error);
+      }
+    });
+
+    // Execute preloading in background
+    Promise.all(preloadPromises).then(() => {
+      console.log('🎉 Background preloading completed for', Math.min(trips.length, 10), 'trips');
+    }).catch(error => {
+      console.warn('Some preloading operations failed:', error);
+    });
+  }, []);
 
   const addTrip = async (trip: Trip) => {
     try {

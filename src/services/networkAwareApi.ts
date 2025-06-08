@@ -1193,8 +1193,6 @@ class NetworkAwareApiService {
         await api.settleExpense(operation.tripId!, operation.data.expenseId, operation.data.participantId);
         break;
         
-
-
       case 'UPDATE_NOTES':
         const updatedNotes = await api.updateTripNotes(operation.tripId!, operation.data.content);
         await offlineService.cacheNotes(operation.tripId!, updatedNotes);
@@ -1416,6 +1414,129 @@ class NetworkAwareApiService {
     } catch (error) {
       console.error(`Failed to preload trip data for ${tripId}:`, error);
     }
+  }
+
+  // Cache-first methods for immediate offline support
+  async getCacheFirstTrips(): Promise<{ data: Trip[], fromCache: boolean }> {
+    // Always return cached data immediately if available
+    const cachedTrips = await offlineService.getCachedTrips();
+    
+    if (cachedTrips.length > 0) {
+      // Start background refresh if online (don't await)
+      if (this.isOnline) {
+        this.refreshTripsInBackground().catch(console.error);
+      }
+      return { data: cachedTrips, fromCache: true };
+    }
+    
+    // If no cache and we're online, fetch from API
+    if (this.isOnline) {
+      try {
+        const trips = await api.getTrips();
+        await offlineService.cacheTrips(trips);
+        return { data: trips, fromCache: false };
+      } catch (error) {
+        console.error('Failed to fetch trips:', error);
+        return { data: [], fromCache: false };
+      }
+    }
+    
+    return { data: [], fromCache: true };
+  }
+
+  async getCacheFirstTrip(tripId: string): Promise<{ data: Trip | null, fromCache: boolean }> {
+    // Always return cached data immediately if available
+    const cachedTrip = await offlineService.getCachedTrip(tripId);
+    
+    if (cachedTrip) {
+      // Start background refresh if online (don't await)
+      if (this.isOnline) {
+        this.refreshTripInBackground(tripId).catch(console.error);
+      }
+      return { data: cachedTrip, fromCache: true };
+    }
+    
+    // If no cache and we're online, fetch from API
+    if (this.isOnline) {
+      try {
+        const trip = await api.getTrip(tripId);
+        if (trip) {
+          await offlineService.updateCachedTrip(trip);
+          return { data: trip, fromCache: false };
+        }
+      } catch (error) {
+        console.error(`Failed to fetch trip ${tripId}:`, error);
+      }
+    }
+    
+    return { data: null, fromCache: true };
+  }
+
+  private async refreshTripsInBackground(): Promise<void> {
+    try {
+      console.log('Background refresh: Fetching trips...');
+      const trips = await api.getTrips();
+      await offlineService.cacheTrips(trips);
+      console.log('Background refresh: Trips updated');
+      
+      // Emit event for components to refresh
+      window.dispatchEvent(new CustomEvent('tripsUpdated', { 
+        detail: { trips, source: 'background' }
+      }));
+    } catch (error) {
+      console.error('Background trips refresh failed:', error);
+    }
+  }
+
+  private async refreshTripInBackground(tripId: string): Promise<void> {
+    try {
+      console.log(`Background refresh: Fetching trip ${tripId}...`);
+      const trip = await api.getTrip(tripId);
+      if (trip) {
+        await offlineService.updateCachedTrip(trip);
+        console.log(`Background refresh: Trip ${tripId} updated`);
+        
+        // Emit event for components to refresh
+        window.dispatchEvent(new CustomEvent('tripUpdated', { 
+          detail: { trip, tripId, source: 'background' }
+        }));
+      }
+    } catch (error) {
+      console.error(`Background trip refresh failed for ${tripId}:`, error);
+    }
+  }
+
+  // Enhanced initialization for immediate cache loading
+  async initializeAppWithCache(): Promise<void> {
+    console.log('🚀 Initializing app with cache-first strategy...');
+    
+    try {
+      // Just do basic cache check without validation (too complex and might hang)
+      console.log('📦 Checking cache availability...');
+      
+      // Simple cache check - don't wait for full validation
+      const cachedTrips = await offlineService.getCachedTrips().catch(() => []);
+      console.log(`📦 Found ${cachedTrips.length} cached trips`);
+      
+      // Start background operations if online (don't wait for them)
+      if (this.isOnline && cachedTrips.length > 0) {
+        console.log('🔄 Starting background data refresh...');
+        // Run in background, don't wait
+        setTimeout(() => {
+          this.refreshTripsInBackground().catch(console.error);
+        }, 100);
+      }
+      
+      console.log('✅ App initialization complete');
+    } catch (error) {
+      console.error('❌ App initialization failed:', error);
+      // Don't rethrow - allow app to continue
+    }
+  }
+
+  private async validateAndCleanCache(): Promise<void> {
+    // Removed this method to avoid blocking - let it run in background later if needed
+    console.log('Cache validation skipped for faster startup');
   }
 }
 

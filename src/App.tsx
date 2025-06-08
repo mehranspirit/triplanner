@@ -23,6 +23,7 @@ import { DreamTripsPage } from './pages/DreamTripsPage';
 import DreamTripDetails from './components/DreamTripDetails';
 import NewTripDetails from './components/TripDetails/NewTripDetails';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { networkAwareApi } from './services/networkAwareApi';
 
 // Import the registry first
 import './eventTypes/registry';
@@ -68,6 +69,106 @@ const ExpensesPageWrapper: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const [isAppInitialized, setIsAppInitialized] = React.useState(false);
+  const initRef = React.useRef(false);
+
+  // Initialize app with cache-first strategy
+  React.useEffect(() => {
+    // Prevent duplicate initialization in React Strict Mode
+    if (initRef.current) return;
+    initRef.current = true;
+    
+    const initializeApp = async () => {
+      try {
+        console.log('🚀 Initializing TripPlanner with offline support...');
+        
+        // Add timeout safety mechanism
+        const initTimeout = setTimeout(() => {
+          console.warn('⚠️ App initialization timeout, continuing anyway...');
+          setIsAppInitialized(true);
+        }, 5000); // 5 second timeout
+        
+        // Register service worker (but don't wait for it to complete initialization)
+        registerServiceWorker().catch(error => {
+          console.warn('⚠️ Service worker registration failed, continuing without it:', error);
+        });
+        
+        // Initialize network-aware API with cache (don't depend on service worker)
+        await networkAwareApi.initializeAppWithCache();
+        
+        // Clear timeout since we completed successfully
+        clearTimeout(initTimeout);
+        setIsAppInitialized(true);
+        console.log('✅ App initialization complete');
+      } catch (error) {
+        console.error('❌ App initialization failed:', error);
+        // Always allow app to continue even if initialization fails
+        setIsAppInitialized(true);
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  // Service Worker registration
+  const registerServiceWorker = async () => {
+    if ('serviceWorker' in navigator) {
+      try {
+        console.log('🔧 Registering service worker...');
+        
+        // In development, Vite PWA generates service worker at different path
+        const swPath = import.meta.env.DEV ? '/dev-dist/sw.js' : '/sw.js';
+        
+        const registration = await navigator.serviceWorker.register(swPath);
+        
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed') {
+                if (navigator.serviceWorker.controller) {
+                  console.log('🔄 New service worker available, will refresh on next visit');
+                  // Optionally show user a refresh button
+                  showUpdateAvailable();
+                } else {
+                  console.log('✅ Service worker cached app for offline use');
+                }
+              }
+            });
+          }
+        });
+        
+        console.log('✅ Service worker registered:', registration.scope);
+        return registration;
+      } catch (error) {
+        console.error('❌ Service worker registration failed:', error);
+        throw error;
+      }
+    } else {
+      console.log('❌ Service workers not supported');
+      throw new Error('Service workers not supported');
+    }
+  };
+
+  const showUpdateAvailable = () => {
+    // Simple update notification - could be enhanced with a toast/notification component
+    if (window.confirm('A new version is available. Refresh to update?')) {
+      window.location.reload();
+    }
+  };
+
+  // Show minimal loading only during initial service worker setup
+  if (!isAppInitialized) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing offline support...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Router>
       <AuthProvider>
