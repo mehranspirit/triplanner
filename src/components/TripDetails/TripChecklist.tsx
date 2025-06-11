@@ -26,6 +26,7 @@ type Checklist = ChecklistBin[];
 interface TripChecklistProps {
   tripId: string;
   canEdit: boolean;
+  onClose: () => void;
 }
 
 const initialBins: Checklist = [
@@ -50,7 +51,7 @@ const checklistCache: ChecklistCache = {};
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const CACHE_VERSION = 1;
 
-const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit }) => {
+const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit, onClose }) => {
   const [bins, setBins] = useState<Checklist>(initialBins);
   const [input, setInput] = useState('');
   const [newBinTitle, setNewBinTitle] = useState('');
@@ -311,176 +312,163 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit }) => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white z-50">
-      {/* Tabs */}
-      <div className="flex border-b">
-        <button
-          className={cn('flex-1 py-2 text-center', activeTab === 'shared' ? 'font-bold border-b-2 border-green-500' : 'text-gray-500')}
-          onClick={() => setActiveTab('shared')}
-        >
-          Shared
-        </button>
-        <button
-          className={cn('flex-1 py-2 text-center', activeTab === 'personal' ? 'font-bold border-b-2 border-green-500' : 'text-gray-500')}
-          onClick={() => setActiveTab('personal')}
-        >
-          Personal
-        </button>
-      </div>
-
-      {/* Error message */}
-      {error && (
-        <div className="flex items-center gap-2 p-2 bg-red-50 text-red-600">
-          <AlertCircle className="h-4 w-4" />
-          <span className="text-sm">{error}</span>
-          <Button
-            variant="ghost"
-            size="sm"
+    <div className="flex flex-col h-full bg-white text-gray-900">
+      {/* Header */}
+      <div className="flex justify-between items-center p-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold">Trip Checklist</h2>
+        <div className="flex items-center gap-2">
+          {isSyncing && <Loader2 className="h-4 w-4 animate-spin" />}
+          <button
             onClick={() => fetchBins(true)}
-            className="ml-auto"
+            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+            title="Refresh"
           >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+            <RefreshCw size={16} />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+          >
+            <X size={20} />
+          </button>
         </div>
-      )}
-
-      {/* Sync indicator */}
-      {isSyncing && (
-        <div className="flex items-center gap-2 p-2 bg-blue-50 text-blue-600">
-          <Loader2 className="animate-spin h-4 w-4" />
-          <span className="text-sm">Syncing changes...</span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 p-4 border-b">
-        <input
-          className="flex-1 border rounded px-2 py-1"
-          value={newBinTitle}
-          onChange={e => setNewBinTitle(e.target.value)}
-          placeholder="Add new bin..."
-        />
-        <Button onClick={handleAddBin} disabled={!newBinTitle.trim()}>
-          Add Bin
-        </Button>
       </div>
+
+      {/* Tabs */}
+      <div className="p-2 border-b border-gray-200">
+        <div className="flex gap-2 rounded-lg bg-gray-100 p-1">
+          <button
+            onClick={() => setActiveTab('shared')}
+            className={cn(
+              "flex-1 py-1 px-2 rounded-md text-sm font-medium transition-colors",
+              activeTab === 'shared' ? 'bg-white shadow' : 'hover:bg-gray-200'
+            )}
+          >
+            Shared
+          </button>
+          <button
+            onClick={() => setActiveTab('personal')}
+            className={cn(
+              "flex-1 py-1 px-2 rounded-md text-sm font-medium transition-colors",
+              activeTab === 'personal' ? 'bg-white shadow' : 'hover:bg-gray-200'
+            )}
+          >
+            Personal
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-100 text-red-800 flex items-center gap-2">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-auto">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex flex-col flex-1 overflow-y-auto gap-4 p-4">
-          {bins.map(bin => (
-            <div key={bin.id} className="flex flex-col bg-gray-50 rounded-lg shadow-md w-full min-w-0">
-              <div className="flex items-center gap-2 p-3 border-b">
-                <input
-                  className="flex-1 font-bold text-lg bg-transparent border-none outline-none"
-                  value={bin.title}
-                  onChange={e => handleEditBinTitle(bin.id, e.target.value)}
-                  disabled={!canEdit}
-                />
-                {canEdit && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteBin(bin.id)}
-                    className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <Droppable droppableId={bin.id}>
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="flex-1 p-3 space-y-2 min-h-[60px]"
-                  >
-                    {bin.items.length === 0 && <div className="text-gray-400 text-center">No items</div>}
-                    {bin.items.map((item, idx) => (
-                      <Draggable key={item.id} draggableId={item.id} index={idx}>
-                        {(provided) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className="flex items-center gap-2 bg-white rounded shadow p-2"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={item.completed}
-                              onChange={() => handleToggle(bin.id, item.id)}
-                              className="accent-green-500"
-                            />
-                            {item.isEditing ? (
-                              <Input
-                                value={item.text}
-                                onChange={(e) => {
-                                  const nextBins = bins.map(b =>
-                                    b.id === bin.id
-                                      ? {
-                                          ...b,
-                                          items: b.items.map(i =>
-                                            i.id === item.id
-                                              ? { ...i, text: e.target.value }
-                                              : i
-                                          )
-                                        }
-                                      : b
-                                  );
-                                  setBins(nextBins);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleEditItem(bin.id, item.id, item.text);
-                                  } else if (e.key === 'Escape') {
-                                    toggleItemEdit(bin.id, item.id);
-                                  }
-                                }}
-                                onBlur={() => handleEditItem(bin.id, item.id, item.text)}
-                                className="flex-1"
-                                autoFocus
-                              />
-                            ) : (
-                              <span
-                                className={cn(
-                                  'flex-1 cursor-pointer',
-                                  item.completed && 'line-through text-gray-400'
-                                )}
-                                onClick={() => handleItemClick(bin.id, item.id)}
-                              >
-                                {item.text}
-                              </span>
-                            )}
-                            {canEdit && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteItem(bin.id, item.id)}
-                                className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
+        <div className="flex-grow overflow-y-auto p-4 space-y-4">
+          {bins.map((bin, binIndex) => (
+            <Droppable key={bin.id} droppableId={bin.id} type="item">
+              {(provided) => (
+                <div 
+                  {...provided.droppableProps} 
+                  ref={provided.innerRef}
+                  className="bg-gray-50 p-3 rounded-lg"
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <Input
+                      value={bin.title}
+                      onChange={(e) => handleEditBinTitle(bin.id, e.target.value)}
+                      disabled={!canEdit}
+                      className="text-md font-semibold bg-transparent border-none focus:ring-0 p-0"
+                    />
+                    {canEdit && (
+                      <button
+                        onClick={() => handleDeleteBin(bin.id)}
+                        className="p-1 text-gray-400 hover:text-red-600 rounded-full hover:bg-gray-100"
+                        title="Delete List"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
-                )}
-              </Droppable>
-              {canEdit && (
-                <div className="flex gap-2 p-3 border-t">
-                  <Input
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddItem(bin.id)}
-                    placeholder="Add an item..."
-                  />
-                  <Button onClick={() => handleAddItem(bin.id)} disabled={!input.trim()}>
-                    Add
-                  </Button>
+                  
+                  {bin.items.map((item, itemIndex) => (
+                    <Draggable key={item.id} draggableId={item.id} index={itemIndex} isDragDisabled={!canEdit}>
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="flex items-center gap-2 p-1.5 rounded-md hover:bg-gray-100 group"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.completed}
+                            onChange={() => handleToggle(bin.id, item.id)}
+                            disabled={!canEdit}
+                            className="form-checkbox h-4 w-4 rounded bg-gray-200 border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className={cn("flex-grow", item.completed && "line-through text-gray-500")}>
+                            {item.text}
+                          </span>
+                          {canEdit && (
+                            <button
+                              onClick={() => handleDeleteItem(bin.id, item.id)}
+                              className="p-1 text-gray-400 hover:text-red-600 rounded-full opacity-0 group-hover:opacity-100"
+                              title="Delete Item"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+
+                  {canEdit && (
+                    <form 
+                      className="mt-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleAddItem(bin.id);
+                      }}
+                    >
+                      <Input
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="+ Add item"
+                        className="w-full bg-transparent border-none focus:ring-0 p-0 placeholder:text-gray-500"
+                      />
+                    </form>
+                  )}
                 </div>
               )}
-            </div>
+            </Droppable>
           ))}
+          {canEdit && (
+             <form 
+                className="mt-4 flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddBin();
+                }}
+              >
+              <Input
+                type="text"
+                value={newBinTitle}
+                onChange={(e) => setNewBinTitle(e.target.value)}
+                placeholder="Add new list..."
+                className="flex-grow bg-gray-100 border-gray-300 rounded-md placeholder:text-gray-500"
+              />
+              <Button type="submit" className="bg-gray-200 hover:bg-gray-300 text-gray-800">Add List</Button>
+            </form>
+          )}
         </div>
       </DragDropContext>
     </div>

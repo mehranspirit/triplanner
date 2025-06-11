@@ -10,10 +10,12 @@ import { UserHighlight } from '../extensions/UserHighlight';
 import '../styles/TripNotes.css';
 import { networkAwareApi } from '../services/networkAwareApi';
 import { TripNote } from '../services/offlineService';
+import { X } from 'lucide-react';
 
 interface TripNotesProps {
   tripId: string;
   canEdit: boolean;
+  onClose: () => void;
 }
 
 // Cache structure with metadata
@@ -121,7 +123,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
   );
 };
 
-const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
+const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit, onClose }) => {
   const { user } = useAuth();
   const [note, setNote] = useState<TripNote | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -242,49 +244,40 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit }) => {
     };
 
     fetchNotes();
-  }, [tripId, editor, isCacheValid]);
+  }, [tripId, canEdit, user, editor, isCacheValid, clearCache]);
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-      </div>
-    );
+    return <div className="p-4 text-center">Loading notes...</div>;
   }
 
   if (error) {
-    return (
-      <div className="text-red-600 p-4">
-        Error: {error}
-      </div>
-    );
+    return <div className="p-4 text-center text-red-500">Error: {error}</div>;
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {canEdit && editor && (
-        <div className="flex-none">
-          <MenuBar editor={editor} />
-        </div>
-      )}
-      <div className="flex-1 overflow-y-auto min-h-0 relative">
-        <div className="absolute inset-0">
-          <div className="h-full p-4">
-            <EditorContent editor={editor} className="prose max-w-none" />
-          </div>
-        </div>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex justify-between items-center p-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-900">Trip Notes</h2>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+        >
+          <X size={20} />
+        </button>
       </div>
-      
+      {canEdit && <MenuBar editor={editor} />}
+      <div className="flex-grow overflow-y-auto p-4">
+        <EditorContent editor={editor} />
+      </div>
       {note?.lastEditedBy && (
-        <div className="flex-none border-t border-gray-200 p-4 flex items-center space-x-2 text-sm text-gray-500 bg-white">
-          <Avatar
-            photoUrl={note.lastEditedBy.photoUrl || null}
+        <div className="p-2 border-t border-gray-200 text-xs text-gray-600 flex items-center gap-2">
+          <Avatar 
+            photoUrl={note.lastEditedBy.photoUrl || null} 
             name={note.lastEditedBy.name}
             size="sm"
           />
           <span>
-            Last edited by {note.lastEditedBy.name} on{' '}
-            {new Date(note.lastEditedAt).toLocaleDateString()}
+            Last edited by {note.lastEditedBy.name} on {new Date(note.lastEditedAt).toLocaleDateString()}
           </span>
         </div>
       )}

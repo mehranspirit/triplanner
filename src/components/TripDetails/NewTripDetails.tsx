@@ -1023,21 +1023,44 @@ const NewTripDetails: React.FC = () => {
 
       {/* Trip Checklist */}
       {showChecklist && (
-        <div className="fixed bottom-[220px] right-6 z-[9999] w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
-          <TripChecklist tripId={trip._id} canEdit={canEdit} />
+        <div className={cn(
+          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
+          "bottom-0 inset-x-0 h-[85vh]",
+          "md:w-[400px] md:h-[600px] md:bottom-6 md:right-6 md:left-auto md:rounded-lg",
+          "bg-white border-gray-200"
+        )}>
+          <TripChecklist 
+            tripId={trip._id} 
+            canEdit={canEdit} 
+            onClose={() => setShowChecklist(false)}
+          />
         </div>
       )}
 
       {/* Trip Notes */}
       {showNotes && (
-        <div className="fixed bottom-24 right-6 z-[100] w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
-          <TripNotes tripId={trip._id} canEdit={canEdit} />
+        <div className={cn(
+          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
+          "bottom-0 inset-x-0 h-[85vh]",
+          "md:w-[400px] md:h-[600px] md:bottom-24 md:right-6 md:left-auto md:rounded-lg",
+          "bg-white border-gray-200"
+        )}>
+          <TripNotes 
+            tripId={trip._id} 
+            canEdit={canEdit}
+            onClose={() => setShowNotes(false)}
+          />
         </div>
       )}
 
       {/* Trip Map */}
       {showMap && (
-        <div className="fixed bottom-6 right-6 z-[100] w-[400px] h-[500px] rounded-lg shadow-xl overflow-hidden border bg-background">
+        <div className={cn(
+          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
+          "bottom-0 inset-x-0 h-[85vh]",
+          "md:w-[400px] md:h-[600px] md:bottom-40 md:right-6 md:left-auto md:rounded-lg",
+          "bg-white border-gray-200"
+        )}>
           <TripMap trip={trip} />
         </div>
       )}
