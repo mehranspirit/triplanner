@@ -65,7 +65,7 @@ router.get('/google/callback',
       );
 
       const frontendURL = process.env.NODE_ENV === 'production'
-        ? 'https://triplanner-eight.vercel.app'
+        ? 'https://triplannerapp.com'
         : process.env.FRONTEND_URL;
 
       // Redirect to frontend with token
