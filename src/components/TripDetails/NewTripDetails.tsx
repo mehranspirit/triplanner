@@ -131,6 +131,7 @@ const NewTripDetails: React.FC = () => {
   const [deletingEvents, setDeletingEvents] = useState<Set<string>>(new Set());
   const [showChecklist, setShowChecklist] = useState(false);
   const [isAddingSuggestions, setIsAddingSuggestions] = useState(false);
+  const [isImprovingLocations, setIsImprovingLocations] = useState(false);
   const [addingProgress, setAddingProgress] = useState(0);
   const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
   const tripInsights = useMemo(
@@ -254,6 +255,26 @@ const NewTripDetails: React.FC = () => {
       default:
         setShowNotifications(false);
         break;
+    }
+  };
+
+  const handleImproveLocations = async () => {
+    if (!trip?._id) return;
+
+    try {
+      setIsImprovingLocations(true);
+      const result = await api.geocodeTripEvents(trip._id);
+      await handleTripUpdate(result.trip);
+      setSuccess(
+        result.updatedCount > 0
+          ? `Improved ${result.updatedCount} event location${result.updatedCount === 1 ? '' : 's'}.`
+          : 'No event locations needed updates.'
+      );
+    } catch (error) {
+      console.error('Error improving locations:', error);
+      setSuccess(error instanceof Error ? error.message : 'Failed to improve event locations');
+    } finally {
+      setIsImprovingLocations(false);
     }
   };
 
@@ -868,6 +889,15 @@ const NewTripDetails: React.FC = () => {
           </div>
           <div className="text-xs text-gray-500 mt-1 space-y-0.5">
             {getTimeInfo()}
+            {event.location?.quality && event.location.quality !== 'exact' && (
+              <div className="flex items-center space-x-1">
+                <MapPin className="w-3 h-3" />
+                <span>
+                  Location {event.location.quality}
+                  {event.location.source ? ` via ${event.location.source}` : ''}
+                </span>
+              </div>
+            )}
             {(() => {
               switch (event.type) {
                 case 'stay':
@@ -1046,6 +1076,16 @@ const NewTripDetails: React.FC = () => {
             >
               <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
               {isGeneratingSuggestions ? 'Generating...' : 'AI Suggestions'}
+            </Button>
+          )}
+          {canEdit && (
+            <Button
+              variant="outline"
+              onClick={handleImproveLocations}
+              disabled={isImprovingLocations}
+            >
+              <MapPin className="mr-2 h-4 w-4 text-green-500" />
+              {isImprovingLocations ? 'Improving...' : 'Improve locations'}
             </Button>
           )}
           <Button

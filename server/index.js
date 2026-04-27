@@ -16,6 +16,7 @@ const notesRoutes = require('./routes/notes');
 const importsRoutes = require('./routes/imports');
 const aiParserRoutes = require('./routes/aiParser');
 const notificationRoutes = require('./routes/notifications');
+const geocodingRoutes = require('./routes/geocoding');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
@@ -203,6 +204,9 @@ app.use('/api', aiParserRoutes);
 
 // Mount in-app notification routes
 app.use('/api', notificationRoutes);
+
+// Mount server-side geocoding routes
+app.use('/api', geocodingRoutes);
 
 // Mount dream trips routes
 app.use('/api/trips/dream', dreamTripsRouter);

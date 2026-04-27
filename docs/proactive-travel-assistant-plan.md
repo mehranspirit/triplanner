@@ -1335,10 +1335,10 @@ User experience unlocked:
 
 Implementation tasks:
 
-1. Add server-side geocoding endpoint.
-2. Add location quality status to events.
+1. [x] Add server-side geocoding endpoint.
+2. [x] Add location quality status to events.
 3. Geocode parsed/imported events before review when possible.
-4. Cache geocoding results in MongoDB.
+4. [x] Cache geocoding results in MongoDB.
 5. Add opening-hours data only after location matching is reliable.
 
 #### Routing And Transit

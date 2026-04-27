@@ -89,6 +89,7 @@ interface API {
   updateTripNotification: (tripId: string, notificationId: string, data: UpdateNotificationRequest) => Promise<TripNotification>;
   getNotificationPreferences: (tripId: string) => Promise<NotificationPreference>;
   updateNotificationPreferences: (tripId: string, data: UpdateNotificationPreferenceRequest) => Promise<NotificationPreference>;
+  geocodeTripEvents: (tripId: string) => Promise<{ trip: Trip; updatedCount: number; results: unknown[] }>;
 }
 
 // Add helper after imports near top
@@ -1165,6 +1166,18 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to update notification preferences');
+    }
+    return response.json();
+  },
+
+  geocodeTripEvents: async (tripId: string): Promise<{ trip: Trip; updatedCount: number; results: unknown[] }> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/geocode-events`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to improve event locations');
     }
     return response.json();
   },

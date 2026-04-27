@@ -71,8 +71,16 @@ const isLikelyDuplicate = (candidate: Event, existing: Event) => {
 };
 
 const needsMapLocationReview = (event: Event) => {
-  if (event.location?.lat !== 0 || event.location?.lng !== 0) {
+  if (event.location?.quality === 'exact') {
     return false;
+  }
+
+  if (event.location?.quality === 'missing' || event.location?.quality === 'unresolved') {
+    return true;
+  }
+
+  if (event.location?.lat !== 0 || event.location?.lng !== 0) {
+    return event.location?.quality === 'inferred';
   }
 
   const eventData = event as any;

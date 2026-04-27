@@ -18,6 +18,10 @@ export interface Event {
     lat: number;
     lng: number;
     address?: string;
+    quality?: 'exact' | 'inferred' | 'unresolved' | 'missing';
+    source?: 'manual' | 'geocoded' | 'imported' | 'unknown';
+    query?: string;
+    confidence?: number;
   };
   notes?: string;
   status: 'confirmed' | 'exploring';

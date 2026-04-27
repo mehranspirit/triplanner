@@ -15,7 +15,19 @@ const eventSchema = new mongoose.Schema({
   location: {
     lat: Number,
     lng: Number,
-    address: String
+    address: String,
+    quality: {
+      type: String,
+      enum: ['exact', 'inferred', 'unresolved', 'missing'],
+      default: undefined
+    },
+    source: {
+      type: String,
+      enum: ['manual', 'geocoded', 'imported', 'unknown'],
+      default: undefined
+    },
+    query: String,
+    confidence: Number
   },
   notes: String,
   status: {
