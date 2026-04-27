@@ -73,6 +73,16 @@ const extractJsonObject = (text: string): string => {
   return stripped.slice(start, end + 1);
 };
 
+const logAIParserDebug = (label: string, data: unknown) => {
+  const enabled =
+    import.meta.env.DEV ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('debugAIParser') === 'true');
+
+  if (enabled) {
+    console.debug(`[AI event parser] ${label}:`, data);
+  }
+};
+
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -647,11 +657,16 @@ ${request.text}
 Return only valid JSON. Do not include markdown, comments, or explanatory text outside the JSON.
 Use this exact JSON shape:
 {
-  "type": "single or multiple",
+  "type": "single",
   "events": [{
-    "type": "arrival, departure, stay, destination, flight, train, rental_car, bus, or activity",
+    "type": "arrival",
     "fields": {
-      "includeAllFieldsMatchingTheEventType": true
+      "airport": "San José, CR (SJO)",
+      "date": "2026-06-18",
+      "time": "07:15",
+      "flightNumber": "UA2312",
+      "airline": "United",
+      "bookingReference": "B9YEB7"
     },
     "confidence": 0.95,
     "reasoning": "explanation of why this type was chosen and how the fields were extracted"
@@ -677,12 +692,25 @@ Use this exact JSON shape:
       throw new Error('Empty response from AI');
     }
 
-    // Log the raw response
-    //console.log('Raw AI response:', text);
+    logAIParserDebug('raw response', text);
 
     const cleanText = extractJsonObject(text);
+    logAIParserDebug('clean JSON text', cleanText);
 
-    const parsed = JSON.parse(cleanText) as ParsedResponse;
+    let parsed: ParsedResponse;
+
+    try {
+      parsed = JSON.parse(cleanText) as ParsedResponse;
+    } catch (parseError) {
+      console.error('Error parsing AI event response JSON:', {
+        parseError,
+        rawResponse: text,
+        cleanText,
+      });
+      throw parseError;
+    }
+
+    logAIParserDebug('parsed response', parsed);
     
     if (!parsed.type || !parsed.events || !Array.isArray(parsed.events)) {
       throw new Error('Invalid response format from AI');
