@@ -6,6 +6,12 @@ import { getHeaders } from '../utils/api.ts';
 import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
 import { DreamTrip } from '../types/dreamTripTypes';
 import { CreateTravelImportRequest, TravelImport, UpdateTravelImportRequest } from '../types/travelImportTypes';
+import {
+  NotificationPreference,
+  TripNotification,
+  UpdateNotificationPreferenceRequest,
+  UpdateNotificationRequest
+} from '../types/notificationTypes';
 
 type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
 
@@ -79,6 +85,10 @@ interface API {
   getTravelImports: (tripId: string) => Promise<TravelImport[]>;
   createTravelImport: (tripId: string, data: CreateTravelImportRequest) => Promise<TravelImport>;
   updateTravelImport: (tripId: string, importId: string, data: UpdateTravelImportRequest) => Promise<TravelImport>;
+  getTripNotifications: (tripId: string, options?: { generate?: boolean }) => Promise<TripNotification[]>;
+  updateTripNotification: (tripId: string, notificationId: string, data: UpdateNotificationRequest) => Promise<TripNotification>;
+  getNotificationPreferences: (tripId: string) => Promise<NotificationPreference>;
+  updateNotificationPreferences: (tripId: string, data: UpdateNotificationPreferenceRequest) => Promise<NotificationPreference>;
 }
 
 // Add helper after imports near top
@@ -1097,6 +1107,64 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to update travel import');
+    }
+    return response.json();
+  },
+
+  getTripNotifications: async (tripId: string, options = {}): Promise<TripNotification[]> => {
+    const params = new URLSearchParams();
+    if (options.generate === false) params.set('generate', 'false');
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/notifications${query}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch notifications');
+    }
+    return response.json();
+  },
+
+  updateTripNotification: async (
+    tripId: string,
+    notificationId: string,
+    data: UpdateNotificationRequest
+  ): Promise<TripNotification> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/notifications/${notificationId}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to update notification');
+    }
+    return response.json();
+  },
+
+  getNotificationPreferences: async (tripId: string): Promise<NotificationPreference> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/notification-preferences`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch notification preferences');
+    }
+    return response.json();
+  },
+
+  updateNotificationPreferences: async (
+    tripId: string,
+    data: UpdateNotificationPreferenceRequest
+  ): Promise<NotificationPreference> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/notification-preferences`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to update notification preferences');
     }
     return response.json();
   },

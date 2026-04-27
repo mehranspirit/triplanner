@@ -15,6 +15,7 @@ const expenseRoutes = require('./routes/expenses');
 const notesRoutes = require('./routes/notes');
 const importsRoutes = require('./routes/imports');
 const aiParserRoutes = require('./routes/aiParser');
+const notificationRoutes = require('./routes/notifications');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
@@ -199,6 +200,9 @@ app.use('/api', importsRoutes);
 
 // Mount server-side AI parser routes
 app.use('/api', aiParserRoutes);
+
+// Mount in-app notification routes
+app.use('/api', notificationRoutes);
 
 // Mount dream trips routes
 app.use('/api/trips/dream', dreamTripsRouter);

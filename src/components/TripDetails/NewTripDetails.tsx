@@ -24,11 +24,12 @@ import { cn } from '@/lib/utils';
 import { getDefaultThumbnail } from './thumbnailHelpers';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripMap from '@/components/TripMap';
-import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare, CalendarDays } from 'lucide-react';
+import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare, CalendarDays, Bell } from 'lucide-react';
 import TripNotes from '@/components/TripNotes';
 import TripChecklist from '@/components/TripDetails/TripChecklist';
 import TripCommandCenter from '@/components/TripDetails/TripCommandCenter';
 import InTripAssistant from '@/components/TripDetails/InTripAssistant';
+import TripNotifications from '@/components/TripDetails/TripNotifications';
 
 // Import icons
 import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
@@ -58,6 +59,7 @@ import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/tra
 import { formatEventDateTime, getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
 import { api } from '@/services/api';
 import { hashText } from '@/utils/hash';
+import { NotificationPreference, TripNotification } from '@/types/notificationTypes';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -105,6 +107,11 @@ const NewTripDetails: React.FC = () => {
   const [showMap, setShowMap] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showToday, setShowToday] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<TripNotification[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference | null>(null);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
   const [isAIParseModalOpen, setIsAIParseModalOpen] = useState(false);
   const [parseText, setParseText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -134,6 +141,27 @@ const NewTripDetails: React.FC = () => {
     () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
     [tripInsights, dismissedInsightIds]
   );
+  const unreadNotificationCount = notifications.filter(notification => !notification.readAt).length;
+
+  const fetchNotifications = async (generate = true) => {
+    if (!trip?._id) return;
+
+    try {
+      setIsLoadingNotifications(true);
+      setNotificationError(null);
+      const [data, preferences] = await Promise.all([
+        api.getTripNotifications(trip._id, { generate }),
+        api.getNotificationPreferences(trip._id),
+      ]);
+      setNotifications(data);
+      setNotificationPreferences(preferences);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+      setNotificationError(error instanceof Error ? error.message : 'Failed to load notifications');
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  };
 
   useEffect(() => {
     if (!trip?._id) return;
@@ -146,6 +174,11 @@ const NewTripDetails: React.FC = () => {
       setDismissedInsightIds([]);
     }
   }, [trip?._id]);
+
+  useEffect(() => {
+    if (!trip?._id) return;
+    fetchNotifications();
+  }, [trip?._id, trip?.updatedAt]);
 
   const handleDismissInsight = (insightId: string) => {
     if (!trip?._id) return;
@@ -162,6 +195,86 @@ const NewTripDetails: React.FC = () => {
 
     localStorage.removeItem(`dismissedTripInsights:${trip._id}`);
     setDismissedInsightIds([]);
+  };
+
+  const handleUpdateNotification = async (
+    notification: TripNotification,
+    data: { read?: boolean; dismissed?: boolean }
+  ) => {
+    if (!trip?._id) return;
+
+    try {
+      const updated = await api.updateTripNotification(trip._id, notification._id, data);
+      if (data.dismissed) {
+        setNotifications(prev => prev.filter(item => item._id !== notification._id));
+      } else {
+        setNotifications(prev => prev.map(item => item._id === notification._id ? updated : item));
+      }
+    } catch (error) {
+      console.error('Error updating notification:', error);
+      setNotificationError(error instanceof Error ? error.message : 'Failed to update notification');
+    }
+  };
+
+  const handleNotificationAction = (notification: TripNotification) => {
+    if (!trip) return;
+
+    if (!notification.readAt) {
+      handleUpdateNotification(notification, { read: true });
+    }
+
+    switch (notification.actionTarget) {
+      case 'event': {
+        const event = trip.events.find(tripEvent => tripEvent.id === notification.eventId);
+        if (event) {
+          setShowNotifications(false);
+          handleEditEventClick(event);
+        }
+        break;
+      }
+      case 'checklist':
+        setShowNotifications(false);
+        setShowChecklist(true);
+        break;
+      case 'expenses':
+        navigate(`/trips/${trip._id}/expenses`);
+        break;
+      case 'today':
+        setShowNotifications(false);
+        setShowToday(true);
+        break;
+      case 'ai_import':
+        setShowNotifications(false);
+        setIsAIParseModalOpen(true);
+        break;
+      case 'add_event':
+        setShowNotifications(false);
+        handleAddEventClick(notification.title.toLowerCase().includes('stay') ? 'stay' : 'rental_car');
+        break;
+      default:
+        setShowNotifications(false);
+        break;
+    }
+  };
+
+  const handleUpdateNotificationPreferences = async (
+    updates: Partial<Pick<NotificationPreference, 'inAppEnabled' | 'disabledTypes'>>
+  ) => {
+    if (!trip?._id || !notificationPreferences) return;
+
+    try {
+      const nextPreferences = {
+        ...notificationPreferences,
+        ...updates,
+      };
+      setNotificationPreferences(nextPreferences);
+      const savedPreferences = await api.updateNotificationPreferences(trip._id, updates);
+      setNotificationPreferences(savedPreferences);
+      await fetchNotifications();
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      setNotificationError(error instanceof Error ? error.message : 'Failed to update notification preferences');
+    }
   };
 
   const handleAddEventClick = (type: EventType) => {
@@ -939,6 +1052,7 @@ const NewTripDetails: React.FC = () => {
             variant="outline"
             onClick={() => {
               setShowToday(true);
+              setShowNotifications(false);
               setShowChecklist(false);
               setShowNotes(false);
               setShowMap(false);
@@ -946,6 +1060,25 @@ const NewTripDetails: React.FC = () => {
           >
             <CalendarDays className="mr-2 h-4 w-4 text-blue-500" />
             Today
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowNotifications(true);
+              setShowToday(false);
+              setShowChecklist(false);
+              setShowNotes(false);
+              setShowMap(false);
+              fetchNotifications();
+            }}
+          >
+            <Bell className="mr-2 h-4 w-4 text-amber-500" />
+            Notifications
+            {unreadNotificationCount > 0 && (
+              <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
+                {unreadNotificationCount}
+              </span>
+            )}
           </Button>
         </div>
         <div className="flex items-center space-x-2">
@@ -1090,6 +1223,39 @@ const NewTripDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* Notifications Toggle Button */}
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "fixed bottom-[318px] right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          showNotifications ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-white hover:bg-gray-50"
+        )}
+        onClick={() => {
+          setShowNotifications(!showNotifications);
+          if (!showNotifications) {
+            setShowToday(false);
+            setShowChecklist(false);
+            setShowNotes(false);
+            setShowMap(false);
+            fetchNotifications();
+          }
+        }}
+      >
+        {showNotifications ? (
+          <X className="h-8 w-8" />
+        ) : (
+          <div className="relative">
+            <Bell className="h-8 w-8 text-amber-500" />
+            {unreadNotificationCount > 0 && (
+              <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-amber-500 px-1 text-xs text-white">
+                {unreadNotificationCount}
+              </span>
+            )}
+          </div>
+        )}
+      </Button>
+
       {/* Today Toggle Button */}
       <Button
         variant="outline"
@@ -1101,6 +1267,7 @@ const NewTripDetails: React.FC = () => {
         onClick={() => {
           setShowToday(!showToday);
           if (!showToday) {
+            setShowNotifications(false);
             setShowChecklist(false);
             setShowNotes(false);
             setShowMap(false);
@@ -1125,6 +1292,7 @@ const NewTripDetails: React.FC = () => {
         onClick={() => {
           setShowChecklist(!showChecklist);
           if (!showChecklist) {
+            setShowNotifications(false);
             setShowToday(false);
             setShowNotes(false);
             setShowMap(false);
@@ -1149,6 +1317,7 @@ const NewTripDetails: React.FC = () => {
         onClick={() => {
           setShowNotes(!showNotes);
           if (!showNotes) {
+            setShowNotifications(false);
             setShowToday(false);
             setShowChecklist(false);
             setShowMap(false);
@@ -1173,6 +1342,7 @@ const NewTripDetails: React.FC = () => {
         onClick={() => {
           setShowMap(!showMap);
           if (!showMap) {
+            setShowNotifications(false);
             setShowToday(false);
             setShowChecklist(false);
             setShowNotes(false);
@@ -1185,6 +1355,29 @@ const NewTripDetails: React.FC = () => {
           <MapPin className="h-8 w-8 text-blue-500" />
         )}
       </Button>
+
+      {/* Trip Notifications */}
+      {showNotifications && (
+        <div className={cn(
+          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
+          "bottom-0 inset-x-0 h-[85vh]",
+          "md:w-[440px] md:h-[640px] md:bottom-6 md:right-6 md:left-auto md:rounded-lg",
+          "bg-white border-gray-200"
+        )}>
+          <TripNotifications
+            notifications={notifications}
+            preferences={notificationPreferences}
+            loading={isLoadingNotifications}
+            error={notificationError}
+            onClose={() => setShowNotifications(false)}
+            onRefresh={() => fetchNotifications()}
+            onMarkRead={(notification) => handleUpdateNotification(notification, { read: true })}
+            onDismiss={(notification) => handleUpdateNotification(notification, { dismissed: true })}
+            onAction={handleNotificationAction}
+            onUpdatePreferences={handleUpdateNotificationPreferences}
+          />
+        </div>
+      )}
 
       {/* Today Assistant */}
       {showToday && (

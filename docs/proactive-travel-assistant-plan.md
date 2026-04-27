@@ -1137,6 +1137,7 @@ With Render:
 - Preferred starting point: **Render Cron Job** that runs a reminder generation script every few minutes.
 - Alternative: **Render Background Worker** for queue-style processing.
 - Avoid depending only on frontend timers or service workers for important reminders.
+- Initial cron command: `npm run reminders:generate` from the `server` directory.
 
 Use MongoDB to make jobs idempotent:
 
@@ -1162,15 +1163,16 @@ More scalable later:
 
 ### Tasks
 
-1. Add notification model.
-2. Add reminder model.
-3. Add notification API endpoints.
-4. Add in-app notification UI on the Vercel frontend.
-5. Add Render Cron Job for reminder generation.
-6. Add MongoDB idempotency keys and job locks.
-7. Generate reminders from insight engine.
-8. Add user notification preferences.
+1. [x] Add notification model.
+2. [x] Add reminder model.
+3. [x] Add notification API endpoints.
+4. [x] Add in-app notification UI on the Vercel frontend.
+5. [x] Add Render Cron Job for reminder generation.
+6. [x] Add MongoDB idempotency keys and job locks.
+7. [x] Generate reminders from insight engine.
+8. [x] Add user notification preferences.
 9. Add email/push later.
+10. [x] Retire generated in-app notifications when the underlying itinerary issue is resolved.
 
 ### Initial MongoDB Indexes
 
