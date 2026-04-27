@@ -21,6 +21,17 @@ const isCollaboratorObject = (c: Collaborator): c is { user: User; role: 'editor
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
 };
 
+const throwApiError = async (response: Response, fallbackMessage: string): Promise<never> => {
+  let message = fallbackMessage;
+  try {
+    const data = await response.json();
+    message = data.message || data.error || message;
+  } catch {
+    // Keep fallback for non-JSON responses.
+  }
+  throw new Error(message);
+};
+
 export interface TripNote {
   content: string;
   edits: {
@@ -864,7 +875,7 @@ export const api: API = {
     const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses`, {
       headers: getHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to fetch expenses');
+    if (!response.ok) await throwApiError(response, 'Failed to fetch expenses');
     return response.json();
   },
 
@@ -874,7 +885,7 @@ export const api: API = {
       headers: getHeaders(),
       body: JSON.stringify(expense),
     });
-    if (!response.ok) throw new Error('Failed to add expense');
+    if (!response.ok) await throwApiError(response, 'Failed to add expense');
     return response.json();
   },
 
@@ -884,7 +895,7 @@ export const api: API = {
       headers: getHeaders(),
       body: JSON.stringify(updates),
     });
-    if (!response.ok) throw new Error('Failed to update expense');
+    if (!response.ok) await throwApiError(response, 'Failed to update expense');
     return response.json();
   },
 
@@ -893,7 +904,7 @@ export const api: API = {
       method: 'DELETE',
       headers: getHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to delete expense');
+    if (!response.ok) await throwApiError(response, 'Failed to delete expense');
   },
 
   settleExpense: async (tripId: string, expenseId: string, participantId: string): Promise<void> => {
@@ -902,7 +913,7 @@ export const api: API = {
       headers: getHeaders(),
       body: JSON.stringify({ participantId }),
     });
-    if (!response.ok) throw new Error('Failed to settle expense');
+    if (!response.ok) await throwApiError(response, 'Failed to settle expense');
   },
 
   // Settlement Management
@@ -910,7 +921,7 @@ export const api: API = {
     const response = await fetch(`${API_URL}/api/trips/${tripId}/settlements`, {
       headers: getHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to fetch settlements');
+    if (!response.ok) await throwApiError(response, 'Failed to fetch settlements');
     return response.json();
   },
 
@@ -920,7 +931,7 @@ export const api: API = {
       headers: getHeaders(),
       body: JSON.stringify(settlement),
     });
-    if (!response.ok) throw new Error('Failed to add settlement');
+    if (!response.ok) await throwApiError(response, 'Failed to add settlement');
     return response.json();
   },
 
@@ -930,7 +941,7 @@ export const api: API = {
       headers: getHeaders(),
       body: JSON.stringify(updates),
     });
-    if (!response.ok) throw new Error('Failed to update settlement');
+    if (!response.ok) await throwApiError(response, 'Failed to update settlement');
     return response.json();
   },
 
@@ -939,14 +950,14 @@ export const api: API = {
       method: 'DELETE',
       headers: getHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to delete settlement');
+    if (!response.ok) await throwApiError(response, 'Failed to delete settlement');
   },
 
   getExpenseSummary: async (tripId: string): Promise<ExpenseSummary> => {
     const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses/summary`, {
       headers: getHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to fetch expense summary');
+    if (!response.ok) await throwApiError(response, 'Failed to fetch expense summary');
     return response.json();
   },
 

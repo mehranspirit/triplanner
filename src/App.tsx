@@ -55,8 +55,27 @@ const ExpensesPageWrapper: React.FC = () => {
   const { state } = useTrip();
   const trip = state.trips.find(t => t._id === tripId);
 
+  if (state.loading) {
+    return (
+      <div className="rounded-lg bg-white p-8 text-center shadow">
+        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+        <p className="text-sm text-gray-600">Loading trip expenses...</p>
+      </div>
+    );
+  }
+
   if (!trip) {
-    return <div>Loading...</div>;
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <h2 className="text-lg font-semibold text-gray-900">Trip not found</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          This trip may have been removed, or you may not have access to it.
+        </p>
+        <Link to="/trips" className="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-800">
+          Back to trips
+        </Link>
+      </div>
+    );
   }
 
   return (

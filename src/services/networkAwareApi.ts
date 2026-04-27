@@ -600,42 +600,53 @@ class NetworkAwareApiService {
       }
 
       // Calculate total amount and per-person balances
-      let totalAmount = 0;
       const perPersonBalances: Record<string, number> = {};
-      const currency = expenses[0]?.currency || 'USD';
+      const currencyTotals: Record<string, { totalAmount: number; unsettledAmount: number }> = {};
 
       // Process expenses
       for (const expense of expenses) {
-        totalAmount += expense.amount;
+        const currency = expense.currency || 'USD';
+        if (!currencyTotals[currency]) {
+          currencyTotals[currency] = { totalAmount: 0, unsettledAmount: 0 };
+        }
+        currencyTotals[currency].totalAmount += expense.amount;
         
-        // Add amount paid by payer
         if (!perPersonBalances[expense.paidBy._id]) {
           perPersonBalances[expense.paidBy._id] = 0;
         }
-        perPersonBalances[expense.paidBy._id] += expense.amount;
 
-        // Subtract each participant's share
+        // Only unsettled shares affect balances. The payer is owed each open share.
         for (const participant of expense.participants) {
           if (!perPersonBalances[participant.userId]) {
             perPersonBalances[participant.userId] = 0;
           }
           if (!participant.settled) {
+            perPersonBalances[expense.paidBy._id] += participant.share;
             perPersonBalances[participant.userId] -= participant.share;
           }
         }
       }
       
-      // Calculate unsettled amount (sum of all negative balances)
-      // Note: When offline, settlements are not processed, so this shows the full unsettled amount
+      // Match the server convention: positive balances are amounts owed to people.
       const unsettledAmount = Object.values(perPersonBalances)
-        .filter(balance => balance < 0)
-        .reduce((sum, balance) => sum + Math.abs(balance), 0);
+        .reduce((sum, balance) => sum + Math.max(0, balance), 0);
+
+      const currencies = Object.keys(currencyTotals);
+      const hasMixedCurrencies = currencies.length > 1;
+      const currency = hasMixedCurrencies ? 'MULTI' : currencies[0] || 'USD';
+      const totalAmount = hasMixedCurrencies ? 0 : currencyTotals[currency]?.totalAmount || 0;
+
+      if (!hasMixedCurrencies && currencyTotals[currency]) {
+        currencyTotals[currency].unsettledAmount = unsettledAmount;
+      }
 
       const summary = {
         totalAmount,
         perPersonBalances,
         unsettledAmount,
-        currency
+        currency,
+        currencyTotals,
+        hasMixedCurrencies
       };
 
       // Cache the calculated summary

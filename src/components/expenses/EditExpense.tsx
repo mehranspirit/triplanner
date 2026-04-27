@@ -5,18 +5,7 @@ import { User } from '../../types/eventTypes';
 import Avatar from '../Avatar';
 import { suggestCategory, CategorySuggestion } from '../../utils/categorySuggestions';
 import { createParticipantWithSplitDetails, calculateEqualShare, roundToTwoDecimals } from '../../utils/expenseUtils';
-
-// Define expense categories
-const EXPENSE_CATEGORIES: { [key: string]: string[] } = {
-  'Transportation': ['Flights', 'Trains', 'Buses', 'Taxis/Rideshares', 'Car Rental', 'Fuel', 'Parking'],
-  'Accommodation': ['Hotels', 'Hostels', 'Airbnb', 'Camping', 'Other Lodging'],
-  'Food & Drinks': ['Restaurants', 'Cafes', 'Groceries', 'Street Food', 'Bars', 'Snacks'],
-  'Activities & Entertainment': ['Museums', 'Tours', 'Attractions', 'Shows', 'Sports', 'Recreation'],
-  'Shopping': ['Souvenirs', 'Clothes', 'Electronics', 'Gifts', 'Other Items'],
-  'Utilities & Services': ['Internet', 'Phone', 'Laundry', 'Cleaning', 'Other Services'],
-  'Health & Medical': ['Medicine', 'Insurance', 'Medical Services', 'First Aid'],
-  'Other': ['Tips', 'Fees', 'Emergency', 'Miscellaneous']
-};
+import { EXPENSE_CATEGORIES, EXPENSE_CURRENCIES } from '../../utils/expenseOptions';
 
 interface EditExpenseProps {
   tripId: string;
@@ -35,14 +24,6 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
   onExpenseUpdated,
   onCancel
 }) => {
-  // Add debug logging
-  console.log('EditExpense props:', {
-    expense,
-    participants,
-    currentUser,
-    expenseParticipants: expense.participants
-  });
-
   const { updateExpense } = useExpense();
   const [title, setTitle] = useState(expense.title);
   const [description, setDescription] = useState(expense.description);
@@ -76,6 +57,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [splitWarning, setSplitWarning] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const validateSplits = () => {
     if (splitMethod === 'equal') return true;
@@ -119,9 +101,26 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     setIsSaving(true);
 
     try {
+      const expenseAmount = parseFloat(amount);
+      if (!title.trim()) {
+        setFormError('Title is required.');
+        return;
+      }
+
+      if (!Number.isFinite(expenseAmount) || expenseAmount <= 0) {
+        setFormError('Amount must be greater than 0.');
+        return;
+      }
+
+      if (selectedParticipants.length === 0) {
+        setFormError('Select at least one person to split this expense with.');
+        return;
+      }
+
       // Validate splits
       if (!validateSplits()) {
         setSplitWarning(getSplitWarning());
@@ -136,7 +135,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
         return createParticipantWithSplitDetails(
           user,
           splitMethod,
-          parseFloat(amount),
+          expenseAmount,
           selectedParticipants,
           participantShares
         );
@@ -150,7 +149,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
       const updatedExpense: Partial<Expense> = {
         title,
         description,
-        amount: parseFloat(amount),
+        amount: expenseAmount,
         currency,
         date,
         paidBy: {
@@ -167,8 +166,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
       await updateExpense(tripId, expense._id, updatedExpense);
       onExpenseUpdated?.();
     } catch (error) {
-      console.error('Failed to update expense:', error);
-      alert('Failed to update expense. Please try again.');
+      setFormError(error instanceof Error ? error.message : 'Failed to update expense. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -204,19 +202,12 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
 
   // Initialize participant shares from the expense data
   useEffect(() => {
-    console.log('Initializing from expense:', {
-      expenseParticipants: expense.participants,
-      splitMethod: expense.splitMethod,
-      amount
-    });
-
     // First, ensure we have the correct selected participants - just their IDs
     const initialSelectedParticipants = expense.participants.map(p => {
       // Handle both populated and unpopulated user objects
       const userId = typeof p.userId === 'object' && p.userId !== null ? (p.userId as User)._id : p.userId;
       return userId;
     });
-    console.log('Setting initial selected participants:', initialSelectedParticipants);
     setSelectedParticipants(initialSelectedParticipants);
 
     // Then initialize the shares using the userId as the key
@@ -250,31 +241,30 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
         }
       }
 
-    console.log('Calculated initial shares:', initialShares);
     setParticipantShares(initialShares);
   }, [expense]); // Remove amount from dependencies to prevent recalculation
-
-  // Add debug logging for participant rendering
-  console.log('Rendering participants:', {
-    participants: participants.map(p => ({ id: p._id, name: p.name })),
-    selectedParticipants: selectedParticipants,
-    participantShares: Object.entries(participantShares).map(([id, share]) => ({ id, share }))
-  });
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Edit Expense</h2>
+        <h2 id="edit-expense-title" className="text-xl font-semibold">Edit Expense</h2>
         <button
           type="button"
           onClick={onCancel}
           className="text-gray-500 hover:text-gray-700"
+          aria-label="Close edit expense form"
         >
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
+
+      {formError && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+          {formError}
+        </div>
+      )}
 
       {/* Title */}
       <div>
@@ -320,12 +310,9 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
             onChange={(e) => setCurrency(e.target.value)}
             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
           >
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-            <option value="JPY">JPY</option>
-            <option value="CAD">CAD</option>
-            <option value="AUD">AUD</option>
+            {EXPENSE_CURRENCIES.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -383,7 +370,11 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">Paid By</label>
         <select
           value={selectedPayer}
-          onChange={(e) => setSelectedPayer(e.target.value)}
+          onChange={(e) => {
+            const payerId = e.target.value;
+            setSelectedPayer(payerId);
+            setFormError(null);
+          }}
           className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
         >
           {participants.map(participant => (
@@ -392,6 +383,9 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
             </option>
           ))}
         </select>
+        <p className="mt-1 text-xs text-gray-500">
+          The payer can be different from the people sharing the cost.
+        </p>
       </div>
 
       {/* Split Method */}
@@ -415,7 +409,6 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
               selectedParticipants.forEach(id => {
                 newShares[id] = equalShare;
               });
-              console.log('Recalculated shares for equal split:', newShares);
               setParticipantShares(newShares);
             } else if (newSplitMethod === 'percentage') {
               // Round to 1 decimal place for percentages
@@ -434,7 +427,6 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
               const otherTotal = Object.values(shares).reduce((sum, share) => sum + share, 0);
               shares[lastId] = roundToTwoDecimals(100 - otherTotal);
               
-              console.log('Recalculated shares for percentage split:', shares);
               setParticipantShares(shares);
             } else if (newSplitMethod === 'shares') {
               setParticipantShares(
@@ -459,16 +451,13 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
       {/* Participants and Split Details */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Participants</label>
+        <p className="mb-2 text-xs text-gray-500">
+          Select only the people who should be charged for this expense.
+        </p>
         <div className="space-y-2">
           {participants.map(participant => {
             const isSelected = selectedParticipants.includes(participant._id);
             const share = participantShares[participant._id] || 0;
-            console.log('Rendering participant:', {
-              participantId: participant._id,
-              isSelected,
-              share,
-              selectedParticipants
-            });
             return (
               <div key={participant._id} className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -479,11 +468,7 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
                       const newSelected = e.target.checked
                         ? [...selectedParticipants, participant._id]
                         : selectedParticipants.filter(id => id !== participant._id);
-                      console.log('Updating selected participants:', {
-                        participantId: participant._id,
-                        checked: e.target.checked,
-                        newSelected
-                      });
+                      setFormError(null);
                       setSelectedParticipants(newSelected);
 
                       // Recalculate shares based on split method
@@ -500,7 +485,6 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
                         newSelected.forEach(id => {
                           newShares[id] = equalShare;
                         });
-                        console.log('Recalculated shares for equal split:', newShares);
                         setParticipantShares(newShares);
                       } else if (splitMethod === 'percentage') {
                         // Calculate equal percentage for all selected participants
@@ -519,7 +503,6 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
                         const otherTotal = Object.values(newShares).reduce((sum, share) => sum + share, 0);
                         newShares[lastId] = roundToTwoDecimals(100 - otherTotal);
                         
-                        console.log('Recalculated shares after participant toggle:', newShares);
                         setParticipantShares(newShares);
                       } else if (splitMethod === 'shares') {
                         setParticipantShares(
@@ -547,12 +530,6 @@ export const EditExpense: React.FC<EditExpenseProps> = ({
                           ...participantShares,
                           [participant._id]: isNaN(value) ? 0 : value
                         };
-                        console.log('Updating participant share:', {
-                          participantId: participant._id,
-                          oldShare: share,
-                          newShare: value,
-                          newShares
-                        });
                         setParticipantShares(newShares);
                       }}
                       className="w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"

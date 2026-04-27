@@ -1,25 +1,14 @@
 import React, { useState } from 'react';
 import { useExpense } from '../../context/ExpenseContext';
-import { Expense, SplitMethod, SplitDetails } from '../../types/expenseTypes';
+import { Expense, SplitMethod } from '../../types/expenseTypes';
 import { User } from '../../types/eventTypes';
 import Avatar from '../Avatar';
 import { suggestCategory, CategorySuggestion } from '../../utils/categorySuggestions';
 import { createParticipantWithSplitDetails, calculateEqualShare } from '../../utils/expenseUtils';
 import { useEvent } from '../../contexts/EventContext';
-import { EVENT_TYPES } from '../../eventTypes/registry';
 import { getEventTypeLabel } from '../../config/eventTypes';
-
-// Define expense categories
-const EXPENSE_CATEGORIES: { [key: string]: string[] } = {
-  'Transportation': ['Flights', 'Trains', 'Buses', 'Taxis/Rideshares', 'Car Rental', 'Fuel', 'Parking'],
-  'Accommodation': ['Hotels', 'Hostels', 'Airbnb', 'Camping', 'Other Lodging'],
-  'Food & Drinks': ['Restaurants', 'Cafes', 'Groceries', 'Street Food', 'Bars', 'Snacks'],
-  'Activities & Entertainment': ['Museums', 'Tours', 'Attractions', 'Shows', 'Sports', 'Recreation'],
-  'Shopping': ['Souvenirs', 'Clothes', 'Electronics', 'Gifts', 'Other Items'],
-  'Utilities & Services': ['Internet', 'Phone', 'Laundry', 'Cleaning', 'Other Services'],
-  'Health & Medical': ['Medicine', 'Insurance', 'Medical Services', 'First Aid'],
-  'Other': ['Tips', 'Fees', 'Emergency', 'Miscellaneous']
-};
+import { EXPENSE_CATEGORIES, EXPENSE_CURRENCIES } from '../../utils/expenseOptions';
+import { formatCurrency } from '../../utils/format';
 
 interface AddExpenseProps {
   tripId: string;
@@ -31,6 +20,9 @@ interface AddExpenseProps {
 export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, currentUser, onExpenseAdded }) => {
   const { addExpense, expenses } = useExpense();
   const { events } = useEvent();
+  const defaultPayerId = participants.some(p => p._id === currentUser._id)
+    ? currentUser._id
+    : participants[0]?._id || '';
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -38,7 +30,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [splitMethod, setSplitMethod] = useState<SplitMethod>('equal');
   const [participantShares, setParticipantShares] = useState<{ [key: string]: number }>({});
-  const [selectedPayer, setSelectedPayer] = useState(currentUser._id);
+  const [selectedPayer, setSelectedPayer] = useState(defaultPayerId);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
     participants.map(p => p._id)
   );
@@ -51,11 +43,8 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
-
-  // Debug logging
-  console.log('All events:', events);
-  console.log('Events with cost:', events.filter(e => e.cost !== undefined));
-  console.log('Events with cost > 0:', events.filter(e => typeof e.cost === 'number' && e.cost > 0));
+  const [formError, setFormError] = useState<string | null>(null);
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
 
   // Filter events with cost
   const eventsWithCost = events.filter(e => typeof e.cost === 'number' && e.cost > 0);
@@ -197,12 +186,30 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setFormError(null);
+    setDuplicateWarning(null);
+
+    const expenseAmount = parseFloat(amount);
+    if (!title.trim()) {
+      setFormError('Title is required.');
+      return;
+    }
+
+    if (!Number.isFinite(expenseAmount) || expenseAmount <= 0) {
+      setFormError('Amount must be greater than 0.');
+      return;
+    }
+
+    if (selectedParticipants.length === 0) {
+      setFormError('Select at least one person to split this expense with.');
+      return;
+    }
+
     // First validate splits
     if (!validateSplits()) {
       const warning = getSplitWarning();
       if (warning) {
-        alert(warning);
+        setSplitWarning(warning);
         return;
       }
     }
@@ -219,24 +226,19 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       return isSameEvent && isSameAmount && isSameCategory;
     });
 
-    if (duplicateExpense) {
-      const confirmed = window.confirm(
-        `Warning: An expense for "${title}" with the same amount (${amount}) and category (${selectedSubcategory || selectedCategory}) already exists.\n\nAre you sure you want to add this expense anyway?`
-      );
-      if (!confirmed) {
-        return;
-      }
+    if (duplicateExpense && !allowDuplicate) {
+      setDuplicateWarning(`An expense for "${title}" with the same amount and category already exists. Review it before adding another one.`);
+      return;
     }
 
     const payer = participants.find(p => p._id === selectedPayer);
     if (!payer) {
-      alert('Selected payer not found');
+      setFormError('Selected payer was not found.');
       return;
     }
 
     setIsSaving(true);
 
-    const expenseAmount = parseFloat(amount);
     const expense: Omit<Expense, '_id'> = {
       tripId,
       title,
@@ -267,7 +269,6 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
 
     try {
       await addExpense(tripId, expense);
-      console.log('Expense added successfully');
       
       // Reset form
       setTitle('');
@@ -276,17 +277,18 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       setDate(new Date().toISOString().split('T')[0]);
       setSplitMethod('equal');
       setParticipantShares({});
-      setSelectedPayer(currentUser._id);
+      setSelectedPayer(defaultPayerId);
       setSelectedParticipants(participants.map(p => p._id));
       setSelectedCategory('');
       setSelectedSubcategory('');
+      setAllowDuplicate(false);
+      setDuplicateWarning(null);
       
       if (onExpenseAdded) {
         onExpenseAdded();
       }
     } catch (error) {
-      console.error('Failed to add expense:', error);
-      alert('Failed to add expense. Please try again.');
+      setFormError(error instanceof Error ? error.message : 'Failed to add expense. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -331,6 +333,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       if (prev.includes(userId)) {
         return prev.filter(id => id !== userId);
       } else {
+        setFormError(null);
         return [...prev, userId];
       }
     });
@@ -366,11 +369,9 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     }
   };
 
-  // Add console logging to track payer selection
   const handlePayerChange = (payerId: string) => {
-    console.log('Changing payer to:', payerId);
-    console.log('Selected from participants:', participants.find(p => p._id === payerId));
     setSelectedPayer(payerId);
+    setFormError(null);
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -426,10 +427,15 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
             <option value="">-- Select an event --</option>
             {eventsWithCost.map(event => (
               <option key={event.id} value={event.id}>
-                {getEventTitle(event)} | ${event.cost?.toFixed(2)} | {formatEventDateRange(event)}
+                {getEventTitle(event)} | {formatCurrency(event.cost || 0, currency)} | {formatEventDateRange(event)}
               </option>
             ))}
           </select>
+        </div>
+      )}
+      {formError && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+          {formError}
         </div>
       )}
       <div>
@@ -502,14 +508,9 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
               onChange={(e) => setCurrency(e.target.value)}
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
             >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="JPY">JPY</option>
-              <option value="CAD">CAD</option>
-              <option value="AUD">AUD</option>
-              <option value="CNY">CNY</option>
-              <option value="INR">INR</option>
+              {EXPENSE_CURRENCIES.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -580,6 +581,9 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
         {/* Payer Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Paid by</label>
+          <p className="mb-2 text-xs text-gray-500">
+            The payer can be different from the people sharing the cost.
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {participants.map((participant) => (
               <label
@@ -611,6 +615,9 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
         {/* Participants Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Split between</label>
+          <p className="mb-2 text-xs text-gray-500">
+            Select only the people who should be charged for this expense.
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {participants.map((participant) => (
               <label
@@ -692,6 +699,16 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">{duplicateWarning}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAllowDuplicate(true);
+                    setDuplicateWarning(null);
+                  }}
+                  className="mt-2 text-sm font-medium text-yellow-800 underline hover:text-yellow-900"
+                >
+                  Add it anyway
+                </button>
               </div>
             </div>
           </div>

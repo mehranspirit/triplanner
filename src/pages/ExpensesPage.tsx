@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
+import { useAuth } from '../context/AuthContext';
 import { ExpenseDashboard } from '../components/expenses/ExpenseDashboard';
 import { User } from '../types/eventTypes';
-import Avatar from '../components/Avatar';
 
 // Add the default thumbnail constant
 const PREDEFINED_THUMBNAILS = {
@@ -80,6 +80,7 @@ const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor
 const ExpensesPage: React.FC = () => {
   const { tripId } = useParams<{ tripId: string }>();
   const { state } = useTrip();
+  const { user, isLoading: authLoading } = useAuth();
   const trip = state.trips.find(t => t._id === tripId);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
 
@@ -93,8 +94,48 @@ const ExpensesPage: React.FC = () => {
     loadThumbnail();
   }, [trip]);
 
+  if (state.loading || authLoading) {
+    return (
+      <div className="rounded-lg bg-white p-8 text-center shadow">
+        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+        <p className="text-sm text-gray-600">Loading trip expenses...</p>
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+        <h2 className="text-lg font-semibold text-red-900">Unable to load expenses</h2>
+        <p className="mt-2 text-sm text-red-700">{state.error}</p>
+        <Link to="/trips" className="mt-4 inline-flex text-sm font-medium text-red-700 hover:text-red-900">
+          Back to trips
+        </Link>
+      </div>
+    );
+  }
+
   if (!trip) {
-    return <div>Loading...</div>;
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <h2 className="text-lg font-semibold text-gray-900">Trip not found</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          This trip may have been removed, or you may not have access to it.
+        </p>
+        <Link to="/trips" className="mt-4 inline-flex text-sm font-medium text-blue-600 hover:text-blue-800">
+          Back to trips
+        </Link>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-center">
+        <h2 className="text-lg font-semibold text-yellow-900">Sign in required</h2>
+        <p className="mt-2 text-sm text-yellow-700">Please sign in again to manage trip expenses.</p>
+      </div>
+    );
   }
 
   // Get all participants (owner + collaborators)
@@ -167,7 +208,7 @@ const ExpensesPage: React.FC = () => {
           <ExpenseDashboard 
             tripId={tripId!} 
             participants={participants}
-            currentUser={trip.owner}
+            currentUser={user}
           />
         </div>
       </div>

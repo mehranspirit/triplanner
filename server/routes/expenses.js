@@ -6,16 +6,255 @@ const Settlement = require('../models/Settlement');
 const Trip = require('../models/Trip');
 const User = require('../models/User');
 
+const WRITABLE_EXPENSE_FIELDS = [
+  'title',
+  'description',
+  'amount',
+  'currency',
+  'date',
+  'paidBy',
+  'splitMethod',
+  'participants',
+  'category',
+  'receipt'
+];
+
+const WRITABLE_SETTLEMENT_FIELDS = [
+  'fromUserId',
+  'toUserId',
+  'amount',
+  'currency',
+  'method',
+  'status',
+  'date',
+  'notes'
+];
+
+const getId = (value) => {
+  if (!value) return null;
+  if (value._id) return value._id.toString();
+  return value.toString();
+};
+
+const pickFields = (source, allowedFields) => {
+  return allowedFields.reduce((result, field) => {
+    if (Object.prototype.hasOwnProperty.call(source, field)) {
+      result[field] = source[field];
+    }
+    return result;
+  }, {});
+};
+
+const findAccessibleTrip = (tripId, userId, populate = '') => {
+  let query = Trip.findOne({
+    _id: tripId,
+    $or: [
+      { owner: userId },
+      { 'collaborators.user': userId }
+    ]
+  });
+
+  if (populate) {
+    populate.split(' ').filter(Boolean).forEach(path => {
+      query = query.populate(path);
+    });
+  }
+
+  return query;
+};
+
+const getTripRole = (trip, userId) => {
+  const userIdString = userId.toString();
+  if (getId(trip.owner) === userIdString) return 'owner';
+
+  const collaborator = trip.collaborators.find(c => getId(c.user) === userIdString);
+  return collaborator?.role || null;
+};
+
+const canWriteTripExpenses = (trip, userId) => {
+  const role = getTripRole(trip, userId);
+  return role === 'owner' || role === 'editor';
+};
+
+const getTripParticipantIds = (trip) => {
+  return new Set([
+    getId(trip.owner),
+    ...trip.collaborators.map(c => getId(c.user))
+  ].filter(Boolean));
+};
+
+const normalizeUserId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object') return getId(value);
+  return value.toString();
+};
+
+const normalizeParticipants = (participants = []) => {
+  return participants.map(participant => ({
+    ...participant,
+    userId: normalizeUserId(participant.userId)
+  }));
+};
+
+const validateExpenseInput = (data, trip) => {
+  if (!data.title?.trim()) {
+    return 'Expense title is required';
+  }
+
+  if (!Number.isFinite(Number(data.amount)) || Number(data.amount) <= 0) {
+    return 'Expense amount must be greater than 0';
+  }
+
+  if (!['equal', 'custom', 'percentage', 'shares'].includes(data.splitMethod)) {
+    return 'Invalid split method';
+  }
+
+  if (!Array.isArray(data.participants) || data.participants.length === 0) {
+    return 'At least one participant is required';
+  }
+
+  const tripParticipantIds = getTripParticipantIds(trip);
+  const payerId = normalizeUserId(data.paidBy);
+
+  if (!payerId || !tripParticipantIds.has(payerId)) {
+    return 'Payer must be a trip participant';
+  }
+
+  const participantIds = normalizeParticipants(data.participants).map(p => p.userId);
+  if (participantIds.some(id => !id || !tripParticipantIds.has(id))) {
+    return 'All split participants must belong to the trip';
+  }
+
+  if (new Set(participantIds).size !== participantIds.length) {
+    return 'Split participants must be unique';
+  }
+
+  return null;
+};
+
+const buildExpensePayload = (body, tripId, fallbackUserId) => {
+  const payload = pickFields(body, WRITABLE_EXPENSE_FIELDS);
+  payload.tripId = tripId;
+  payload.paidBy = normalizeUserId(payload.paidBy) || fallbackUserId;
+  payload.participants = normalizeParticipants(payload.participants);
+  return payload;
+};
+
+const validateSettlementInput = (data, trip) => {
+  const fromUserId = normalizeUserId(data.fromUserId);
+  const toUserId = normalizeUserId(data.toUserId);
+  const tripParticipantIds = getTripParticipantIds(trip);
+
+  if (!fromUserId || !toUserId) {
+    return 'Both settlement users are required';
+  }
+
+  if (fromUserId === toUserId) {
+    return 'Settlement users must be different people';
+  }
+
+  if (!tripParticipantIds.has(fromUserId) || !tripParticipantIds.has(toUserId)) {
+    return 'Both users must be participants in the trip';
+  }
+
+  if (!Number.isFinite(Number(data.amount)) || Number(data.amount) <= 0) {
+    return 'Settlement amount must be greater than 0';
+  }
+
+  return null;
+};
+
+const buildSettlementPayload = (body, tripId) => {
+  const payload = pickFields(body, WRITABLE_SETTLEMENT_FIELDS);
+  payload.tripId = tripId;
+  payload.fromUserId = normalizeUserId(payload.fromUserId);
+  payload.toUserId = normalizeUserId(payload.toUserId);
+  return payload;
+};
+
+const calculateSummary = (trip, expenses, settlements) => {
+  const perPersonBalances = {};
+  const participantIds = getTripParticipantIds(trip);
+
+  participantIds.forEach(participantId => {
+    perPersonBalances[participantId] = 0;
+  });
+
+  const totalsByCurrency = {};
+  const ensureCurrencyTotals = (currency) => {
+    if (!totalsByCurrency[currency]) {
+      totalsByCurrency[currency] = {
+        totalAmount: 0,
+        unsettledAmount: 0
+      };
+    }
+    return totalsByCurrency[currency];
+  };
+
+  expenses.forEach(expense => {
+    const currency = expense.currency || 'USD';
+    const payerId = getId(expense.paidBy);
+    const amount = Number(expense.amount) || 0;
+
+    ensureCurrencyTotals(currency).totalAmount += amount;
+
+    expense.participants.forEach(participant => {
+      if (participant.settled) return;
+      const participantId = getId(participant.userId);
+      const share = Number(participant.share) || 0;
+      perPersonBalances[payerId] = (perPersonBalances[payerId] || 0) + share;
+      perPersonBalances[participantId] = (perPersonBalances[participantId] || 0) - share;
+    });
+  });
+
+  settlements.forEach(settlement => {
+    if (settlement.status !== 'completed') return;
+
+    const fromUserId = getId(settlement.fromUserId);
+    const toUserId = getId(settlement.toUserId);
+    const amount = Number(settlement.amount) || 0;
+
+    perPersonBalances[fromUserId] = (perPersonBalances[fromUserId] || 0) + amount;
+    perPersonBalances[toUserId] = (perPersonBalances[toUserId] || 0) - amount;
+  });
+
+  const unsettledAmount = Object.values(perPersonBalances).reduce((sum, balance) => {
+    return sum + Math.max(0, Number(balance) || 0);
+  }, 0);
+
+  const currencies = Object.keys(totalsByCurrency);
+  const totalAmount = currencies.length === 1
+    ? totalsByCurrency[currencies[0]].totalAmount
+    : 0;
+
+  if (currencies.length === 1) {
+    totalsByCurrency[currencies[0]].unsettledAmount = unsettledAmount;
+  }
+
+  return {
+    totalAmount,
+    perPersonBalances,
+    unsettledAmount,
+    currency: currencies.length === 1 ? currencies[0] : 'MULTI',
+    currencyTotals: totalsByCurrency,
+    hasMixedCurrencies: currencies.length > 1
+  };
+};
+
+const transformExpense = (expense) => ({
+  ...expense.toObject(),
+  participants: expense.participants.map(participant => ({
+    ...participant.toObject(),
+    userId: participant.userId._id.toString(),
+    name: participant.userId.name,
+    photoUrl: participant.userId.photoUrl
+  }))
+});
+
 // Get all expenses for a trip
 router.get('/trips/:tripId/expenses', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
@@ -31,6 +270,7 @@ router.get('/trips/:tripId/expenses', auth, async (req, res) => {
       ...expense,
       participants: expense.participants.map(participant => ({
         ...participant,
+        userId: participant.userId._id.toString(),
         name: participant.userId.name,
         photoUrl: participant.userId.photoUrl
       }))
@@ -45,55 +285,38 @@ router.get('/trips/:tripId/expenses', auth, async (req, res) => {
 // Add a new expense
 router.post('/trips/:tripId/expenses', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
     }
 
-    // Only set paidBy to current user if not provided in request
-    const expense = new Expense({
-      ...req.body,
-      tripId: req.params.tripId,
-      paidBy: req.body.paidBy || req.user._id
-    });
+    if (!canWriteTripExpenses(trip, req.user._id)) {
+      return res.status(403).json({ message: 'Only trip owners and editors can add expenses' });
+    }
+
+    const expensePayload = buildExpensePayload(req.body, req.params.tripId, req.user._id);
+    const validationError = validateExpenseInput(expensePayload, trip);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
+    }
+
+    const expense = new Expense(expensePayload);
 
     await expense.save();
     await expense.populate('paidBy', 'name email photoUrl');
     await expense.populate('participants.userId', 'name email photoUrl');
 
-    // Transform the response to include user data in participants
-    const transformedExpense = {
-      ...expense.toObject(),
-      participants: expense.participants.map(participant => ({
-        ...participant.toObject(),
-        name: participant.userId.name,
-        photoUrl: participant.userId.photoUrl
-      }))
-    };
-
-    res.status(201).json(transformedExpense);
+    res.status(201).json(transformExpense(expense));
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(400).json({ message: error.message || 'Failed to add expense' });
   }
 });
 
 // Update an expense
 router.put('/trips/:tripId/expenses/:expenseId', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
@@ -108,46 +331,34 @@ router.put('/trips/:tripId/expenses/:expenseId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
-    // Allow both the expense payer and trip collaborators to update the expense
-    const isPayer = expense.paidBy.toString() === req.user._id.toString();
-    const isCollaborator = trip.collaborators.some(c => c.user.toString() === req.user._id.toString());
-    const isOwner = trip.owner.toString() === req.user._id.toString();
-
-    if (!isPayer && !isCollaborator && !isOwner) {
-      return res.status(403).json({ message: 'Not authorized to update this expense' });
+    if (!canWriteTripExpenses(trip, req.user._id)) {
+      return res.status(403).json({ message: 'Only trip owners and editors can update expenses' });
     }
 
-    Object.assign(expense, req.body);
+    const expensePayload = buildExpensePayload({
+      ...expense.toObject(),
+      ...pickFields(req.body, WRITABLE_EXPENSE_FIELDS)
+    }, req.params.tripId, expense.paidBy);
+    const validationError = validateExpenseInput(expensePayload, trip);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
+    }
+
+    Object.assign(expense, expensePayload);
     await expense.save();
     await expense.populate('paidBy', 'name email photoUrl');
     await expense.populate('participants.userId', 'name email photoUrl');
 
-    // Transform the response to include user data in participants
-    const transformedExpense = {
-      ...expense.toObject(),
-      participants: expense.participants.map(participant => ({
-        ...participant.toObject(),
-        name: participant.userId.name,
-        photoUrl: participant.userId.photoUrl
-      }))
-    };
-
-    res.json(transformedExpense);
+    res.json(transformExpense(expense));
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(400).json({ message: error.message || 'Failed to update expense' });
   }
 });
 
 // Delete an expense
 router.delete('/trips/:tripId/expenses/:expenseId', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
@@ -162,7 +373,10 @@ router.delete('/trips/:tripId/expenses/:expenseId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
-    // Remove the paidBy check to allow all collaborators to delete
+    if (!canWriteTripExpenses(trip, req.user._id)) {
+      return res.status(403).json({ message: 'Only trip owners and editors can delete expenses' });
+    }
+
     await expense.deleteOne();
     res.json({ message: 'Expense deleted successfully' });
   } catch (error) {
@@ -173,16 +387,14 @@ router.delete('/trips/:tripId/expenses/:expenseId', auth, async (req, res) => {
 // Mark an expense as settled for a participant
 router.post('/trips/:tripId/expenses/:expenseId/settle', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
+    }
+
+    if (!canWriteTripExpenses(trip, req.user._id)) {
+      return res.status(403).json({ message: 'Only trip owners and editors can settle expense shares' });
     }
 
     const expense = await Expense.findOne({
@@ -214,13 +426,7 @@ router.post('/trips/:tripId/expenses/:expenseId/settle', auth, async (req, res) 
 // Get all settlements for a trip
 router.get('/trips/:tripId/settlements', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
@@ -239,38 +445,31 @@ router.get('/trips/:tripId/settlements', auth, async (req, res) => {
 // Add a new settlement
 router.post('/trips/:tripId/settlements', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
     }
 
-    // Validate that both users are participants in the trip
-    const fromUser = await User.findById(req.body.fromUserId);
-    const toUser = await User.findById(req.body.toUserId);
+    if (!canWriteTripExpenses(trip, req.user._id)) {
+      return res.status(403).json({ message: 'Only trip owners and editors can add settlements' });
+    }
+
+    const settlementPayload = buildSettlementPayload(req.body, req.params.tripId);
+    const validationError = validateSettlementInput(settlementPayload, trip);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
+    }
+
+    const fromUser = await User.findById(settlementPayload.fromUserId);
+    const toUser = await User.findById(settlementPayload.toUserId);
 
     if (!fromUser || !toUser) {
       return res.status(400).json({ message: 'Invalid user IDs provided' });
     }
 
-    const isFromUserParticipant = trip.owner._id.equals(fromUser._id) || 
-      trip.collaborators.some(c => c.user._id.equals(fromUser._id));
-    const isToUserParticipant = trip.owner._id.equals(toUser._id) || 
-      trip.collaborators.some(c => c.user._id.equals(toUser._id));
-
-    if (!isFromUserParticipant || !isToUserParticipant) {
-      return res.status(400).json({ message: 'Both users must be participants in the trip' });
-    }
-
     const settlement = new Settlement({
-      ...req.body,
-      tripId: req.params.tripId,
+      ...settlementPayload,
       fromUserId: fromUser._id,
       toUserId: toUser._id
     });
@@ -289,16 +488,14 @@ router.post('/trips/:tripId/settlements', auth, async (req, res) => {
 // Update a settlement
 router.put('/trips/:tripId/settlements/:settlementId', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
+    }
+
+    if (!canWriteTripExpenses(trip, req.user._id)) {
+      return res.status(403).json({ message: 'Only trip owners and editors can update settlements' });
     }
 
     const settlement = await Settlement.findOne({
@@ -328,16 +525,14 @@ router.put('/trips/:tripId/settlements/:settlementId', auth, async (req, res) =>
 // Delete a settlement
 router.delete('/trips/:tripId/settlements/:settlementId', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    });
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id);
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
+    }
+
+    if (!canWriteTripExpenses(trip, req.user._id)) {
+      return res.status(403).json({ message: 'Only trip owners and editors can delete settlements' });
     }
 
     const settlement = await Settlement.findOne({
@@ -360,13 +555,7 @@ router.delete('/trips/:tripId/settlements/:settlementId', auth, async (req, res)
 // Get expense summary for a trip
 router.get('/trips/:tripId/expenses/summary', auth, async (req, res) => {
   try {
-    const trip = await Trip.findOne({
-      _id: req.params.tripId,
-      $or: [
-        { owner: req.user._id },
-        { 'collaborators.user': req.user._id }
-      ]
-    }).populate('owner').populate('collaborators.user');
+    const trip = await findAccessibleTrip(req.params.tripId, req.user._id, 'owner collaborators.user');
 
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found or access denied' });
@@ -380,64 +569,7 @@ router.get('/trips/:tripId/expenses/summary', auth, async (req, res) => {
       .populate('fromUserId')
       .populate('toUserId');
 
-    // Calculate total amount spent
-    const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-
-    // Initialize balances for all participants
-    const perPersonBalances = {};
-    const allParticipants = new Set();
-
-    // Add all participants to the set
-    allParticipants.add(trip.owner._id.toString());
-    trip.collaborators.forEach(collaborator => {
-      allParticipants.add(collaborator.user._id.toString());
-    });
-
-    // Initialize all balances to 0
-    allParticipants.forEach(participantId => {
-      perPersonBalances[participantId] = 0;
-    });
-
-    // Process expenses
-    expenses.forEach(expense => {
-      const payerId = expense.paidBy._id.toString();
-      const totalExpense = expense.amount;
-      
-      // Add the full amount to what others owe the payer
-      perPersonBalances[payerId] += totalExpense;
-
-      // Subtract each participant's share
-      expense.participants.forEach(participant => {
-        const participantId = participant.userId._id.toString();
-        perPersonBalances[participantId] -= participant.share;
-      });
-    });
-
-    // Process settlements
-    settlements.forEach(settlement => {
-      if (settlement.status === 'completed') {
-        const fromUserId = settlement.fromUserId._id.toString();
-        const toUserId = settlement.toUserId._id.toString();
-        
-        // When A pays B:
-        // - A's balance increases (their debt decreases)
-        // - B's balance decreases (what they're owed decreases)
-        perPersonBalances[fromUserId] += settlement.amount;
-        perPersonBalances[toUserId] -= settlement.amount;
-      }
-    });
-
-    // Calculate total unsettled amount (sum of positive balances)
-    const unsettledAmount = Object.values(perPersonBalances).reduce((sum, balance) => {
-      return sum + Math.max(0, balance);
-    }, 0);
-
-    res.json({
-      totalAmount,
-      perPersonBalances,
-      unsettledAmount,
-      currency: expenses[0]?.currency || 'USD'
-    });
+    res.json(calculateSummary(trip, expenses, settlements));
   } catch (error) {
     console.error('Error calculating expense summary:', error);
     res.status(500).json({ message: 'Server error', error: error.message });

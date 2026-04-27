@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
+import { formatCurrency } from '@/utils/format';
 
 interface RentalCarEventCardProps {
   event: RentalCarEvent;
@@ -485,7 +486,7 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
               "transition-all duration-200",
               isExploring ? "text-gray-600" : "text-gray-900"
             )}>
-              <span className="font-semibold">Cost:</span> ${event.cost.toFixed(2)}
+              <span className="font-semibold">Cost:</span> {formatCurrency(event.cost, 'USD')}
             </span>
           </div>
         )}

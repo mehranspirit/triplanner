@@ -100,33 +100,45 @@ const roundToTwoDecimals = (value) => {
   return parseFloat(value.toFixed(2));
 };
 
+const applyRoundedShares = (participants, amount, getRawShare) => {
+  if (!participants.length) {
+    throw new Error('At least one participant is required');
+  }
+
+  let runningTotal = 0;
+  participants.forEach((participant, index) => {
+    if (index === participants.length - 1) {
+      participant.share = roundToTwoDecimals(amount - runningTotal);
+    } else {
+      const share = roundToTwoDecimals(getRawShare(participant));
+      participant.share = share;
+      runningTotal += share;
+    }
+  });
+};
+
 // Add a pre-save middleware to validate participant shares
 expenseSchema.pre('save', function(next) {
   try {
     if (this.splitMethod === 'equal') {
-      const share = roundToTwoDecimals(this.amount / this.participants.length);
-      this.participants.forEach(participant => {
-        participant.share = share;
-      });
+      applyRoundedShares(this.participants, this.amount, () => this.amount / this.participants.length);
     } else if (this.splitMethod === 'percentage') {
       const totalPercentage = this.participants.reduce((sum, p) => sum + (p.splitDetails.percentage?.value || 0), 0);
       if (Math.abs(totalPercentage - 100) > 0.1) {
         throw new Error('Total percentage must equal 100');
       }
-      // Calculate actual shares based on percentages
-      this.participants.forEach(participant => {
+      applyRoundedShares(this.participants, this.amount, (participant) => {
         const percentage = participant.splitDetails.percentage?.value || 0;
-        participant.share = roundToTwoDecimals((this.amount * percentage) / 100);
+        return (this.amount * percentage) / 100;
       });
     } else if (this.splitMethod === 'shares') {
       const totalShares = this.participants.reduce((sum, p) => sum + (p.splitDetails.shares?.value || 0), 0);
       if (totalShares <= 0) {
         throw new Error('Total shares must be greater than 0');
       }
-      // Calculate actual shares based on share ratio
-      this.participants.forEach(participant => {
+      applyRoundedShares(this.participants, this.amount, (participant) => {
         const shareValue = participant.splitDetails.shares?.value || 0;
-        participant.share = roundToTwoDecimals((this.amount * shareValue) / totalShares);
+        return (this.amount * shareValue) / totalShares;
       });
     } else if (this.splitMethod === 'custom') {
       // For custom splits, validate that the sum equals the total amount
