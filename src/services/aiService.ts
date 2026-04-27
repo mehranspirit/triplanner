@@ -58,6 +58,21 @@ interface ParsedResponse {
   events: ParsedEventData[];
 }
 
+const extractJsonObject = (text: string): string => {
+  const stripped = text
+    .replace(/```json\s*/g, '')
+    .replace(/```\s*/g, '')
+    .trim();
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error('AI response did not contain a complete JSON object');
+  }
+
+  return stripped.slice(start, end + 1);
+};
+
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -629,19 +644,16 @@ Important flight related Event Rules:
 NOW THIS IS THE ACTUAL TEXT TO PARSE:
 ${request.text}
 
-Return the response in this exact JSON format:
+Return only valid JSON. Do not include markdown, comments, or explanatory text outside the JSON.
+Use this exact JSON shape:
 {
-  "type": "single" | "multiple", (based on how many events you detected in the text. Return flights with both arrival to and departure from the trip destination are also multiple events)
+  "type": "single or multiple",
   "events": [{
-    "type": "one of: arrival, departure, stay, destination, flight, train, rental_car, bus, activity",
+    "type": "arrival, departure, stay, destination, flight, train, rental_car, bus, or activity",
     "fields": {
-      // All fields matching the type's interface, including required and any detected optional fields
-      // Dates must be in YYYY-MM-DD format
-      // Times must be in HH:mm format
-      // Include status (default to 'confirmed')
-      // Include source (default to 'other')
+      "includeAllFieldsMatchingTheEventType": true
     },
-    "confidence": 0-1 score of confidence in the parsing,
+    "confidence": 0.95,
     "reasoning": "explanation of why this type was chosen and how the fields were extracted"
   }]
 }`;
@@ -653,7 +665,8 @@ Return the response in this exact JSON format:
         temperature: 0.1,
         topK: 1,
         topP: 0.1,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 4096,
+        responseMimeType: 'application/json',
       },
     });
 
@@ -667,13 +680,7 @@ Return the response in this exact JSON format:
     // Log the raw response
     //console.log('Raw AI response:', text);
 
-    // Clean up the response text
-    const cleanText = text
-      .replace(/```json\s*/g, '')
-      .replace(/```\s*/g, '')
-      .trim()
-      .replace(/^[^{]*({.*})[^}]*$/s, '$1')
-      .replace(/\\"/g, '"');
+    const cleanText = extractJsonObject(text);
 
     const parsed = JSON.parse(cleanText) as ParsedResponse;
     
