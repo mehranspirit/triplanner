@@ -13,6 +13,8 @@ import {
   User
 } from '@/types/eventTypes';
 import { v4 as uuidv4 } from 'uuid';
+import { API_URL } from '@/config';
+import { getHeaders } from '@/utils/api';
 
 interface AISuggestionRequest {
   places: string[];
@@ -32,6 +34,7 @@ interface DreamTripSuggestionRequest {
 interface TextEventParseRequest {
   text: string;
   trip: {
+    _id?: string;
     name: string;
     description: string;
     startDate: string;
@@ -493,6 +496,25 @@ SUGGESTION_END`;
 };
 
 export const parseEventFromText = async (request: TextEventParseRequest): Promise<Event | Event[]> => {
+  if (!request.trip._id) {
+    throw new Error('Trip ID is required to parse event details');
+  }
+
+  const response = await fetch(`${API_URL}/api/trips/${request.trip._id}/parse-event`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ text: request.text }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.message || 'Failed to parse event details. Please try again or enter details manually.');
+  }
+
+  const data = await response.json();
+  const events = data.events || [];
+  return events.length === 1 ? events[0] : events;
+
   const prompt = `Parse the following text and extract travel event details. The text could be either a natural language description or an email containing reservation details. The events is related to this trip with the following info:
 
 Trip Context:
@@ -640,31 +662,50 @@ Common fields for all events:
 - thumbnailUrl?: string
 
 Important flight related Event Rules:
-1. For text or reservation containing flights TO or FROM the trip destination:
-   - Create "arrival" events for flights TO the destination. for these events use the airport we're flying to as the airport field.
-   - Create "departure" events for flights FROM the destination. for these events use the airport we're flying from as the airport field.
-   - DO NOT create additional "flight" events for these cases
+1. For airline reservation receipts with scheduled flight segments:
+   - Create one "flight" event for each scheduled flight segment.
+   - Include both departure and arrival details for each segment.
+   - This is important because the user's next real-world action is often departing from their origin airport, not only arriving at the trip destination.
+   - DO NOT reduce an airline segment to only an "arrival" or "departure" event when the receipt contains complete flight departure and arrival details.
+   - If a receipt contains multiple numbered flight segments, parse every segment that matches the trip.
+   - A round-trip receipt usually has at least two "flight" events.
 
-2. For flights WITHIN the trip dates and between locations during the trip:
-   - Create ONLY a "flight" event
-   - DO NOT create "arrival" or "departure" events for these cases
+2. Use "arrival" or "departure" only when the text describes a standalone arrival/departure checkpoint without enough details to create a full flight event.
 
-3. If you are parsing an Arrival and a Departure from the same text or reservation, DO NOT create additional Flight events.
+3. Do not stop after the first flight segment. If the text says "Flight 1 of 2" and "Flight 2 of 2", evaluate both segments and include both if they are relevant.
 
 NOW THIS IS THE ACTUAL TEXT TO PARSE:
 ${request.text}
 
 Return only valid JSON. Do not include markdown, comments, or explanatory text outside the JSON.
-Use this exact JSON shape:
+Use this exact JSON shape. For round-trip flight receipts, return "multiple" and include one full flight event per segment:
 {
-  "type": "single",
+  "type": "multiple",
   "events": [{
-    "type": "arrival",
+    "type": "flight",
     "fields": {
-      "airport": "San José, CR (SJO)",
-      "date": "2026-06-18",
-      "time": "07:15",
+      "departureAirport": "San Francisco, CA, US (SFO)",
+      "arrivalAirport": "San José, CR (SJO)",
+      "departureDate": "2026-06-17",
+      "departureTime": "23:36",
+      "arrivalDate": "2026-06-18",
+      "arrivalTime": "07:15",
       "flightNumber": "UA2312",
+      "airline": "United",
+      "bookingReference": "B9YEB7"
+    },
+    "confidence": 0.95,
+    "reasoning": "explanation of why this type was chosen and how the fields were extracted"
+  }, {
+    "type": "flight",
+    "fields": {
+      "departureAirport": "San José, CR (SJO)",
+      "arrivalAirport": "San Francisco, CA, US (SFO)",
+      "departureDate": "2026-06-27",
+      "departureTime": "08:45",
+      "arrivalDate": "2026-06-27",
+      "arrivalTime": "14:30",
+      "flightNumber": "UA2313",
       "airline": "United",
       "bookingReference": "B9YEB7"
     },

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTripDetails } from './hooks';
 // import EventCard from './EventCard'; // Placeholder
 import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
@@ -23,9 +24,11 @@ import { cn } from '@/lib/utils';
 import { getDefaultThumbnail } from './thumbnailHelpers';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripMap from '@/components/TripMap';
-import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare } from 'lucide-react';
+import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare, CalendarDays } from 'lucide-react';
 import TripNotes from '@/components/TripNotes';
 import TripChecklist from '@/components/TripDetails/TripChecklist';
+import TripCommandCenter from '@/components/TripDetails/TripCommandCenter';
+import InTripAssistant from '@/components/TripDetails/InTripAssistant';
 
 // Import icons
 import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
@@ -50,6 +53,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TripLoading from '@/components/ui/trip-loading';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
+import { generateTripInsights } from '@/services/tripInsights';
+import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/travelImportValidation';
+import { formatEventDateTime, getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
+import { api } from '@/services/api';
+import { hashText } from '@/utils/hash';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -73,6 +81,7 @@ const processText = (text: string | undefined | null): string => {
 };
 
 const NewTripDetails: React.FC = () => {
+  const navigate = useNavigate();
   const {
     trip,
     loading,
@@ -95,10 +104,17 @@ const NewTripDetails: React.FC = () => {
   const [isCondensedView, setIsCondensedView] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showToday, setShowToday] = useState(false);
   const [isAIParseModalOpen, setIsAIParseModalOpen] = useState(false);
   const [parseText, setParseText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [parsedCandidates, setParsedCandidates] = useState<ParsedEventCandidate[]>([]);
+  const [isAddingParsedEvents, setIsAddingParsedEvents] = useState(false);
+  const [activeTravelImportId, setActiveTravelImportId] = useState<string | null>(null);
+  const parseWarning = parsedCandidates.length === 1 && /Flight\s+1\s+of\s+\d+/i.test(parseText)
+    ? 'This looks like a multi-flight receipt, but only one event was extracted. Review the text or try parsing again before saving.'
+    : null;
   const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
@@ -109,6 +125,44 @@ const NewTripDetails: React.FC = () => {
   const [showChecklist, setShowChecklist] = useState(false);
   const [isAddingSuggestions, setIsAddingSuggestions] = useState(false);
   const [addingProgress, setAddingProgress] = useState(0);
+  const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
+  const tripInsights = useMemo(
+    () => trip ? generateTripInsights({ trip, events: trip.events }) : [],
+    [trip]
+  );
+  const visibleTripInsights = useMemo(
+    () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
+    [tripInsights, dismissedInsightIds]
+  );
+
+  useEffect(() => {
+    if (!trip?._id) return;
+
+    try {
+      const stored = localStorage.getItem(`dismissedTripInsights:${trip._id}`);
+      setDismissedInsightIds(stored ? JSON.parse(stored) : []);
+    } catch (error) {
+      console.warn('Failed to load dismissed trip insights:', error);
+      setDismissedInsightIds([]);
+    }
+  }, [trip?._id]);
+
+  const handleDismissInsight = (insightId: string) => {
+    if (!trip?._id) return;
+
+    setDismissedInsightIds(prev => {
+      const next = Array.from(new Set([...prev, insightId]));
+      localStorage.setItem(`dismissedTripInsights:${trip._id}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleRestoreDismissedInsights = () => {
+    if (!trip?._id) return;
+
+    localStorage.removeItem(`dismissedTripInsights:${trip._id}`);
+    setDismissedInsightIds([]);
+  };
 
   const handleAddEventClick = (type: EventType) => {
     setEditingEvent(null);
@@ -235,6 +289,7 @@ const NewTripDetails: React.FC = () => {
       const parsedEvents = await parseEventFromText({
         text: parseText,
         trip: {
+          _id: trip._id,
           name: trip.name,
           description: trip.description || '',
           startDate: trip.startDate,
@@ -250,21 +305,88 @@ const NewTripDetails: React.FC = () => {
       });
       
       // Handle both single event and array of events
-      const eventsToAdd = Array.isArray(parsedEvents) ? parsedEvents : [parsedEvents];
-      
-      // Add each event to the trip
-      for (const event of eventsToAdd) {
-        await handleSaveEvent(event);
+      const eventsToReview = Array.isArray(parsedEvents) ? parsedEvents : [parsedEvents];
+      const candidates = buildParsedEventCandidates(eventsToReview, trip.events);
+      setParsedCandidates(candidates);
+
+      try {
+        const sourceHash = await hashText(parseText);
+        const travelImport = await api.createTravelImport(trip._id, {
+          sourceType: 'manual_text',
+          sourceHash,
+          status: 'parsed',
+          model: 'gemini-2.5-flash',
+          parsedEvents: eventsToReview,
+          validationErrors: candidates.flatMap(candidate => candidate.validation.errors),
+        });
+        setActiveTravelImportId(travelImport._id);
+      } catch (historyError) {
+        console.warn('Failed to record travel import history:', historyError);
       }
-      
-      // Close the modal and reset state
-      setIsAIParseModalOpen(false);
-      setParseText('');
     } catch (error) {
       console.error('Error parsing text:', error);
-      setParseError(error instanceof Error ? error.message : 'Failed to parse text');
+      const message = error instanceof Error ? error.message : 'Failed to parse text';
+      setParseError(message);
+
+      try {
+        const sourceHash = await hashText(parseText);
+        await api.createTravelImport(trip._id, {
+          sourceType: 'manual_text',
+          sourceHash,
+          status: 'failed',
+          model: 'gemini-2.5-flash',
+          validationErrors: [message],
+        });
+      } catch (historyError) {
+        console.warn('Failed to record failed travel import:', historyError);
+      }
     } finally {
       setIsParsing(false);
+    }
+  };
+
+  const resetAIParseModal = () => {
+    setIsAIParseModalOpen(false);
+    setParseText('');
+    setParseError(null);
+    setParsedCandidates([]);
+    setActiveTravelImportId(null);
+  };
+
+  const handleAddParsedCandidates = async () => {
+    if (!trip) return;
+
+    const selectedCandidates = parsedCandidates.filter(candidate => candidate.selected && candidate.validation.valid);
+    if (selectedCandidates.length === 0) return;
+
+    try {
+      setIsAddingParsedEvents(true);
+      const createdEventIds: string[] = [];
+      for (const candidate of selectedCandidates) {
+        await handleSaveEvent(candidate.event);
+        createdEventIds.push(candidate.event.id);
+      }
+
+      if (activeTravelImportId) {
+        try {
+          await api.updateTravelImport(trip._id, activeTravelImportId, {
+            status: createdEventIds.length === selectedCandidates.length ? 'accepted' : 'partially_accepted',
+            createdEventIds,
+            validationErrors: parsedCandidates.flatMap(candidate => [
+              ...candidate.validation.errors,
+              ...candidate.validation.warnings,
+            ]),
+          });
+        } catch (historyError) {
+          console.warn('Failed to update travel import history:', historyError);
+        }
+      }
+      resetAIParseModal();
+    } catch (error) {
+      console.error('Error adding parsed events:', error);
+      setParseError(error instanceof Error ? error.message : 'Failed to add parsed events');
+    } finally {
+      setIsAddingParsedEvents(false);
     }
   };
 
@@ -341,22 +463,7 @@ const NewTripDetails: React.FC = () => {
   if (!trip) return <div className="p-4">Trip not found.</div>;
 
   // Sort events by startDate, earliest first
-  const sortedEvents = [...trip.events].sort((a, b) => {
-    // First compare by date
-    const dateA = new Date(a.startDate).getTime();
-    const dateB = new Date(b.startDate).getTime();
-    
-    if (dateA !== dateB) {
-      return dateA - dateB;
-    }
-    
-    // If dates are the same, compare by time
-    // Extract time parts for comparison
-    const timeA = a.startDate ? a.startDate.split('T')[1] || '00:00:00' : '00:00:00';
-    const timeB = b.startDate ? b.startDate.split('T')[1] || '00:00:00' : '00:00:00';
-    
-    return timeA.localeCompare(timeB);
-  });
+  const sortedEvents = sortEventsByStart(trip.events);
 
   // Update the CondensedEventCard component to include icons
   const CondensedEventCard: React.FC<{ event: Event; thumbnail: string }> = ({ event, thumbnail }) => {
@@ -746,6 +853,25 @@ const NewTripDetails: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <TripCommandCenter
+        trip={trip}
+        insights={visibleTripInsights}
+        canEdit={canEdit}
+        onOpenAIImport={() => setIsAIParseModalOpen(true)}
+        onOpenChecklist={() => setShowChecklist(true)}
+        onOpenExpenses={() => navigate(`/trips/${trip._id}/expenses`)}
+        onAddEvent={(eventType = 'stay') => handleAddEventClick(eventType)}
+        onEditEvent={(eventId) => {
+          const event = trip.events.find(tripEvent => tripEvent.id === eventId);
+          if (event) {
+            handleEditEventClick(event);
+          }
+        }}
+        onDismissInsight={handleDismissInsight}
+        dismissedInsightCount={dismissedInsightIds.length}
+        onRestoreDismissedInsights={handleRestoreDismissedInsights}
+      />
       
       {/* Add Event & View Options */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -809,6 +935,18 @@ const NewTripDetails: React.FC = () => {
               {isGeneratingSuggestions ? 'Generating...' : 'AI Suggestions'}
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowToday(true);
+              setShowChecklist(false);
+              setShowNotes(false);
+              setShowMap(false);
+            }}
+          >
+            <CalendarDays className="mr-2 h-4 w-4 text-blue-500" />
+            Today
+          </Button>
         </div>
         <div className="flex items-center space-x-2">
           <Label htmlFor="condensed-view" className="cursor-pointer">Condensed View</Label>
@@ -952,6 +1090,30 @@ const NewTripDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* Today Toggle Button */}
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "fixed bottom-[244px] right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          showToday ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
+        )}
+        onClick={() => {
+          setShowToday(!showToday);
+          if (!showToday) {
+            setShowChecklist(false);
+            setShowNotes(false);
+            setShowMap(false);
+          }
+        }}
+      >
+        {showToday ? (
+          <X className="h-8 w-8" />
+        ) : (
+          <CalendarDays className="h-8 w-8 text-blue-500" />
+        )}
+      </Button>
+
       {/* Checklist Toggle Button */}
       <Button
         variant="outline"
@@ -963,6 +1125,7 @@ const NewTripDetails: React.FC = () => {
         onClick={() => {
           setShowChecklist(!showChecklist);
           if (!showChecklist) {
+            setShowToday(false);
             setShowNotes(false);
             setShowMap(false);
           }
@@ -986,6 +1149,7 @@ const NewTripDetails: React.FC = () => {
         onClick={() => {
           setShowNotes(!showNotes);
           if (!showNotes) {
+            setShowToday(false);
             setShowChecklist(false);
             setShowMap(false);
           }
@@ -1009,6 +1173,7 @@ const NewTripDetails: React.FC = () => {
         onClick={() => {
           setShowMap(!showMap);
           if (!showMap) {
+            setShowToday(false);
             setShowChecklist(false);
             setShowNotes(false);
           }
@@ -1021,6 +1186,31 @@ const NewTripDetails: React.FC = () => {
         )}
       </Button>
 
+      {/* Today Assistant */}
+      {showToday && (
+        <div className={cn(
+          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
+          "bottom-0 inset-x-0 h-[85vh]",
+          "md:w-[440px] md:h-[640px] md:bottom-6 md:right-6 md:left-auto md:rounded-lg",
+          "bg-white border-gray-200"
+        )}>
+          <InTripAssistant
+            trip={trip}
+            insights={visibleTripInsights}
+            canEdit={canEdit}
+            onClose={() => setShowToday(false)}
+            onOpenChecklist={() => {
+              setShowToday(false);
+              setShowChecklist(true);
+            }}
+            onEditEvent={(event) => {
+              setShowToday(false);
+              handleEditEventClick(event);
+            }}
+          />
+        </div>
+      )}
+
       {/* Trip Checklist */}
       {showChecklist && (
         <div className={cn(
@@ -1031,6 +1221,7 @@ const NewTripDetails: React.FC = () => {
         )}>
           <TripChecklist 
             tripId={trip._id} 
+            trip={trip}
             canEdit={canEdit} 
             onClose={() => setShowChecklist(false)}
           />
@@ -1066,45 +1257,128 @@ const NewTripDetails: React.FC = () => {
       )}
 
       {/* AI Parse Modal */}
-      <Dialog open={isAIParseModalOpen} onOpenChange={setIsAIParseModalOpen}>
-        <DialogContent>
+      <Dialog
+        open={isAIParseModalOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setIsAIParseModalOpen(true);
+          } else {
+            resetAIParseModal();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[720px] max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Parse Event with AI</DialogTitle>
+            <DialogTitle>Import booking details</DialogTitle>
             <DialogDescription>
               Paste your event details, reservation email, or natural language description.
-              The AI will try to extract event information and create appropriate events.
+              The AI will extract event candidates for you to review before anything is saved.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="py-4">
+          <div className="py-4 space-y-4 overflow-y-auto pr-1">
             <Textarea
               placeholder="Paste your text here..."
               value={parseText}
-              onChange={(e) => setParseText(e.target.value)}
+              onChange={(e) => {
+                setParseText(e.target.value);
+                setParsedCandidates([]);
+              }}
               className="min-h-[200px]"
+              disabled={isParsing || isAddingParsedEvents}
             />
             {parseError && (
               <p className="mt-2 text-sm text-red-500">{parseError}</p>
+            )}
+            {parseWarning && (
+              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                {parseWarning}
+              </p>
+            )}
+
+            {parsedCandidates.length > 0 && (
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Review extracted events</h3>
+                  <p className="text-sm text-gray-500">
+                    Select the valid events you want to add. Candidates with errors must be fixed manually before they can be saved.
+                  </p>
+                </div>
+                {parsedCandidates.map((candidate, index) => {
+                  const start = getEventStart(candidate.event);
+                  const hasIssues = candidate.validation.errors.length > 0 || candidate.validation.warnings.length > 0;
+
+                  return (
+                    <div key={candidate.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={candidate.selected}
+                          disabled={!candidate.validation.valid || isAddingParsedEvents}
+                          onChange={(event) => {
+                            const nextCandidates = [...parsedCandidates];
+                            nextCandidates[index] = {
+                              ...candidate,
+                              selected: event.target.checked,
+                            };
+                            setParsedCandidates(nextCandidates);
+                          }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="font-medium text-gray-900">{getEventDisplayName(candidate.event)}</h4>
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                              {candidate.event.type.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">{formatEventDateTime(start)}</p>
+
+                          {hasIssues && (
+                            <div className="mt-3 space-y-1 text-sm">
+                              {candidate.validation.errors.map((error) => (
+                                <p key={error} className="text-red-600">Error: {error}</p>
+                              ))}
+                              {candidate.validation.warnings.map((warning) => (
+                                <p key={warning} className="text-amber-600">Warning: {warning}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
           
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => {
-                setIsAIParseModalOpen(false);
-                setParseText('');
-                setParseError(null);
-              }}
+              onClick={resetAIParseModal}
+              disabled={isParsing || isAddingParsedEvents}
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleAIParse}
-              disabled={!parseText.trim() || isParsing}
-            >
-              {isParsing ? 'Parsing...' : 'Parse Text'}
-            </Button>
+            {parsedCandidates.length === 0 ? (
+              <Button
+                onClick={handleAIParse}
+                disabled={!parseText.trim() || isParsing}
+              >
+                {isParsing ? 'Parsing...' : 'Parse Text'}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleAddParsedCandidates}
+                disabled={
+                  isAddingParsedEvents ||
+                  !parsedCandidates.some(candidate => candidate.selected && candidate.validation.valid)
+                }
+              >
+                {isAddingParsedEvents ? 'Adding...' : 'Add Selected Events'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

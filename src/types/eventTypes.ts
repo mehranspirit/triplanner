@@ -77,6 +77,7 @@ export interface Trip {
   _id: string;
   name: string;
   description?: string;
+  timezone?: string;
   startDate: string;
   endDate: string;
   events: Event[];

@@ -3,10 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { Trash2, Loader2, RefreshCw, AlertCircle, X } from 'lucide-react';
+import { Trash2, Loader2, RefreshCw, AlertCircle, X, Lightbulb, Plus } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { debounce } from 'lodash';
 import { networkAwareApi } from '../../services/networkAwareApi';
+import { Trip } from '@/types/eventTypes';
+import { generatePrepSuggestions } from '@/services/prepSuggestions';
 
 interface ChecklistItem {
   id: string;
@@ -25,6 +27,7 @@ type Checklist = ChecklistBin[];
 
 interface TripChecklistProps {
   tripId: string;
+  trip: Trip;
   canEdit: boolean;
   onClose: () => void;
 }
@@ -51,7 +54,7 @@ const checklistCache: ChecklistCache = {};
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const CACHE_VERSION = 1;
 
-const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit, onClose }) => {
+const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, trip, canEdit, onClose }) => {
   const [bins, setBins] = useState<Checklist>(initialBins);
   const [input, setInput] = useState('');
   const [newBinTitle, setNewBinTitle] = useState('');
@@ -59,9 +62,15 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit, onClose 
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'shared' | 'personal'>('shared');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<string[]>([]);
 
   // Determine endpoint based on tab
   const endpoint = activeTab === 'shared' ? 'shared' : 'personal';
+  const existingItemTexts = bins.flatMap((bin) => bin.items.map((item) => item.text));
+  const suggestedItems = generatePrepSuggestions({ trip, existingItems: existingItemTexts })
+    .filter((suggestion) => suggestion.scope === activeTab)
+    .filter((suggestion) => !dismissedSuggestionIds.includes(suggestion.id))
+    .slice(0, 3);
 
   // Check if cache is valid
   const isCacheValid = useCallback((entry: CacheEntry | undefined) => {
@@ -156,6 +165,15 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit, onClose 
     fetchBins();
   }, [tripId, endpoint, fetchBins]);
 
+  useEffect(() => {
+    const storedDismissals = localStorage.getItem(`dismissedPrepSuggestions:${tripId}:${activeTab}`);
+    try {
+      setDismissedSuggestionIds(storedDismissals ? JSON.parse(storedDismissals) : []);
+    } catch {
+      setDismissedSuggestionIds([]);
+    }
+  }, [tripId, activeTab]);
+
   // Socket.io setup
   useEffect(() => {
     const socket = io();
@@ -189,6 +207,28 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit, onClose 
     );
     setInput('');
     syncBins(nextBins);
+  };
+
+  const handleAcceptSuggestion = (suggestionId: string, title: string) => {
+    if (!canEdit) return;
+    const targetBin = bins[0] || { id: crypto.randomUUID(), title: 'To Do', items: [] };
+    const hasTargetBin = bins.some((bin) => bin.id === targetBin.id);
+    const nextBins = hasTargetBin
+      ? bins.map((bin) =>
+          bin.id === targetBin.id
+            ? { ...bin, items: [...bin.items, { id: crypto.randomUUID(), text: title, completed: false }] }
+            : bin
+        )
+      : [{ ...targetBin, items: [{ id: crypto.randomUUID(), text: title, completed: false }] }];
+
+    syncBins(nextBins);
+    handleDismissSuggestion(suggestionId);
+  };
+
+  const handleDismissSuggestion = (suggestionId: string) => {
+    const nextDismissed = Array.from(new Set([...dismissedSuggestionIds, suggestionId]));
+    localStorage.setItem(`dismissedPrepSuggestions:${tripId}:${activeTab}`, JSON.stringify(nextDismissed));
+    setDismissedSuggestionIds(nextDismissed);
   };
 
   // Toggle item completed
@@ -365,6 +405,48 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, canEdit, onClose 
           <button onClick={() => setError(null)} className="ml-auto">
             <X size={16} />
           </button>
+        </div>
+      )}
+
+      {canEdit && suggestedItems.length > 0 && (
+        <div className="border-b border-blue-100 bg-blue-50 p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-900">
+            <Lightbulb size={16} />
+            Suggested checklist items
+          </div>
+          <div className="space-y-2">
+            {suggestedItems.map((suggestion) => (
+              <div key={suggestion.id} className="rounded-md border border-blue-100 bg-white p-2">
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900">{suggestion.title}</p>
+                    <p className="mt-0.5 text-xs text-gray-600">{suggestion.reason}</p>
+                    {suggestion.dueDate && (
+                      <p className="mt-1 text-xs text-blue-700">Suggested by {suggestion.dueDate}</p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => handleAcceptSuggestion(suggestion.id, suggestion.title)}
+                  >
+                    <Plus size={14} className="mr-1" />
+                    Add
+                  </Button>
+                  <button
+                    type="button"
+                    className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    onClick={() => handleDismissSuggestion(suggestion.id)}
+                    aria-label={`Dismiss ${suggestion.title}`}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

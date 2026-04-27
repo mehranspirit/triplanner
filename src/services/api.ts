@@ -5,6 +5,7 @@ import { API_URL } from '../config';
 import { getHeaders } from '../utils/api.ts';
 import { Expense, Settlement, ExpenseSummary } from '../types/expenseTypes';
 import { DreamTrip } from '../types/dreamTripTypes';
+import { CreateTravelImportRequest, TravelImport, UpdateTravelImportRequest } from '../types/travelImportTypes';
 
 type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
 
@@ -75,6 +76,9 @@ interface API {
   updateDreamTripCollaboratorRole: (tripId: string, userId: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
   getTripNotes: (tripId: string) => Promise<TripNote>;
   updateTripNotes: (tripId: string, content: string) => Promise<TripNote>;
+  getTravelImports: (tripId: string) => Promise<TravelImport[]>;
+  createTravelImport: (tripId: string, data: CreateTravelImportRequest) => Promise<TravelImport>;
+  updateTravelImport: (tripId: string, importId: string, data: UpdateTravelImportRequest) => Promise<TravelImport>;
 }
 
 // Add helper after imports near top
@@ -200,6 +204,7 @@ export const api: API = {
         _id: trip._id,
         name: trip.name,
         description: trip.description,
+        timezone: trip.timezone,
         thumbnailUrl: trip.thumbnailUrl,
         startDate: trip.startDate,
         endDate: trip.endDate,
@@ -250,6 +255,7 @@ export const api: API = {
       _id: trip._id,
       name: trip.name,
       description: trip.description,
+      timezone: trip.timezone,
       thumbnailUrl: trip.thumbnailUrl,
       startDate: trip.startDate,
       endDate: trip.endDate,
@@ -354,6 +360,7 @@ export const api: API = {
       name: createdTrip.name,
       thumbnailUrl: createdTrip.thumbnailUrl,
       description: createdTrip.description,
+      timezone: createdTrip.timezone,
       startDate: createdTrip.startDate,
       endDate: createdTrip.endDate,
       owner: {
@@ -1053,6 +1060,43 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to update trip notes');
+    }
+    return response.json();
+  },
+
+  getTravelImports: async (tripId: string): Promise<TravelImport[]> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/imports`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch travel imports');
+    }
+    return response.json();
+  },
+
+  createTravelImport: async (tripId: string, data: CreateTravelImportRequest): Promise<TravelImport> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/imports`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to create travel import');
+    }
+    return response.json();
+  },
+
+  updateTravelImport: async (tripId: string, importId: string, data: UpdateTravelImportRequest): Promise<TravelImport> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/imports/${importId}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to update travel import');
     }
     return response.json();
   },

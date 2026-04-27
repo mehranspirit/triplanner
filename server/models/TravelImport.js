@@ -1,0 +1,54 @@
+const mongoose = require('mongoose');
+
+const travelImportSchema = new mongoose.Schema({
+  tripId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Trip',
+    required: true,
+    index: true
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  sourceType: {
+    type: String,
+    enum: ['email_text', 'pdf_text', 'manual_text', 'image_text'],
+    default: 'manual_text'
+  },
+  sourceHash: {
+    type: String,
+    trim: true
+  },
+  status: {
+    type: String,
+    enum: ['parsed', 'failed', 'accepted', 'partially_accepted'],
+    required: true,
+    default: 'parsed'
+  },
+  model: {
+    type: String,
+    trim: true
+  },
+  parsedEvents: [{
+    type: mongoose.Schema.Types.Mixed
+  }],
+  validationErrors: [{
+    type: String,
+    trim: true
+  }],
+  createdEventIds: [{
+    type: String,
+    trim: true
+  }]
+}, {
+  timestamps: true
+});
+
+travelImportSchema.index({ tripId: 1, createdAt: -1 });
+travelImportSchema.index({ userId: 1, createdAt: -1 });
+travelImportSchema.index({ sourceHash: 1, tripId: 1 });
+
+module.exports = mongoose.model('TravelImport', travelImportSchema);

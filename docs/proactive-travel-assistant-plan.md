@@ -886,12 +886,12 @@ interface Event {
 
 ### Tasks
 
-1. Audit all event types and their current date/time fields.
-2. Add normalization helpers in `src/utils/eventTime.ts`.
-3. Replace ad hoc date parsing in insights, calendar, and command center.
-4. Add trip-level timezone setting.
-5. Add per-event timezone override later.
-6. Add migration/backfill path for existing events if canonical fields are persisted.
+1. [ ] Audit all event types and their current date/time fields.
+2. [x] Add normalization helpers in `src/utils/eventTime.ts`.
+3. [ ] Replace ad hoc date parsing in insights, calendar, and command center.
+4. [x] Add trip-level timezone setting.
+5. [ ] Add per-event timezone override later.
+6. [ ] Add migration/backfill path for existing events if canonical fields are persisted.
 
 ### Acceptance Criteria
 
@@ -986,14 +986,14 @@ For a group trip:
 
 ### Tasks
 
-1. Add deterministic prep suggestion service.
-2. Add "Suggested checklist items" panel in Trip Checklist.
-3. Let users accept suggestions into shared/personal checklist.
-4. Deduplicate against existing checklist items.
-5. Add due dates to checklist items.
-6. Add assignments later.
-7. Persist accepted/dismissed prep suggestions in MongoDB once the backend model exists.
-8. Use Render backend for AI-generated custom prep lists after deterministic suggestions exist.
+1. [x] Add deterministic prep suggestion service.
+2. [x] Add "Suggested checklist items" panel in Trip Checklist.
+3. [x] Let users accept suggestions into shared/personal checklist.
+4. [x] Deduplicate against existing checklist items.
+5. [ ] Add due dates to checklist items.
+6. [ ] Add assignments later.
+7. [ ] Persist accepted/dismissed prep suggestions in MongoDB once the backend model exists.
+8. [ ] Use Render backend for AI-generated custom prep lists after deterministic suggestions exist.
 
 ### Acceptance Criteria
 
@@ -1073,15 +1073,15 @@ During the trip:
 
 ### Tasks
 
-1. Build `InTripAssistant` component.
-2. Reuse insight engine for warnings.
-3. Reuse event time normalization.
-4. Add active trip detection.
-5. Add offline-first data access.
-6. Add quick actions for navigation, copy address, copy confirmation number, add expense, open checklist.
-7. Add a route such as `/trips/:id/today` or a prominent "Today" tab in trip details.
-8. Cache the next 48 hours of critical trip data in IndexedDB.
-9. Add "copy confirmation" and "open maps" mobile affordances.
+1. [x] Build `InTripAssistant` component.
+2. [x] Reuse insight engine for warnings.
+3. [x] Reuse event time normalization.
+4. [x] Add active trip detection.
+5. [ ] Add offline-first data access.
+6. [ ] Add quick actions for navigation, copy address, copy confirmation number, add expense, open checklist.
+7. [x] Add a route such as `/trips/:id/today` or a prominent "Today" tab in trip details.
+8. [ ] Cache the next 48 hours of critical trip data in IndexedDB.
+9. [x] Add "copy confirmation" and "open maps" mobile affordances.
 
 ### Acceptance Criteria
 
@@ -1212,12 +1212,12 @@ These should be hosted on the Render backend.
 
 ### Tasks
 
-1. Add backend AI service wrapper.
-2. Move Gemini API key to server env.
+1. [x] Add backend AI service wrapper.
+2. [x] Move Gemini API key to server env.
 3. Add structured response validation with `zod`.
 4. Add error mapping for quota, model errors, malformed JSON, safety blocks.
 5. Add redacted debug logging.
-6. Update frontend `aiService.ts` to call backend endpoints.
+6. [x] Update frontend `aiService.ts` to call backend endpoints.
 7. Add model fallback config.
 8. Add rate limiting per user.
 9. Add MongoDB persistence for AI parse/import attempts.
@@ -1561,8 +1561,8 @@ Outcome:
 Scope:
 
 - Event time helpers.
-- Trip timezone setting.
-- Use helpers in insights and Command Center.
+- Trip timezone setting. Completed locally with editable `trip.timezone`.
+- Use helpers in insights and Command Center. In progress; Command Center now formats with the trip timezone.
 
 Estimated effort: medium.
 
@@ -1656,19 +1656,25 @@ Build Milestone 0, Milestone 1, and the first half of Milestone 2.
 
 ### Sprint Tasks
 
-1. Add docs/config notes for Vercel public env vs Render secret env.
-2. Add `TripInsight` types.
-3. Add `eventTime` helpers.
-4. Add `generateTripInsights`.
-5. Implement missing-field insights.
-6. Implement overlap insights.
-7. Implement next/current event helpers.
-8. Add `TripCommandCenter`.
-9. Wire Command Center into `NewTripDetails`.
-10. Change AI parse flow to show candidates before saving.
-11. Add candidate validation for required fields.
-12. Add duplicate detection helper.
-13. Create MongoDB `TravelImport` model if import history is included in the sprint.
+- [x] Add docs/config notes for Vercel public env vs Render secret env.
+- [x] Add `TripInsight` types.
+- [x] Add `eventTime` helpers.
+- [x] Add `generateTripInsights`.
+- [x] Implement missing-field insights.
+- [x] Implement overlap insights.
+- [x] Implement next/current event helpers.
+- [x] Add `TripCommandCenter`.
+- [x] Wire Command Center into `NewTripDetails`.
+- [x] Change AI parse flow to show candidates before saving.
+- [x] Add candidate validation for required fields.
+- [x] Add duplicate detection helper.
+- [x] Create MongoDB `TravelImport` model if import history is included in the sprint.
+- [x] Tighten round-trip flight parsing prompt and warn when a multi-flight receipt returns only one candidate.
+- [x] Update flight receipt parsing to create full flight-segment events so origin departures appear in the trip timeline.
+- [x] Persist Travel Import parse status and accepted event IDs without storing raw pasted text.
+- [x] Add a Command Center nudge to plan ground transport after flight arrivals.
+- [x] Add local per-trip dismissal for Command Center insights.
+- [x] Route Command Center insight actions to the relevant event editor or add-event modal.
 
 ### Definition Of Done
 

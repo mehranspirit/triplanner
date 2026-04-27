@@ -1,19 +1,8 @@
 const path = require('path');
-const fs = require('fs');
 
 const envPath = path.join(__dirname, '.env');
-console.log('Loading .env from:', envPath);
-console.log('File exists:', fs.existsSync(envPath));
-if (fs.existsSync(envPath)) {
-  console.log('File contents:', fs.readFileSync(envPath, 'utf8'));
-}
-
 require('dotenv').config({ path: envPath });
-
-// Log all environment variables
-console.log('All environment variables:', Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => !key.includes('SECRET') && !key.includes('KEY'))
-));
+console.log('Loaded server environment configuration');
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -24,6 +13,8 @@ const activitiesRoutes = require('./routes/activities');
 const aiSuggestionsRoutes = require('./routes/aiSuggestions');
 const expenseRoutes = require('./routes/expenses');
 const notesRoutes = require('./routes/notes');
+const importsRoutes = require('./routes/imports');
+const aiParserRoutes = require('./routes/aiParser');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
@@ -203,6 +194,12 @@ app.use('/api', expenseRoutes);
 // Mount notes routes
 app.use('/api', notesRoutes);
 
+// Mount travel import routes
+app.use('/api', importsRoutes);
+
+// Mount server-side AI parser routes
+app.use('/api', aiParserRoutes);
+
 // Mount dream trips routes
 app.use('/api/trips/dream', dreamTripsRouter);
 
@@ -370,6 +367,7 @@ app.post('/api/trips', auth, async (req, res) => {
       collaborators: [],
       isPublic: false,
       description: req.body.description || '',
+      timezone: req.body.timezone || undefined,
       startDate: req.body.startDate || null,
       endDate: req.body.endDate || null
     });
@@ -400,6 +398,7 @@ app.post('/api/trips', auth, async (req, res) => {
       events: populatedTrip.events || [],
       collaborators: populatedTrip.collaborators || [],
       description: populatedTrip.description || '',
+      timezone: populatedTrip.timezone || undefined,
       startDate: populatedTrip.startDate || null,
       endDate: populatedTrip.endDate || null,
       isPublic: populatedTrip.isPublic || false,
@@ -596,6 +595,11 @@ app.put('/api/trips/:id', auth, async (req, res) => {
     if (req.body.description !== trip.description) {
       changedFields.push('description');
       trip.description = req.body.description;
+    }
+
+    if (req.body.timezone !== trip.timezone) {
+      changedFields.push('timezone');
+      trip.timezone = req.body.timezone || undefined;
     }
     
     if (req.body.thumbnailUrl !== trip.thumbnailUrl) {

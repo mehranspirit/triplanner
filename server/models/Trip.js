@@ -183,6 +183,11 @@ const tripSchema = new mongoose.Schema({
   },
   thumbnailUrl: String,
   description: String,
+  timezone: {
+    type: String,
+    trim: true,
+    default: undefined
+  },
   note: tripNoteSchema,
   events: [eventSchema],
   owner: {
