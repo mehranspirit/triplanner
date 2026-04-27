@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const NotificationPreference = require('../models/NotificationPreference');
+const { getTripFlightStatuses } = require('./flightStatus');
 
 const parseEventDateTime = (dateValue, timeValue) => {
   if (!dateValue) return null;
@@ -88,7 +89,74 @@ const toNotification = ({ userId, tripId, ...notification }) => ({
   ...notification
 });
 
-const buildCandidateNotifications = ({ trip, userId, now = new Date() }) => {
+const buildFlightStatusNotifications = ({ trip, userId, flightStatusSnapshots = [] }) => {
+  const eventsById = new Map((trip.events || []).map((event) => [event.id, event]));
+  const notifications = [];
+
+  flightStatusSnapshots.forEach((snapshot) => {
+    const event = eventsById.get(snapshot.eventId);
+    if (!event) return;
+
+    const normalizedStatus = (snapshot.status || '').toLowerCase();
+    const departureDelay = snapshot.departure?.delayMinutes || 0;
+    const arrivalDelay = snapshot.arrival?.delayMinutes || 0;
+    const delayMinutes = Math.max(departureDelay, arrivalDelay);
+    const gateInfo = [
+      snapshot.departure?.terminal ? `terminal ${snapshot.departure.terminal}` : null,
+      snapshot.departure?.gate ? `gate ${snapshot.departure.gate}` : null
+    ].filter(Boolean).join(', ');
+
+    if (/cancel/.test(normalizedStatus)) {
+      notifications.push(toNotification({
+        userId,
+        tripId: trip._id,
+        eventId: event.id,
+        dedupeKey: `flight-cancelled:${event.id}:${snapshot.dateLocal}`,
+        type: 'reminder',
+        severity: 'critical',
+        title: 'Flight may be cancelled',
+        message: `${getEventName(event)} is showing status "${snapshot.status}". Check with the airline before heading to the airport.`,
+        actionLabel: 'Open Today',
+        actionTarget: 'today'
+      }));
+      return;
+    }
+
+    if (delayMinutes >= 30 || /delay/.test(normalizedStatus)) {
+      notifications.push(toNotification({
+        userId,
+        tripId: trip._id,
+        eventId: event.id,
+        dedupeKey: `flight-delayed:${event.id}:${snapshot.dateLocal}`,
+        type: 'reminder',
+        severity: delayMinutes >= 90 ? 'warning' : 'info',
+        title: 'Flight delay reported',
+        message: `${getEventName(event)} is showing ${delayMinutes ? `about ${delayMinutes} minutes of delay` : `status "${snapshot.status}"`}. Recheck connections, airport pickup, and arrival plans.`,
+        actionLabel: 'Open Today',
+        actionTarget: 'today'
+      }));
+    }
+
+    if (gateInfo) {
+      notifications.push(toNotification({
+        userId,
+        tripId: trip._id,
+        eventId: event.id,
+        dedupeKey: `flight-gate:${event.id}:${snapshot.dateLocal}:${gateInfo}`,
+        type: 'reminder',
+        severity: 'info',
+        title: 'Flight gate details available',
+        message: `${getEventName(event)} currently shows departure ${gateInfo}. Verify in the airline app before boarding.`,
+        actionLabel: 'Open Today',
+        actionTarget: 'today'
+      }));
+    }
+  });
+
+  return notifications;
+};
+
+const buildCandidateNotifications = async ({ trip, userId, now = new Date() }) => {
   const tripId = trip._id;
   const events = trip.events || [];
   const notifications = [];
@@ -161,7 +229,15 @@ const buildCandidateNotifications = ({ trip, userId, now = new Date() }) => {
     }
   });
 
-  return notifications;
+  const flightStatuses = await getTripFlightStatuses({ trip });
+  return [
+    ...notifications,
+    ...buildFlightStatusNotifications({
+      trip,
+      userId,
+      flightStatusSnapshots: flightStatuses.snapshots || []
+    })
+  ];
 };
 
 const generateTripNotifications = async ({ trip, userId }) => {
@@ -169,7 +245,7 @@ const generateTripNotifications = async ({ trip, userId }) => {
   const inAppEnabled = preferences?.inAppEnabled !== false;
   const disabledTypes = new Set(preferences?.disabledTypes || []);
   const candidates = inAppEnabled
-    ? buildCandidateNotifications({ trip, userId }).filter((candidate) => !disabledTypes.has(candidate.type))
+    ? (await buildCandidateNotifications({ trip, userId })).filter((candidate) => !disabledTypes.has(candidate.type))
     : [];
   const activeDedupeKeys = candidates.map((candidate) => candidate.dedupeKey);
 

@@ -1273,8 +1273,14 @@ Use trip context and user behavior to suggest better actions.
 1. Persist accepted/rejected structured suggestions.
 2. Add preference signals model.
 3. Add context builder for AI prompts.
-4. Add deterministic filters before showing suggestions.
+4. [x] Add deterministic filters before showing suggestions.
 5. Add feedback UI on suggestions.
+
+Initial deterministic suggestions:
+
+- Weather-aware suggestions add backup activity, re-timing, or review actions.
+- Short trips now detect open itinerary days and suggest adding an activity.
+- Busy days with many scheduled items now surface a pacing review insight.
 
 ### Acceptance Criteria
 
@@ -1310,11 +1316,21 @@ User experience unlocked:
 
 Implementation tasks:
 
-1. Add provider abstraction in `server/services/external/flights/`.
-2. Store flight status snapshots in MongoDB.
-3. Match flight status to event flight number/date.
-4. Generate insights and reminders from status changes.
+1. [x] Add provider abstraction in `server/services/external/flights/`.
+2. [x] Store flight status snapshots in MongoDB.
+3. [x] Match flight status to event flight number/date.
+4. [x] Generate insights and reminders from status changes.
 5. Avoid polling every flight too frequently; poll only upcoming active flights.
+
+Initial implementation:
+
+- Supports `aviationstack` and `aerodatabox` providers.
+- Defaults to Aviationstack because its free tier is easier to start with.
+- Set `FLIGHT_STATUS_PROVIDER=aviationstack` and `AVIATIONSTACK_API_KEY` in the Render/server environment.
+- For AeroDataBox fallback, set `FLIGHT_STATUS_PROVIDER=aerodatabox`, `AERODATABOX_API_KEY`, and optionally `AERODATABOX_API_HOST` / `AERODATABOX_API_URL`.
+- Caches `FlightStatusSnapshot` records for 20 minutes.
+- Surfaces status, delay, terminal, and gate details on flight event cards and Command Center insights.
+- Generates in-app notifications for cancelled flights, delayed flights, and available gate/terminal details.
 
 #### Maps, Places, And Geocoding
 
@@ -1361,8 +1377,15 @@ Implementation tasks:
 
 1. Add route estimate adapter.
 2. Cache route estimates by origin/destination/mode.
-3. Use route estimates in insight engine.
-4. Surface warnings in Command Center and Today view.
+3. [x] Use approximate route estimates in insight engine.
+4. [x] Surface warnings in Command Center.
+
+Initial implementation:
+
+- Uses geocoded event coordinates to estimate same-day transfer distance and travel time.
+- Flags tight buffers between consecutive scheduled events.
+- Flags long same-day transfers that may need explicit travel planning.
+- Uses deterministic estimates only; provider-backed route estimates can replace this later.
 
 #### Weather
 
@@ -1382,10 +1405,20 @@ User experience unlocked:
 
 Implementation tasks:
 
-1. Add weather adapter on Render.
-2. Cache forecast by location/date.
-3. Connect weather to activity/location events.
-4. Generate weather insights only for upcoming/active trip days.
+1. [x] Add weather adapter on Render.
+2. [x] Cache forecast by location/date.
+3. [x] Connect weather to activity/location events.
+4. [x] Generate weather insights only for upcoming/active trip days.
+
+Initial implementation:
+
+- Uses Open-Meteo as a no-key provider for daily forecasts.
+- Stores `WeatherSnapshot` records by trip, event, provider, and date.
+- Fetches weather for geocoded stay, destination, activity, arrival, departure, and flight endpoint locations inside the provider forecast window.
+- Converts rain, heat, and wind conditions into deterministic Command Center insights.
+- Weather insights now suggest concrete actions: add an indoor backup activity for rainy outdoor plans, edit timing for heat, and review outdoor plans for wind.
+- Timeline event cards and the Today drawer surface compact forecasts from the same snapshots.
+- Does not block core itinerary access if the weather provider fails.
 
 #### Documents, Email, And OCR
 

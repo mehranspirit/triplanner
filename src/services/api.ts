@@ -12,6 +12,8 @@ import {
   UpdateNotificationPreferenceRequest,
   UpdateNotificationRequest
 } from '../types/notificationTypes';
+import { TripWeatherResponse } from '../types/weatherTypes';
+import { TripFlightStatusesResponse } from '../types/flightStatusTypes';
 
 type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
 
@@ -90,6 +92,8 @@ interface API {
   getNotificationPreferences: (tripId: string) => Promise<NotificationPreference>;
   updateNotificationPreferences: (tripId: string, data: UpdateNotificationPreferenceRequest) => Promise<NotificationPreference>;
   geocodeTripEvents: (tripId: string) => Promise<{ trip: Trip; updatedCount: number; results: unknown[] }>;
+  getTripWeather: (tripId: string, options?: { refresh?: boolean }) => Promise<TripWeatherResponse>;
+  getTripFlightStatuses: (tripId: string, options?: { refresh?: boolean }) => Promise<TripFlightStatusesResponse>;
 }
 
 // Add helper after imports near top
@@ -1178,6 +1182,34 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to improve event locations');
+    }
+    return response.json();
+  },
+
+  getTripWeather: async (tripId: string, options = {}): Promise<TripWeatherResponse> => {
+    const params = new URLSearchParams();
+    if (options.refresh) params.set('refresh', 'true');
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/weather${query}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch trip weather');
+    }
+    return response.json();
+  },
+
+  getTripFlightStatuses: async (tripId: string, options = {}): Promise<TripFlightStatusesResponse> => {
+    const params = new URLSearchParams();
+    if (options.refresh) params.set('refresh', 'true');
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/flight-statuses${query}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch flight statuses');
     }
     return response.json();
   },

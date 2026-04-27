@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import type { Map as LeafletMap } from 'leaflet';
 import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '@/types/eventTypes';
+import { sortEventsByStart } from '@/utils/eventTime';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -69,6 +70,7 @@ interface Location {
   lon: number;
   displayName: string;
   event: Event;
+  endpointRole?: 'departure' | 'arrival' | 'single';
 }
 
 interface RouteInfo {
@@ -162,7 +164,7 @@ const extractMapRelevantData = (trip: Trip) => {
   return {
     id: trip._id,
     name: trip.name,
-    events: trip.events.map(event => ({
+    events: sortEventsByStart(trip.events).map(event => ({
       id: event.id,
       type: event.type,
       startDate: event.startDate,
@@ -233,16 +235,56 @@ const fetchWithRetry = async (url: string, retries = MAX_RETRIES, delay = RATE_L
 const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
+  const [unmappedEvents, setUnmappedEvents] = useState<{ eventId: string; label: string; reason: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const mapRef = useRef<LeafletMap | null>(null);
   const loadingRef = useRef<boolean>(true); // Add ref to track loading state
+  const routeEndpointEventTypes = new Set<EventType>(['flight', 'train', 'bus', 'rental_car']);
+
+  const attachEventToLocation = (
+    location: Location,
+    event: Event,
+    endpointRole: Location['endpointRole'] = 'single'
+  ): Location => ({
+    ...location,
+    endpointRole,
+    event: {
+      ...event,
+      createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as Event,
+  });
   
   // Extract only the data needed for the map to prevent unnecessary re-renders
   const mapRelevantData = useMemo(() => extractMapRelevantData(trip), [
     trip._id,
     trip.name,
-    trip.events.map(event => `${event.id}-${event.status}-${event.type}-${event.startDate}-${event.endDate}-${event.location?.lat}-${event.location?.lng}`).join(',')
+    trip.events.map(event => {
+      const eventData = event as any;
+      return [
+        event.id,
+        event.status,
+        event.type,
+        event.startDate,
+        event.endDate,
+        event.location?.lat,
+        event.location?.lng,
+        event.location?.address,
+        eventData.address,
+        eventData.airport,
+        eventData.accommodationName,
+        eventData.placeName,
+        eventData.departureAirport,
+        eventData.arrivalAirport,
+        eventData.departureStation,
+        eventData.arrivalStation,
+        eventData.pickupLocation,
+        eventData.dropoffLocation
+      ].join('-');
+    }).join(',')
   ]);
 
   // Add cleanup effect
@@ -383,6 +425,30 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     }
   };
 
+  const getEventMapLabel = (event: Partial<Event> & Record<string, any>) => {
+    switch (event.type) {
+      case 'stay':
+        return event.accommodationName || 'Stay';
+      case 'destination':
+        return event.placeName || 'Destination';
+      case 'activity':
+        return event.title || 'Activity';
+      case 'flight':
+        return event.flightNumber ? `Flight ${event.flightNumber}` : 'Flight';
+      case 'train':
+        return event.trainNumber ? `Train ${event.trainNumber}` : 'Train';
+      case 'bus':
+        return event.busNumber ? `Bus ${event.busNumber}` : 'Bus';
+      case 'rental_car':
+        return event.carCompany ? `${event.carCompany} rental car` : 'Rental car';
+      case 'arrival':
+      case 'departure':
+        return `${event.type} ${event.airport || ''}`.trim();
+      default:
+        return event.type || 'Event';
+    }
+  };
+
   // Helper function to calculate distance between two points
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371; // Earth's radius in km
@@ -453,12 +519,16 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
 
   const fetchTripLocation = async (tripName: string): Promise<Location | null> => {
     try {
-      const keywords = tripName
+      const cleanedKeywords = tripName
         .toLowerCase()
         .replace(/[^\w\s]/g, '')
         .split(' ')
         .filter(word => !['trip', 'to', 'in', 'at', 'the', 'a', 'an'].includes(word))
         .join(' ');
+      const keywords = tripName.trim() || cleanedKeywords;
+      const fallbackKeywords = cleanedKeywords && cleanedKeywords !== keywords.toLowerCase()
+        ? cleanedKeywords
+        : '';
         
       const cacheKey = getLocationCacheKey(keywords);
       if (locationCache[cacheKey] && isCacheValid(locationCache[cacheKey].timestamp, LOCATION_CACHE_DURATION)) {
@@ -482,17 +552,21 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       
       try {
-      const response = await fetchWithRetry(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(keywords)}`
-      );
+      const fetchLocationData = async (query: string) => {
+        const response = await fetchWithRetry(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`
+        );
+        const data = await response.json();
+        return Array.isArray(data) && data.length > 0 ? data[0] : null;
+      };
 
-      const data = await response.json();
+      const result = await fetchLocationData(keywords) || (fallbackKeywords ? await fetchLocationData(fallbackKeywords) : null);
       
-      if (data && data.length > 0) {
+      if (result) {
         const locationData = {
-          lat: parseFloat(data[0].lat),
-          lon: parseFloat(data[0].lon),
-            displayName: data[0].display_name,
+          lat: parseFloat(result.lat),
+          lon: parseFloat(result.lon),
+            displayName: result.display_name,
             timestamp: Date.now()
         };
         
@@ -536,12 +610,13 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         // Process locations sequentially to avoid rate limiting
         const processLocations = async () => {
           const results: (Location | Location[] | null)[] = [];
+          const skippedEvents: { eventId: string; label: string; reason: string }[] = [];
           
           for (const event of mapRelevantData.events) {
             // Check if loading should continue
             if (!loadingRef.current) {
               console.log('Loading stopped - map module closed');
-              return results;
+              return { results, skippedEvents };
             }
 
             try {
@@ -549,8 +624,9 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           let departureLocation = null;
           let arrivalLocation = null;
           
-          // If event has direct coordinates, use them
-          if (event.location?.lat && event.location?.lng) {
+          // If event has direct coordinates, use them. Transport events with
+          // departure/arrival endpoints still need both endpoints for routing.
+          if (event.location?.lat && event.location?.lng && !routeEndpointEventTypes.has(event.type)) {
             let displayName = 'Location';
             
             switch (event.type) {
@@ -568,6 +644,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               lat: event.location.lat,
               lon: event.location.lng,
               displayName,
+              endpointRole: 'single',
               event: {
                 ...event,
                 createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -596,8 +673,18 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               departureLocation = await fetchTripLocation(flightEvent.departureAirport || '');
                   await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
               arrivalLocation = await fetchTripLocation(flightEvent.arrivalAirport || '');
-              if (departureLocation && arrivalLocation) {
-                    results.push([departureLocation, arrivalLocation]);
+              const endpointLocations = [
+                departureLocation ? attachEventToLocation(departureLocation, event as unknown as Event, 'departure') : null,
+                arrivalLocation ? attachEventToLocation(arrivalLocation, event as unknown as Event, 'arrival') : null,
+              ].filter((location): location is Location => location !== null);
+              if (endpointLocations.length > 0) {
+                results.push(endpointLocations);
+              } else {
+                skippedEvents.push({
+                  eventId: event.id,
+                  label: getEventMapLabel(event),
+                  reason: 'Could not map flight airports'
+                });
               }
                   continue;
             }
@@ -606,24 +693,18 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               departureLocation = await fetchTripLocation(trainEvent.departureStation || '');
                   await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
               arrivalLocation = await fetchTripLocation(trainEvent.arrivalStation || '');
-              if (departureLocation && arrivalLocation) {
-                departureLocation.event = {
-                  ...event,
-                  ...trainEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                arrivalLocation.event = {
-                  ...event,
-                  ...trainEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                    results.push([departureLocation, arrivalLocation]);
+              const endpointLocations = [
+                departureLocation ? attachEventToLocation(departureLocation, event as unknown as Event, 'departure') : null,
+                arrivalLocation ? attachEventToLocation(arrivalLocation, event as unknown as Event, 'arrival') : null,
+              ].filter((location): location is Location => location !== null);
+              if (endpointLocations.length > 0) {
+                results.push(endpointLocations);
+              } else {
+                skippedEvents.push({
+                  eventId: event.id,
+                  label: getEventMapLabel(event),
+                  reason: 'Could not map train stations'
+                });
               }
                   continue;
             }
@@ -632,8 +713,18 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               departureLocation = await fetchTripLocation(carEvent.pickupLocation || '');
                   await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
               arrivalLocation = await fetchTripLocation(carEvent.dropoffLocation || '');
-              if (departureLocation && arrivalLocation) {
-                    results.push([departureLocation, arrivalLocation]);
+              const endpointLocations = [
+                departureLocation ? attachEventToLocation(departureLocation, event as unknown as Event, 'departure') : null,
+                arrivalLocation ? attachEventToLocation(arrivalLocation, event as unknown as Event, 'arrival') : null,
+              ].filter((location): location is Location => location !== null);
+              if (endpointLocations.length > 0) {
+                results.push(endpointLocations);
+              } else {
+                skippedEvents.push({
+                  eventId: event.id,
+                  label: getEventMapLabel(event),
+                  reason: 'Could not map rental car locations'
+                });
               }
                   continue;
             }
@@ -642,30 +733,31 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               departureLocation = await fetchTripLocation(busEvent.departureStation || '');
                   await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
               arrivalLocation = await fetchTripLocation(busEvent.arrivalStation || '');
-              if (departureLocation && arrivalLocation) {
-                departureLocation.event = {
-                  ...event,
-                  ...busEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                arrivalLocation.event = {
-                  ...event,
-                  ...busEvent,
-                  createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                } as Event;
-                    results.push([departureLocation, arrivalLocation]);
+              const endpointLocations = [
+                departureLocation ? attachEventToLocation(departureLocation, event as unknown as Event, 'departure') : null,
+                arrivalLocation ? attachEventToLocation(arrivalLocation, event as unknown as Event, 'arrival') : null,
+              ].filter((location): location is Location => location !== null);
+              if (endpointLocations.length > 0) {
+                results.push(endpointLocations);
+              } else {
+                skippedEvents.push({
+                  eventId: event.id,
+                  label: getEventMapLabel(event),
+                  reason: 'Could not map bus stations'
+                });
               }
                   continue;
             }
           }
 
-              if (!searchQuery) continue;
+              if (!searchQuery) {
+                skippedEvents.push({
+                  eventId: event.id,
+                  label: getEventMapLabel(event),
+                  reason: 'No map location provided'
+                });
+                continue;
+              }
           
           // Check cache first
           const cacheKey = getLocationCacheKey(searchQuery);
@@ -687,7 +779,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                 // Check if loading should continue before making API call
                 if (!loadingRef.current) {
                   console.log('Loading stopped before API call - map module closed');
-                  return results;
+                  return { results, skippedEvents };
                 }
 
                 await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
@@ -699,7 +791,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                 // Check if loading should continue after API call
                 if (!loadingRef.current) {
                   console.log('Loading stopped after API call - map module closed');
-                  return results;
+                  return { results, skippedEvents };
             }
 
             const data = await response.json();
@@ -725,6 +817,12 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                   updatedAt: new Date().toISOString(),
                 } as Event
                   });
+            } else {
+              skippedEvents.push({
+                eventId: event.id,
+                label: getEventMapLabel(event),
+                reason: `No map result for "${searchQuery}"`
+              });
             }
           } catch (err) {
             console.warn(`Error fetching location for ${searchQuery}:`, err);
@@ -734,15 +832,16 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
             }
           }
           
-          return results;
+          return { results, skippedEvents };
         };
 
-        const results = await processLocations();
+        const { results, skippedEvents } = await processLocations();
         
         // Only update state if loading wasn't stopped
         if (loadingRef.current) {
         const validLocations = results.flat().filter((loc): loc is Location => loc !== null);
         setLocations(validLocations);
+        setUnmappedEvents(skippedEvents);
 
         // Filter to only include confirmed events for routes
         const confirmedLocations = validLocations.filter(
@@ -760,13 +859,20 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
 
           const currentEvent = confirmedLocations[i].event;
           const nextEvent = confirmedLocations[i + 1].event;
+          const isSameTransportEvent =
+            currentEvent.id === nextEvent.id &&
+            routeEndpointEventTypes.has(currentEvent.type) &&
+            confirmedLocations[i].endpointRole === 'departure' &&
+            confirmedLocations[i + 1].endpointRole === 'arrival';
           
           let routeType: 'driving' | 'train' | 'flight' = 'driving';
           
-          if (currentEvent.type === 'train' || nextEvent.type === 'train') {
-            routeType = 'train';
-          } else if (currentEvent.type === 'flight' || nextEvent.type === 'flight') {
-            routeType = 'flight';
+          if (isSameTransportEvent) {
+            if (currentEvent.type === 'train' || currentEvent.type === 'bus') {
+              routeType = 'train';
+            } else if (currentEvent.type === 'flight') {
+              routeType = 'flight';
+            }
           }
           
           if (confirmedLocations[i] && confirmedLocations[i + 1]) {
@@ -1015,6 +1121,26 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
             </div>
           </div>
         </div>
+
+        {unmappedEvents.length > 0 && (
+          <div className="leaflet-top leaflet-right">
+            <div className="leaflet-control m-4 max-w-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 shadow-lg">
+              <div className="font-semibold">
+                {unmappedEvents.length} event{unmappedEvents.length === 1 ? '' : 's'} not shown on map
+              </div>
+              <div className="mt-2 space-y-1">
+                {unmappedEvents.slice(0, 4).map((event) => (
+                  <div key={`${event.eventId}-${event.reason}`}>
+                    <span className="font-medium">{event.label}:</span> {event.reason}
+                  </div>
+                ))}
+                {unmappedEvents.length > 4 && (
+                  <div>And {unmappedEvents.length - 4} more.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </MapContainer>
     </div>
   );

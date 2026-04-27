@@ -1,13 +1,15 @@
 import React from 'react';
-import { AlertCircle, CalendarDays, CheckSquare, Clock, Copy, ExternalLink, MapPin, X } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckSquare, Clock, CloudSun, Copy, ExternalLink, MapPin, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Event, Trip } from '@/types/eventTypes';
+import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { TripInsight } from '@/types/insightTypes';
 import {
   formatEventDateTime,
   getCurrentEvent,
   getEventBookingReference,
   getEventDisplayName,
+  getEventEnd,
   getEventLocationLabel,
   getEventStart,
   getNextEvent,
@@ -15,11 +17,14 @@ import {
 } from '@/utils/eventTime';
 import { cn } from '@/lib/utils';
 import { getTripStatusSummary } from '@/services/tripStatus';
+import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
 
 interface InTripAssistantProps {
   trip: Trip;
   insights: TripInsight[];
   canEdit: boolean;
+  weatherSnapshots?: WeatherSnapshot[];
+  flightStatusSnapshots?: FlightStatusSnapshot[];
   onClose: () => void;
   onOpenChecklist: () => void;
   onEditEvent: (event: Event) => void;
@@ -37,17 +42,259 @@ const getMapsUrl = (location: string) => {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
 };
 
+const getDirectionsUrl = (from: RoutePoint, to: RoutePoint) => {
+  const origin = `${from.lat},${from.lng}`;
+  const destination = `${to.lat},${to.lng}`;
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
+};
+
+interface RoutePoint {
+  lat: number;
+  lng: number;
+}
+
+interface TransferSummary {
+  from: Event;
+  to: Event;
+  fromPoint: RoutePoint;
+  toPoint: RoutePoint;
+  gapMinutes: number;
+  estimatedTravelMinutes: number;
+  distanceMiles: number;
+  severity: 'ok' | 'tight' | 'long';
+}
+
 const copyText = async (text: string) => {
   if (!navigator.clipboard) return;
   await navigator.clipboard.writeText(text);
+};
+
+const formatWeatherForecast = (forecast: WeatherDay) => {
+  const parts = [
+    forecast.condition,
+    typeof forecast.temperatureMax === 'number' && typeof forecast.temperatureMin === 'number'
+      ? `${Math.round(forecast.temperatureMax)}/${Math.round(forecast.temperatureMin)} deg F`
+      : null,
+    typeof forecast.precipitationProbabilityMax === 'number'
+      ? `${forecast.precipitationProbabilityMax}% rain`
+      : null,
+    typeof forecast.windSpeedMax === 'number' && forecast.windSpeedMax >= 15
+      ? `${Math.round(forecast.windSpeedMax)} mph wind`
+      : null,
+  ].filter(Boolean);
+
+  return parts.join(', ');
+};
+
+const getSnapshotLabel = (snapshot: WeatherSnapshot) => {
+  if (snapshot.locationRole === 'departure') return 'Departure weather';
+  if (snapshot.locationRole === 'arrival') return 'Arrival weather';
+  return 'Weather forecast';
+};
+
+const EventWeatherRows: React.FC<{ snapshots: WeatherSnapshot[] }> = ({ snapshots }) => {
+  const visibleSnapshots = snapshots.filter(snapshot => snapshot.daily?.[0]);
+  if (visibleSnapshots.length === 0) return null;
+
+  return (
+    <div className="mt-2 space-y-1 rounded-md border border-sky-100 bg-sky-50 px-2 py-2 text-xs text-sky-900">
+      {visibleSnapshots.map((snapshot) => (
+        <div key={snapshot._id || `${snapshot.eventId}-${snapshot.date}`} className="flex items-center gap-2">
+          <CloudSun className="h-3.5 w-3.5 flex-shrink-0 text-sky-600" />
+          <span>
+            <span className="font-medium">{getSnapshotLabel(snapshot)}:</span> {formatWeatherForecast(snapshot.daily[0])}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const FlightStatusRows: React.FC<{ snapshots: FlightStatusSnapshot[] }> = ({ snapshots }) => {
+  if (snapshots.length === 0) return null;
+
+  return (
+    <div className="mt-2 space-y-1 rounded-md border border-violet-100 bg-violet-50 px-2 py-2 text-xs text-violet-900">
+      {snapshots.map((snapshot) => {
+        const departureParts = [
+          snapshot.departure?.terminal ? `Terminal ${snapshot.departure.terminal}` : null,
+          snapshot.departure?.gate ? `Gate ${snapshot.departure.gate}` : null,
+          typeof snapshot.departure?.delayMinutes === 'number' && snapshot.departure.delayMinutes > 0
+            ? `${snapshot.departure.delayMinutes} min departure delay`
+            : null,
+        ].filter(Boolean);
+        const arrivalDelay = typeof snapshot.arrival?.delayMinutes === 'number' && snapshot.arrival.delayMinutes > 0
+          ? `${snapshot.arrival.delayMinutes} min arrival delay`
+          : null;
+        const details = [snapshot.status, ...departureParts, arrivalDelay].filter(Boolean).join(' | ');
+
+        return (
+          <div key={snapshot._id || `${snapshot.eventId}-${snapshot.dateLocal}`} className="flex items-center gap-2">
+            <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-violet-600" />
+            <span>
+              <span className="font-medium">Flight status:</span> {details || 'No status details available yet'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const getUsableEventLocation = (event: Event): RoutePoint | null => {
+  if (
+    !event.location ||
+    !event.location.lat ||
+    !event.location.lng ||
+    event.location.lat === 0 ||
+    event.location.lng === 0
+  ) {
+    return null;
+  }
+
+  return { lat: event.location.lat, lng: event.location.lng };
+};
+
+const getFlightEndpointPoint = (
+  event: Event,
+  role: 'departure' | 'arrival',
+  weatherSnapshots: WeatherSnapshot[]
+): RoutePoint | null => {
+  if (event.type !== 'flight') return null;
+
+  const snapshot = weatherSnapshots.find((item) => (
+    (item.originalEventId || item.eventId) === event.id &&
+    item.locationRole === role &&
+    item.lat &&
+    item.lng
+  ));
+
+  return snapshot ? { lat: snapshot.lat, lng: snapshot.lng } : null;
+};
+
+const getRoutePoint = (
+  event: Event,
+  side: 'from' | 'to',
+  weatherSnapshots: WeatherSnapshot[]
+): RoutePoint | null => {
+  if (event.type === 'flight') {
+    return getFlightEndpointPoint(event, side === 'from' ? 'arrival' : 'departure', weatherSnapshots);
+  }
+
+  return getUsableEventLocation(event);
+};
+
+const getDistanceKm = (from: RoutePoint, to: RoutePoint) => {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(to.lat - from.lat);
+  const dLng = toRadians(to.lng - from.lng);
+  const lat1 = toRadians(from.lat);
+  const lat2 = toRadians(to.lat);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const estimateTravelMinutes = (distanceKm: number) => {
+  return Math.ceil((distanceKm / 40) * 60 + 15);
+};
+
+const getTransferSummary = (
+  from: Event,
+  to: Event,
+  weatherSnapshots: WeatherSnapshot[]
+): TransferSummary | null => {
+  const fromEnd = getEventEnd(from);
+  const toStart = getEventStart(to);
+  if (!fromEnd || !toStart) return null;
+
+  const gapMinutes = Math.round((toStart.getTime() - fromEnd.getTime()) / (60 * 1000));
+  if (gapMinutes < 0) return null;
+
+  const fromPoint = getRoutePoint(from, 'from', weatherSnapshots);
+  const toPoint = getRoutePoint(to, 'to', weatherSnapshots);
+  if (!fromPoint || !toPoint) return null;
+
+  const distanceKm = getDistanceKm(fromPoint, toPoint);
+  if (distanceKm < 2) return null;
+
+  const estimatedTravelMinutes = estimateTravelMinutes(distanceKm);
+  const severity = gapMinutes < estimatedTravelMinutes
+    ? 'tight'
+    : distanceKm >= 50 && gapMinutes < estimatedTravelMinutes + 45
+      ? 'long'
+      : 'ok';
+
+  return {
+    from,
+    to,
+    fromPoint,
+    toPoint,
+    gapMinutes,
+    estimatedTravelMinutes,
+    distanceMiles: Math.round(distanceKm * 0.621371),
+    severity,
+  };
+};
+
+const TransferRow: React.FC<{ transfer: TransferSummary; onEditEvent: (event: Event) => void }> = ({
+  transfer,
+  onEditEvent,
+}) => {
+  return (
+    <div className={cn(
+      'rounded-lg border px-3 py-2 text-xs',
+      transfer.severity === 'tight' && 'border-red-200 bg-red-50 text-red-900',
+      transfer.severity === 'long' && 'border-amber-200 bg-amber-50 text-amber-900',
+      transfer.severity === 'ok' && 'border-gray-200 bg-gray-50 text-gray-700'
+    )}>
+      <div className="flex items-start gap-2">
+        <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">
+            Transfer buffer: {transfer.gapMinutes} min available, about {transfer.estimatedTravelMinutes} min estimated
+          </p>
+          <p className="mt-0.5 opacity-90">
+            Roughly {transfer.distanceMiles} miles from {getEventDisplayName(transfer.from)} to {getEventDisplayName(transfer.to)}.
+          </p>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <a
+          href={getDirectionsUrl(transfer.fromPoint, transfer.toPoint)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-md border border-current/20 px-2 py-1 font-medium hover:bg-white/60"
+        >
+          Directions
+        </a>
+        {transfer.severity !== 'ok' && (
+          <button
+            type="button"
+            onClick={() => onEditEvent(transfer.to)}
+            className="rounded-md border border-current/20 px-2 py-1 font-medium hover:bg-white/60"
+          >
+            Edit next event
+          </button>
+        )}
+      </div>
+    </div>
+  );
 };
 
 const EventCard: React.FC<{
   label: string;
   event: Event | null;
   canEdit: boolean;
+  weatherSnapshots: WeatherSnapshot[];
+  flightStatusSnapshots: FlightStatusSnapshot[];
   onEditEvent: (event: Event) => void;
-}> = ({ label, event, canEdit, onEditEvent }) => {
+}> = ({ label, event, canEdit, weatherSnapshots, flightStatusSnapshots, onEditEvent }) => {
   if (!event) {
     return (
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -100,6 +347,8 @@ const EventCard: React.FC<{
             </Button>
           </div>
         )}
+        <FlightStatusRows snapshots={flightStatusSnapshots} />
+        <EventWeatherRows snapshots={weatherSnapshots} />
       </div>
     </div>
   );
@@ -109,6 +358,8 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   trip,
   insights,
   canEdit,
+  weatherSnapshots = [],
+  flightStatusSnapshots = [],
   onClose,
   onOpenChecklist,
   onEditEvent,
@@ -121,6 +372,19 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
     const start = getEventStart(event);
     return start ? isSameLocalDay(start, now) : false;
   });
+  const getEventWeatherSnapshots = (eventId: string) => weatherSnapshots.filter(snapshot => (
+    (snapshot.originalEventId || snapshot.eventId) === eventId && snapshot.daily?.length > 0
+  ));
+  const getEventFlightStatusSnapshots = (eventId: string) => flightStatusSnapshots.filter(snapshot => (
+    snapshot.eventId === eventId
+  ));
+  const weatherBriefingEventIds = Array.from(new Set([
+    currentEvent?.id,
+    nextEvent?.id,
+    ...todaysEvents.map(event => event.id),
+  ].filter((id): id is string => Boolean(id))));
+  const weatherBriefingSnapshots = weatherBriefingEventIds.flatMap(getEventWeatherSnapshots);
+  const flightBriefingSnapshots = weatherBriefingEventIds.flatMap(getEventFlightStatusSnapshots);
   const priorityInsights = [...insights]
     .sort((a, b) => {
       const rank = { critical: 0, warning: 1, info: 2 };
@@ -157,9 +421,37 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
         </div>
 
         <div className="grid gap-3">
-          <EventCard label="Now" event={currentEvent} canEdit={canEdit} onEditEvent={onEditEvent} />
-          <EventCard label="Next" event={nextEvent} canEdit={canEdit} onEditEvent={onEditEvent} />
+          <EventCard
+            label="Now"
+            event={currentEvent}
+            canEdit={canEdit}
+            weatherSnapshots={currentEvent ? getEventWeatherSnapshots(currentEvent.id) : []}
+            flightStatusSnapshots={currentEvent ? getEventFlightStatusSnapshots(currentEvent.id) : []}
+            onEditEvent={onEditEvent}
+          />
+          <EventCard
+            label="Next"
+            event={nextEvent}
+            canEdit={canEdit}
+            weatherSnapshots={nextEvent ? getEventWeatherSnapshots(nextEvent.id) : []}
+            flightStatusSnapshots={nextEvent ? getEventFlightStatusSnapshots(nextEvent.id) : []}
+            onEditEvent={onEditEvent}
+          />
         </div>
+
+        {flightBriefingSnapshots.length > 0 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-gray-900">Flight briefing</h3>
+            <FlightStatusRows snapshots={flightBriefingSnapshots.slice(0, 4)} />
+          </section>
+        )}
+
+        {weatherBriefingSnapshots.length > 0 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-gray-900">Weather briefing</h3>
+            <EventWeatherRows snapshots={weatherBriefingSnapshots.slice(0, 4)} />
+          </section>
+        )}
 
         <section>
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -202,29 +494,39 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
           <h3 className="mb-2 text-sm font-semibold text-gray-900">Today&apos;s timeline</h3>
           {todaysEvents.length > 0 ? (
             <div className="space-y-2">
-              {todaysEvents.map((event) => {
+              {todaysEvents.map((event, index) => {
                 const location = getEventLocationLabel(event);
+                const transfer = index > 0
+                  ? getTransferSummary(todaysEvents[index - 1], event, weatherSnapshots)
+                  : null;
                 return (
-                  <div key={event.id} className="rounded-lg border border-gray-200 p-3 text-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-medium text-gray-900">{getEventDisplayName(event)}</p>
-                        <p className="mt-1 text-gray-600">{formatEventDateTime(getEventStart(event))}</p>
-                        {location && <p className="mt-1 truncate text-gray-500">{location}</p>}
+                  <React.Fragment key={event.id}>
+                    {transfer && (
+                      <TransferRow transfer={transfer} onEditEvent={onEditEvent} />
+                    )}
+                    <div className="rounded-lg border border-gray-200 p-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-gray-900">{getEventDisplayName(event)}</p>
+                          <p className="mt-1 text-gray-600">{formatEventDateTime(getEventStart(event))}</p>
+                          {location && <p className="mt-1 truncate text-gray-500">{location}</p>}
+                          <FlightStatusRows snapshots={getEventFlightStatusSnapshots(event.id)} />
+                          <EventWeatherRows snapshots={getEventWeatherSnapshots(event.id)} />
+                        </div>
+                        {location && (
+                          <a
+                            href={getMapsUrl(location)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-md p-1 text-blue-700 hover:bg-blue-50"
+                            aria-label={`Open map for ${getEventDisplayName(event)}`}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        )}
                       </div>
-                      {location && (
-                        <a
-                          href={getMapsUrl(location)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-md p-1 text-blue-700 hover:bg-blue-50"
-                          aria-label={`Open map for ${getEventDisplayName(event)}`}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      )}
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>

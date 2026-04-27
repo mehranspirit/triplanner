@@ -28,6 +28,122 @@ const formatTime = (timeStr) => {
   return timeStr ? ` at ${timeStr}` : '';
 };
 
+const DATE_FIELD_NAMES = [
+  'date',
+  'checkIn',
+  'checkOut',
+  'startDate',
+  'endDate',
+  'departureDate',
+  'arrivalDate',
+  'dropoffDate',
+];
+
+const hasExplicitYearInText = (text) => /\b(?:19|20)\d{2}\b/.test(text);
+
+const getDateParts = (value) => {
+  if (typeof value !== 'string') return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+};
+
+const createDate = ({ year, month, day }) => {
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getDateOnly = (dateValue, endOfDay = false) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+  return date;
+};
+
+const getTripDateRange = (trip) => {
+  const start = getDateOnly(trip.startDate);
+  const end = getDateOnly(trip.endDate, true);
+  if (!start || !end) return null;
+  return { start, end };
+};
+
+const formatDateParts = ({ year, month, day }) => (
+  `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+);
+
+const getEventDateWindow = (fields) => {
+  const parsedDates = DATE_FIELD_NAMES
+    .map((field) => getDateParts(fields[field]))
+    .filter(Boolean)
+    .map(createDate)
+    .filter(Boolean);
+
+  if (parsedDates.length === 0) return null;
+
+  return {
+    start: new Date(Math.min(...parsedDates.map((date) => date.getTime()))),
+    end: new Date(Math.max(...parsedDates.map((date) => date.getTime()))),
+  };
+};
+
+const isWithinRange = (window, range) => (
+  window && window.start >= range.start && window.end <= range.end
+);
+
+const normalizeYearlessDatesToTripRange = ({ eventData, trip, text }) => {
+  const range = getTripDateRange(trip);
+  if (!range || hasExplicitYearInText(text) || !eventData.fields) {
+    return eventData;
+  }
+
+  const currentWindow = getEventDateWindow(eventData.fields);
+  if (!currentWindow || isWithinRange(currentWindow, range)) {
+    return eventData;
+  }
+
+  const tripStartYear = range.start.getFullYear();
+  const tripEndYear = range.end.getFullYear();
+  const candidateYears = Array.from(
+    { length: tripEndYear - tripStartYear + 3 },
+    (_, index) => tripStartYear - 1 + index,
+  );
+
+  const bestYear = candidateYears.find((year) => {
+    const candidateFields = { ...eventData.fields };
+    DATE_FIELD_NAMES.forEach((field) => {
+      const parts = getDateParts(candidateFields[field]);
+      if (parts) {
+        candidateFields[field] = formatDateParts({ ...parts, year });
+      }
+    });
+
+    return isWithinRange(getEventDateWindow(candidateFields), range);
+  });
+
+  if (!bestYear) {
+    return eventData;
+  }
+
+  const fields = { ...eventData.fields };
+  DATE_FIELD_NAMES.forEach((field) => {
+    const parts = getDateParts(fields[field]);
+    if (parts) {
+      fields[field] = formatDateParts({ ...parts, year: bestYear });
+    }
+  });
+
+  return {
+    ...eventData,
+    fields,
+    reasoning: `${eventData.reasoning || ''} Dates omitted a year in the source text, so the year was inferred from the trip date range.`.trim(),
+  };
+};
+
 const formatEventForPrompt = (event) => {
   switch (event.type) {
     case 'stay':
@@ -66,6 +182,7 @@ Important Date/Time Rules:
 2. All times must be in HH:mm format
 3. For single-day events, startDate and endDate should be the same
 4. For multi-day events (like stays), use the appropriate start and end dates
+5. If the text includes month/day dates without a year, infer the year from the trip date range. Do not use the current calendar year unless it matches the trip.
 
 Possible Event Types and Their Required Fields:
 
@@ -277,7 +394,9 @@ const parseEventText = async ({ text, trip, user }) => {
     throw new Error('Invalid response format from AI');
   }
 
-  const events = parsed.events.map((eventData) => toEvent(eventData, user));
+  const events = parsed.events
+    .map((eventData) => normalizeYearlessDatesToTripRange({ eventData, trip, text }))
+    .map((eventData) => toEvent(eventData, user));
   return {
     model: MODEL_NAME,
     events,

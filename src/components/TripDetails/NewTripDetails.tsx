@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { getDefaultThumbnail } from './thumbnailHelpers';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripMap from '@/components/TripMap';
-import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare, CalendarDays, Bell } from 'lucide-react';
+import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare, CalendarDays, Bell, CloudSun } from 'lucide-react';
 import TripNotes from '@/components/TripNotes';
 import TripChecklist from '@/components/TripDetails/TripChecklist';
 import TripCommandCenter from '@/components/TripDetails/TripCommandCenter';
@@ -60,6 +60,8 @@ import { formatEventDateTime, getEventDisplayName, getEventStart, sortEventsBySt
 import { api } from '@/services/api';
 import { hashText } from '@/utils/hash';
 import { NotificationPreference, TripNotification } from '@/types/notificationTypes';
+import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
+import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -112,6 +114,10 @@ const NewTripDetails: React.FC = () => {
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference | null>(null);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [weatherSnapshots, setWeatherSnapshots] = useState<WeatherSnapshot[]>([]);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [flightStatusSnapshots, setFlightStatusSnapshots] = useState<FlightStatusSnapshot[]>([]);
+  const [flightStatusError, setFlightStatusError] = useState<string | null>(null);
   const [isAIParseModalOpen, setIsAIParseModalOpen] = useState(false);
   const [parseText, setParseText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -135,8 +141,8 @@ const NewTripDetails: React.FC = () => {
   const [addingProgress, setAddingProgress] = useState(0);
   const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
   const tripInsights = useMemo(
-    () => trip ? generateTripInsights({ trip, events: trip.events }) : [],
-    [trip]
+    () => trip ? generateTripInsights({ trip, events: trip.events, weatherSnapshots, flightStatusSnapshots }) : [],
+    [trip, weatherSnapshots, flightStatusSnapshots]
   );
   const visibleTripInsights = useMemo(
     () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
@@ -179,6 +185,50 @@ const NewTripDetails: React.FC = () => {
   useEffect(() => {
     if (!trip?._id) return;
     fetchNotifications();
+  }, [trip?._id, trip?.updatedAt]);
+
+  useEffect(() => {
+    if (!trip?._id) return;
+
+    const fetchWeather = async () => {
+      try {
+        setWeatherError(null);
+        const data = await api.getTripWeather(trip._id);
+        setWeatherSnapshots(data.snapshots || []);
+      } catch (error) {
+        console.error('Error loading weather:', error);
+        setWeatherError(error instanceof Error ? error.message : 'Failed to load trip weather');
+        setWeatherSnapshots([]);
+      }
+    };
+
+    fetchWeather();
+  }, [trip?._id, trip?.updatedAt]);
+
+  useEffect(() => {
+    if (!trip?._id) return;
+
+    const fetchFlightStatuses = async () => {
+      try {
+        setFlightStatusError(null);
+        const data = await api.getTripFlightStatuses(trip._id);
+        setFlightStatusSnapshots(data.snapshots || []);
+        if (!data.configured) {
+          const providerLabel = data.provider === 'aviationstack'
+            ? 'Aviationstack'
+            : data.provider === 'aerodatabox'
+              ? 'AeroDataBox'
+              : data.provider;
+          setFlightStatusError(`${providerLabel} API key is not configured.`);
+        }
+      } catch (error) {
+        console.error('Error loading flight statuses:', error);
+        setFlightStatusError(error instanceof Error ? error.message : 'Failed to load flight statuses');
+        setFlightStatusSnapshots([]);
+      }
+    };
+
+    fetchFlightStatuses();
   }, [trip?._id, trip?.updatedAt]);
 
   const handleDismissInsight = (insightId: string) => {
@@ -599,6 +649,114 @@ const NewTripDetails: React.FC = () => {
   // Sort events by startDate, earliest first
   const sortedEvents = sortEventsByStart(trip.events);
 
+  const getTimelineDateKey = (event: Event) => {
+    const start = getEventStart(event);
+    if (!start) return '';
+
+    const year = start.getFullYear();
+    const month = String(start.getMonth() + 1).padStart(2, '0');
+    const day = String(start.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const tripDateRange = (() => {
+    const start = trip.startDate ? new Date(trip.startDate) : null;
+    const end = trip.endDate ? new Date(trip.endDate) : null;
+
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return null;
+    }
+
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  })();
+
+  const outOfRangeEvents = tripDateRange
+    ? sortedEvents.filter((event) => {
+        const start = getEventStart(event);
+        return !!start && (start < tripDateRange.start || start > tripDateRange.end);
+      })
+    : [];
+
+  const getEventWeatherSnapshots = (eventId: string) => {
+    return weatherSnapshots.filter(snapshot => (
+      (snapshot.originalEventId || snapshot.eventId) === eventId && snapshot.daily?.length > 0
+    ));
+  };
+
+  const formatWeatherForecast = (forecast: WeatherDay) => {
+    const parts = [
+      forecast.condition,
+      typeof forecast.temperatureMax === 'number' && typeof forecast.temperatureMin === 'number'
+        ? `${Math.round(forecast.temperatureMax)}/${Math.round(forecast.temperatureMin)} deg F`
+        : null,
+      typeof forecast.precipitationProbabilityMax === 'number'
+        ? `${forecast.precipitationProbabilityMax}% rain`
+        : null,
+      typeof forecast.windSpeedMax === 'number' && forecast.windSpeedMax >= 15
+        ? `${Math.round(forecast.windSpeedMax)} mph wind`
+        : null,
+    ].filter(Boolean);
+
+    return parts.join(', ');
+  };
+
+  const EventWeatherForecast: React.FC<{ event: Event }> = ({ event }) => {
+    const snapshots = getEventWeatherSnapshots(event.id);
+    if (snapshots.length === 0) return null;
+
+    return (
+      <div className="mt-2 space-y-1 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+        {snapshots.map((snapshot) => {
+          const forecast = snapshot.daily?.[0];
+          if (!forecast) return null;
+          const label = snapshot.locationRole === 'departure'
+            ? 'Departure weather'
+            : snapshot.locationRole === 'arrival'
+              ? 'Arrival weather'
+              : 'Weather forecast';
+
+          return (
+            <div key={snapshot._id || `${snapshot.eventId}-${snapshot.date}`} className="flex items-center gap-2">
+        <CloudSun className="h-4 w-4 flex-shrink-0 text-sky-600" />
+        <span>
+                <span className="font-medium">{label}:</span> {formatWeatherForecast(forecast)}
+        </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const FlightStatusSummary: React.FC<{ event: Event }> = ({ event }) => {
+    if (event.type !== 'flight') return null;
+
+    const snapshot = flightStatusSnapshots.find(status => status.eventId === event.id);
+    if (!snapshot) return null;
+
+    const departureParts = [
+      snapshot.departure?.terminal ? `Terminal ${snapshot.departure.terminal}` : null,
+      snapshot.departure?.gate ? `Gate ${snapshot.departure.gate}` : null,
+      typeof snapshot.departure?.delayMinutes === 'number' && snapshot.departure.delayMinutes > 0
+        ? `${snapshot.departure.delayMinutes} min delay`
+        : null,
+    ].filter(Boolean);
+    const arrivalDelay = typeof snapshot.arrival?.delayMinutes === 'number' && snapshot.arrival.delayMinutes > 0
+      ? `Arrival ${snapshot.arrival.delayMinutes} min delay`
+      : null;
+
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs text-violet-900">
+        <FaPlane className="h-4 w-4 flex-shrink-0 text-violet-600" />
+        <span>
+          <span className="font-medium">Flight status:</span> {[snapshot.status, ...departureParts, arrivalDelay].filter(Boolean).join(' | ')}
+        </span>
+      </div>
+    );
+  };
+
   // Update the CondensedEventCard component to include icons
   const CondensedEventCard: React.FC<{ event: Event; thumbnail: string }> = ({ event, thumbnail }) => {
     const registryItem = EVENT_TYPES[event.type];
@@ -1015,6 +1173,16 @@ const NewTripDetails: React.FC = () => {
         dismissedInsightCount={dismissedInsightIds.length}
         onRestoreDismissedInsights={handleRestoreDismissedInsights}
       />
+      {weatherError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Weather context is unavailable right now: {weatherError}
+        </div>
+      )}
+      {flightStatusError && (
+        <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
+          Flight status context is unavailable right now: {flightStatusError}
+        </div>
+      )}
       
       {/* Add Event & View Options */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -1136,6 +1304,14 @@ const NewTripDetails: React.FC = () => {
       {/* Events Timeline */}
       <div className="bg-white shadow-sm rounded-lg p-4 md:p-6">
         <h2 className="text-xl font-semibold mb-4">Trip Timeline</h2>
+        {outOfRangeEvents.length > 0 && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            <p className="font-semibold">Some events are outside this trip&apos;s dates</p>
+            <p className="mt-1">
+              {outOfRangeEvents.map(getEventDisplayName).join(', ')} {outOfRangeEvents.length === 1 ? 'has' : 'have'} dates that do not match the trip range. Edit the event date to fix the timeline order.
+            </p>
+          </div>
+        )}
       
         <div className="mt-4 space-y-6">
           {sortedEvents.length === 0 ? (
@@ -1146,28 +1322,7 @@ const NewTripDetails: React.FC = () => {
                 {(() => {
                   // Group events by date
                   const groupedEvents = sortedEvents.reduce((groups, event) => {
-                    let dateKey = '';
-                    switch (event.type) {
-                      case 'activity':
-                        dateKey = (event as any).startDate?.split('T')[0];
-                        break;
-                      case 'arrival':
-                      case 'departure':
-                        dateKey = (event as any).date;
-                        break;
-                      case 'stay':
-                        dateKey = (event as any).checkIn;
-                        break;
-                      case 'rental_car':
-                        dateKey = (event as any).date;
-                        break;
-                      case 'bus':
-                      case 'train':
-                        dateKey = (event as any).startDate?.split('T')[0];
-                        break;
-                      default:
-                        dateKey = ((event as any).startDate?.split('T')[0]) || (event as any).date || '';
-                    }
+                    const dateKey = getTimelineDateKey(event);
                     if (!dateKey) {
                       console.warn(`No valid date found for event of type ${event.type}`, event);
                       return groups;
@@ -1214,12 +1369,7 @@ const NewTripDetails: React.FC = () => {
                       </div>
                       
                       <div className="space-y-4">
-                        {events
-                          .sort((a, b) => {
-                            const timeA = a.startDate ? a.startDate.split('T')[1] || '00:00:00' : '00:00:00';
-                            const timeB = b.startDate ? b.startDate.split('T')[1] || '00:00:00' : '00:00:00';
-                            return timeA.localeCompare(timeB);
-                          })
+                        {sortEventsByStart(events)
                           .map((event) => {
                             const registryItem = EVENT_TYPES[event.type];
                             if (!registryItem) return <div key={event.id}>Unknown event type: {event.type}</div>;
@@ -1250,6 +1400,8 @@ const NewTripDetails: React.FC = () => {
                                     onStatusChange={canEdit ? (newStatus) => handleStatusChange(event, newStatus) : undefined}
                                   />
                                 )}
+                                <FlightStatusSummary event={event} />
+                                <EventWeatherForecast event={event} />
                               </div>
                             );
                           })}
@@ -1431,6 +1583,8 @@ const NewTripDetails: React.FC = () => {
             trip={trip}
             insights={visibleTripInsights}
             canEdit={canEdit}
+            weatherSnapshots={weatherSnapshots}
+            flightStatusSnapshots={flightStatusSnapshots}
             onClose={() => setShowToday(false)}
             onOpenChecklist={() => {
               setShowToday(false);
