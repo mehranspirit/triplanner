@@ -14,6 +14,14 @@ import {
 } from '../types/notificationTypes';
 import { TripWeatherResponse } from '../types/weatherTypes';
 import { TripFlightStatusesResponse } from '../types/flightStatusTypes';
+import {
+  AssistantSuggestionFeedback,
+  SaveAssistantSuggestionFeedbackRequest,
+  TripAssistantBriefingResponse,
+  TripQuestionAnswerResponse,
+  TripReplanBriefingResponse,
+  TripTodayBriefingResponse
+} from '../types/assistantBriefingTypes';
 
 type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
 
@@ -105,6 +113,12 @@ interface API {
   geocodeTripEvents: (tripId: string) => Promise<{ trip: Trip; updatedCount: number; results: unknown[] }>;
   getTripWeather: (tripId: string, options?: { refresh?: boolean }) => Promise<TripWeatherResponse>;
   getTripFlightStatuses: (tripId: string, options?: { refresh?: boolean }) => Promise<TripFlightStatusesResponse>;
+  generateTripAssistantBriefing: (tripId: string) => Promise<TripAssistantBriefingResponse>;
+  generateTripTodayBriefing: (tripId: string) => Promise<TripTodayBriefingResponse>;
+  generateTripReplanBriefing: (tripId: string) => Promise<TripReplanBriefingResponse>;
+  askTripQuestion: (tripId: string, question: string) => Promise<TripQuestionAnswerResponse>;
+  getAssistantSuggestionFeedback: (tripId: string) => Promise<AssistantSuggestionFeedback[]>;
+  saveAssistantSuggestionFeedback: (tripId: string, data: SaveAssistantSuggestionFeedbackRequest) => Promise<AssistantSuggestionFeedback>;
 }
 
 // Add helper after imports near top
@@ -1221,6 +1235,82 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to fetch flight statuses');
+    }
+    return response.json();
+  },
+
+  generateTripAssistantBriefing: async (tripId: string): Promise<TripAssistantBriefingResponse> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/assistant-briefing`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to generate assistant briefing');
+    }
+    return response.json();
+  },
+
+  generateTripTodayBriefing: async (tripId: string): Promise<TripTodayBriefingResponse> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/today-briefing`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to generate Today briefing');
+    }
+    return response.json();
+  },
+
+  generateTripReplanBriefing: async (tripId: string): Promise<TripReplanBriefingResponse> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/replan-day`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to generate day replan briefing');
+    }
+    return response.json();
+  },
+
+  askTripQuestion: async (tripId: string, question: string): Promise<TripQuestionAnswerResponse> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/ask`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ question }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to answer trip question');
+    }
+    return response.json();
+  },
+
+  getAssistantSuggestionFeedback: async (tripId: string): Promise<AssistantSuggestionFeedback[]> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/assistant-feedback`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch assistant feedback');
+    }
+    return response.json();
+  },
+
+  saveAssistantSuggestionFeedback: async (
+    tripId: string,
+    data: SaveAssistantSuggestionFeedbackRequest
+  ): Promise<AssistantSuggestionFeedback> => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/assistant-feedback`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to save assistant feedback');
     }
     return response.json();
   },

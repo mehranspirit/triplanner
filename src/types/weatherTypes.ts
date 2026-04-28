@@ -34,6 +34,16 @@ export interface TripWeatherResponse {
   snapshots: WeatherSnapshot[];
   skipped: {
     eventId: string;
+    locationRole?: 'event' | 'departure' | 'arrival';
     reason: 'missing_date' | 'missing_location' | 'outside_forecast_window' | string;
   }[];
+  diagnostics?: {
+    status: 'available' | 'partial' | 'no_targets' | 'outside_window' | 'provider_error' | 'no_data' | string;
+    configured: boolean;
+    reasonCounts: Record<string, number>;
+    attemptedTargets: number;
+    availableSnapshots: number;
+    forecastWindowDays: number;
+    message: string;
+  };
 }

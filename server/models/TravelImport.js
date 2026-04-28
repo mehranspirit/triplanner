@@ -22,11 +22,25 @@ const travelImportSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  sourceTitle: {
+    type: String,
+    trim: true,
+    maxlength: 140
+  },
+  sourceExcerpt: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
   status: {
     type: String,
-    enum: ['parsed', 'failed', 'accepted', 'partially_accepted'],
+    enum: ['parsed', 'needs_review', 'missing_info', 'duplicate', 'failed', 'accepted', 'partially_accepted', 'dismissed', 'unsupported'],
     required: true,
     default: 'parsed'
+  },
+  duplicateOfImportId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'TravelImport'
   },
   model: {
     type: String,

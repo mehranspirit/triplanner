@@ -46,6 +46,8 @@ router.post('/trips/:tripId/imports', auth, async (req, res) => {
     const {
       sourceType = 'manual_text',
       sourceHash,
+      sourceTitle,
+      sourceExcerpt,
       status = 'parsed',
       model,
       parsedEvents = [],
@@ -53,12 +55,27 @@ router.post('/trips/:tripId/imports', auth, async (req, res) => {
       createdEventIds = []
     } = req.body;
 
+    const duplicateImport = sourceHash
+      ? await TravelImport.findOne({
+          tripId,
+          userId: req.user._id,
+          sourceHash,
+          status: { $ne: 'dismissed' }
+        }).sort({ createdAt: -1 })
+      : null;
+    const resolvedStatus = duplicateImport && !['failed', 'accepted', 'partially_accepted'].includes(status)
+      ? 'duplicate'
+      : status;
+
     const travelImport = new TravelImport({
       tripId,
       userId: req.user._id,
       sourceType,
       sourceHash,
-      status,
+      sourceTitle,
+      sourceExcerpt,
+      status: resolvedStatus,
+      duplicateOfImportId: duplicateImport?._id,
       model,
       parsedEvents,
       validationErrors,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, CalendarDays, CheckSquare, Clock, CloudSun, Copy, ExternalLink, MapPin, X } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckSquare, Clock, CloudSun, Copy, ExternalLink, MapPin, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Event, Trip } from '@/types/eventTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getTripStatusSummary } from '@/services/tripStatus';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
+import { TripReplanBriefing, TripTodayBriefing } from '@/types/assistantBriefingTypes';
 
 interface InTripAssistantProps {
   trip: Trip;
@@ -25,9 +26,19 @@ interface InTripAssistantProps {
   canEdit: boolean;
   weatherSnapshots?: WeatherSnapshot[];
   flightStatusSnapshots?: FlightStatusSnapshot[];
+  todayBriefing?: TripTodayBriefing | null;
+  todayBriefingGeneratedAt?: string | null;
+  todayBriefingError?: string | null;
+  isGeneratingTodayBriefing?: boolean;
+  replanBriefing?: TripReplanBriefing | null;
+  replanBriefingGeneratedAt?: string | null;
+  replanBriefingError?: string | null;
+  isGeneratingReplanBriefing?: boolean;
   onClose: () => void;
   onOpenChecklist: () => void;
   onEditEvent: (event: Event) => void;
+  onGenerateTodayBriefing?: () => void;
+  onGenerateReplanBriefing?: () => void;
 }
 
 const isSameLocalDay = (a: Date, b: Date) => {
@@ -287,6 +298,167 @@ const TransferRow: React.FC<{ transfer: TransferSummary; onEditEvent: (event: Ev
   );
 };
 
+const severityStyles: Record<'info' | 'warning' | 'critical', string> = {
+  critical: 'border-red-200 bg-red-50 text-red-900',
+  warning: 'border-amber-200 bg-amber-50 text-amber-900',
+  info: 'border-blue-200 bg-blue-50 text-blue-900',
+};
+
+const TodayBriefingCard: React.FC<{
+  briefing?: TripTodayBriefing | null;
+  generatedAt?: string | null;
+  error?: string | null;
+  isGenerating?: boolean;
+  onGenerate?: () => void;
+  onOpenChecklist: () => void;
+  onEditEventById: (eventId: string) => void;
+}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onEditEventById }) => (
+  <section className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+          <Sparkles className="h-4 w-4" />
+          AI Today briefing
+        </div>
+        <p className="mt-1 text-sm text-blue-900/80">
+          Summarize what matters now from today&apos;s timeline, weather, flights, and alerts.
+        </p>
+      </div>
+      {onGenerate && (
+        <Button variant="outline" size="sm" onClick={onGenerate} disabled={isGenerating}>
+          {isGenerating ? 'Generating...' : briefing ? 'Refresh' : 'Generate'}
+        </Button>
+      )}
+    </div>
+
+    {error && <p className="mt-3 rounded-md bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+
+    {briefing && (
+      <div className="mt-3 space-y-3">
+        <p className="text-sm text-blue-950">{briefing.summary}</p>
+        {briefing.nextAction && (
+          <div className="rounded-md border border-blue-200 bg-white p-2 text-sm">
+            <p className="font-medium text-gray-900">{briefing.nextAction.title}</p>
+            <p className="mt-1 text-gray-600">{briefing.nextAction.reason}</p>
+            <div className="mt-2">
+              {briefing.nextAction.actionTarget === 'checklist' ? (
+                <Button variant="outline" size="sm" onClick={onOpenChecklist}>
+                  {briefing.nextAction.actionLabel}
+                </Button>
+              ) : briefing.nextAction.eventId ? (
+                <Button variant="outline" size="sm" onClick={() => onEditEventById(briefing.nextAction!.eventId!)}>
+                  {briefing.nextAction.actionLabel}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        )}
+        {briefing.watchItems.length > 0 && (
+          <div className="space-y-2">
+            {briefing.watchItems.slice(0, 3).map((item, index) => (
+              <div key={`${item.title}-${index}`} className={cn('rounded-md border p-2 text-sm', severityStyles[item.severity || 'info'])}>
+                <p className="font-medium">{item.title}</p>
+                <p className="mt-1 opacity-90">{item.reason}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {briefing.collaboratorMessage && (
+          <p className="rounded-md border border-blue-200 bg-white p-2 text-xs text-gray-600">
+            <span className="font-medium text-gray-800">Shareable update:</span> {briefing.collaboratorMessage}
+          </p>
+        )}
+        {generatedAt && <p className="text-xs text-blue-900/60">Generated {new Date(generatedAt).toLocaleString()}</p>}
+      </div>
+    )}
+  </section>
+);
+
+const ReplanDayCard: React.FC<{
+  briefing?: TripReplanBriefing | null;
+  generatedAt?: string | null;
+  error?: string | null;
+  isGenerating?: boolean;
+  onGenerate?: () => void;
+  onOpenChecklist: () => void;
+  onEditEventById: (eventId: string) => void;
+}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onEditEventById }) => (
+  <section className="rounded-lg border border-amber-100 bg-amber-50 p-3">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+          <Sparkles className="h-4 w-4" />
+          Replan My Day
+        </div>
+        <p className="mt-1 text-sm text-amber-900/80">
+          Review weather, flights, transfer risks, and alerts for changes worth considering.
+        </p>
+      </div>
+      {onGenerate && (
+        <Button variant="outline" size="sm" onClick={onGenerate} disabled={isGenerating}>
+          {isGenerating ? 'Reviewing...' : briefing ? 'Refresh' : 'Review'}
+        </Button>
+      )}
+    </div>
+
+    {error && <p className="mt-3 rounded-md bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+
+    {briefing && (
+      <div className="mt-3 space-y-3">
+        <p className="text-sm text-amber-950">{briefing.summary}</p>
+        {briefing.suggestions.length > 0 && (
+          <div className="space-y-2">
+            {briefing.suggestions.slice(0, 4).map((suggestion, index) => (
+              <div key={`${suggestion.title}-${index}`} className={cn('rounded-md border p-2 text-sm', severityStyles[suggestion.severity || 'info'])}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{suggestion.title}</p>
+                  <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium">{suggestion.suggestionType}</span>
+                </div>
+                <p className="mt-1 opacity-90">{suggestion.reason}</p>
+                {suggestion.actionLabel && suggestion.actionTarget && (
+                  <div className="mt-2">
+                    {suggestion.actionTarget === 'checklist' ? (
+                      <Button variant="outline" size="sm" onClick={onOpenChecklist}>
+                        {suggestion.actionLabel}
+                      </Button>
+                    ) : suggestion.eventId ? (
+                      <Button variant="outline" size="sm" onClick={() => onEditEventById(suggestion.eventId!)}>
+                        {suggestion.actionLabel}
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {briefing.fallbackIdeas.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-white p-2 text-sm">
+            <p className="font-medium text-gray-900">Fallback ideas</p>
+            <ul className="mt-1 list-disc space-y-1 pl-4 text-gray-700">
+              {briefing.fallbackIdeas.slice(0, 3).map((idea, index) => (
+                <li key={`${idea.title}-${index}`}><span className="font-medium">{idea.title}:</span> {idea.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {briefing.suggestedChecklistItems.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-white p-2 text-sm">
+            <p className="font-medium text-gray-900">Checklist ideas</p>
+            <ul className="mt-1 list-disc space-y-1 pl-4 text-gray-700">
+              {briefing.suggestedChecklistItems.slice(0, 3).map((item, index) => (
+                <li key={`${item.text}-${index}`}><span className="font-medium">{item.text}:</span> {item.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {briefing.caveat && <p className="rounded-md bg-white p-2 text-xs text-amber-900">{briefing.caveat}</p>}
+        {generatedAt && <p className="text-xs text-amber-900/60">Generated {new Date(generatedAt).toLocaleString()}</p>}
+      </div>
+    )}
+  </section>
+);
+
 const EventCard: React.FC<{
   label: string;
   event: Event | null;
@@ -360,9 +532,19 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   canEdit,
   weatherSnapshots = [],
   flightStatusSnapshots = [],
+  todayBriefing,
+  todayBriefingGeneratedAt,
+  todayBriefingError,
+  isGeneratingTodayBriefing,
+  replanBriefing,
+  replanBriefingGeneratedAt,
+  replanBriefingError,
+  isGeneratingReplanBriefing,
   onClose,
   onOpenChecklist,
   onEditEvent,
+  onGenerateTodayBriefing,
+  onGenerateReplanBriefing,
 }) => {
   const now = new Date();
   const currentEvent = getCurrentEvent(trip.events, now);
@@ -391,6 +573,10 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
       return rank[a.severity] - rank[b.severity];
     })
     .slice(0, 3);
+  const handleEditEventById = (eventId: string) => {
+    const event = trip.events.find((tripEvent) => tripEvent.id === eventId);
+    if (event) onEditEvent(event);
+  };
 
   return (
     <div className="flex h-full flex-col bg-white text-gray-900">
@@ -419,6 +605,26 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
           <p className="font-semibold">{tripStatus.label}</p>
           <p className="mt-1 opacity-90">{tripStatus.description}</p>
         </div>
+
+        <TodayBriefingCard
+          briefing={todayBriefing}
+          generatedAt={todayBriefingGeneratedAt}
+          error={todayBriefingError}
+          isGenerating={isGeneratingTodayBriefing}
+          onGenerate={onGenerateTodayBriefing}
+          onOpenChecklist={onOpenChecklist}
+          onEditEventById={handleEditEventById}
+        />
+
+        <ReplanDayCard
+          briefing={replanBriefing}
+          generatedAt={replanBriefingGeneratedAt}
+          error={replanBriefingError}
+          isGenerating={isGeneratingReplanBriefing}
+          onGenerate={onGenerateReplanBriefing}
+          onOpenChecklist={onOpenChecklist}
+          onEditEventById={handleEditEventById}
+        />
 
         <div className="grid gap-3">
           <EventCard

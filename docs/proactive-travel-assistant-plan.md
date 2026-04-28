@@ -1244,6 +1244,198 @@ Do not expose these as Vercel `VITE_*` variables.
 - Parser failures include actionable error details.
 - Existing UI behavior still works after migration.
 
+## Phase 8.5: AI Trip Assistant And Briefings
+
+### Goal
+
+Use AI to turn structured trip context into judgment, summaries, and practical next actions before and during travel.
+
+AI should not replace deterministic checks. The app should continue using structured code for dates, event ordering, weather, flight status, route buffers, notifications, and missing-field validation. AI should sit on top of that context to explain what matters and propose reviewable actions.
+
+### Core Principle
+
+AI output must be:
+
+- grounded in structured trip data,
+- reviewable before being saved,
+- explainable with a clear "why",
+- actionable with a button or next step,
+- safe to ignore without breaking the itinerary.
+
+### Pre-Trip AI Briefing
+
+User question:
+
+- "What should I do next to get ready?"
+- "What is missing before this trip?"
+- "What are the top risks?"
+- "What should I pack or confirm?"
+
+Inputs:
+
+- trip dates and timezone,
+- events and booking references,
+- Command Center insights,
+- weather snapshots,
+- flight status snapshots,
+- map/location quality,
+- checklist status,
+- notifications,
+- notes,
+- expense summary later.
+
+Output shape:
+
+```ts
+interface TripAssistantBriefing {
+  summary: string;
+  topRisks: {
+    title: string;
+    reason: string;
+    severity: 'info' | 'warning' | 'critical';
+    actionLabel?: string;
+    actionTarget?: 'event' | 'checklist' | 'add_event' | 'today' | 'expenses';
+    eventId?: string;
+  }[];
+  nextBestActions: {
+    title: string;
+    reason: string;
+    actionLabel: string;
+    actionTarget: 'event' | 'checklist' | 'add_event' | 'ai_import' | 'expenses';
+    eventId?: string;
+  }[];
+  suggestedChecklistItems: {
+    text: string;
+    reason: string;
+    scope: 'shared' | 'personal';
+    dueDate?: string;
+  }[];
+  suggestedBackupEvents: {
+    title: string;
+    reason: string;
+    eventType: 'activity' | 'destination';
+    date?: string;
+    locationHint?: string;
+  }[];
+}
+```
+
+Example:
+
+> "Your Costa Rica trip is mostly booked. Main gaps: no airport-to-lodging transport after SJO arrival, no indoor backup for the rainy beach day, and no passport/check-in checklist item. Next best action: add ground transport."
+
+### In-Trip Today Copilot
+
+User question:
+
+- "What should I do now?"
+- "Can we still make the next event?"
+- "What changed since I last checked?"
+- "What should we do if the flight is delayed or it rains?"
+
+Inputs:
+
+- current event,
+- next event,
+- today's timeline,
+- route/transfer buffer estimates,
+- flight status,
+- weather,
+- map links,
+- confirmation numbers,
+- checklist and notification state.
+
+Outputs:
+
+- day summary,
+- next action,
+- transfer risk explanation,
+- flight/weather change summary,
+- fallback suggestions,
+- collaborator message draft.
+
+Example:
+
+> "You land at SJO at 7:15 AM. You do not have ground transport added yet, and hotel check-in is 4 PM. Weather near the lodging is rainy this afternoon, so consider a flexible indoor lunch stop before driving south."
+
+### Proposed Endpoints
+
+- `POST /api/trips/:tripId/assistant-briefing`
+- `POST /api/trips/:tripId/today-briefing`
+- `POST /api/trips/:tripId/ask`
+- `POST /api/trips/:tripId/replan-day`
+
+These endpoints should use a shared context builder so prompt inputs are consistent and easy to audit.
+
+### Context Builder
+
+Create a server-side assistant context service that composes:
+
+- normalized trip summary,
+- chronological events,
+- current/next event,
+- top deterministic insights,
+- weather snapshots,
+- flight status snapshots,
+- transfer warnings,
+- checklist gaps,
+- notes summary,
+- relevant notifications.
+
+The context builder should redact sensitive raw import text and only include the minimum required structured fields.
+
+### AI Features To Build
+
+1. Trip readiness briefing.
+2. Today copilot briefing.
+3. Ask My Trip Q&A over itinerary, notes, bookings, weather, flights, and checklist state.
+4. Replan My Day suggestions when weather, flight status, route buffers, or event timing changes.
+5. Collaborator digest: "What changed since you last opened this trip?"
+6. Smart import inbox: classify pasted emails/files, detect duplicates, and infer missing fields.
+7. Post-trip wrap-up: settlement prompts, highlights, exports, and preference learning.
+
+### Tasks
+
+1. [x] Add server-side assistant context builder.
+2. [x] Add `TripAssistantBriefing` response schema and validation.
+3. [x] Add AI briefing endpoint for pre-trip readiness.
+4. [x] Add AI Today briefing endpoint for active trip mode.
+5. [x] Surface briefing in Command Center and Today drawer.
+6. [~] Add accept/edit/dismiss handling for AI-proposed actions.
+7. [~] Store accepted/dismissed AI suggestions in MongoDB.
+8. [~] Add safety guardrails: no auto-save, no hidden writes, no raw sensitive text in logs.
+9. Add prompt/model fallback config.
+10. [~] Add tests for schema validation and action mapping.
+
+Current implementation note:
+
+- Added an on-demand Command Center AI briefing endpoint and UI card. It uses structured trip context, events, weather snapshots, flight status snapshots, and active notifications.
+- Added an on-demand Today briefing endpoint and Today drawer card. It focuses the assistant on current/next events, today's timeline, weather, flight status, and active notifications.
+- Added first-pass action handling for AI briefings: action buttons route to existing app flows, checklist suggestions can be accepted into the normal checklist, and dismissed/accepted checklist suggestions are remembered per trip/user.
+- AI remains review-first: it can route the user or add an explicitly accepted checklist item, but it does not auto-create events, expenses, or notifications.
+- Added persistent `SuggestionFeedback` records and assistant feedback endpoints. Accepted/dismissed AI checklist suggestions now sync through MongoDB per trip/user instead of only living in local storage.
+- Added a first-pass Ask My Trip endpoint and Command Center Q&A panel. Answers are generated from structured assistant context only, include supporting facts, and fall back to deterministic answers if the AI response is unavailable or malformed.
+- Hardened assistant output handling with schema-style normalization for briefing, Today briefing, and Ask My Trip responses. Parsed AI JSON now has enum fields, required strings, and arrays sanitized before it reaches the UI.
+- Added focused Node tests for assistant response normalization and deterministic answer fallback behavior.
+- Added structured weather and flight-status diagnostics so the UI can distinguish provider configuration, provider errors, no matching data, outside forecast windows, and partial results.
+- Cleaned up the Command Center layout into clearer Planning Snapshot, Needs Attention, and collapsed Assistant sections so AI briefing and Ask My Trip do not crowd the default dashboard.
+- Added a review-only Replan My Day endpoint and Today drawer panel. It suggests timing checks, backups, transport/weather/flight considerations, and checklist ideas without automatically changing the itinerary.
+- Started the Smart Import Inbox by reusing persisted `TravelImport` records as reviewable inbox items. New imports are classified as needs review, missing info, possible duplicate, failed, unsupported, accepted, partially accepted, or dismissed.
+- The import modal now surfaces recent inbox items, supports reviewing parsed candidates again, and allows dismissing stale imports without deleting history.
+- Added redacted source titles and excerpts for inbox items so users can identify pasted bookings without storing full raw import text in the review list.
+- Added same-source duplicate detection for imports. Re-pasting a previously imported booking is marked as a duplicate and linked back to the earlier inbox item.
+- Added missing-info guidance to inbox items. The inbox now summarizes missing required fields, map/location warnings, duplicate event warnings, and repeated-source duplicates before the user opens review.
+- Added first-pass inbox filters for open imports, needs review, missing info, duplicates, done, and failed items.
+- Added show-all/show-less controls for filtered inbox results so longer import histories remain discoverable without crowding the modal by default.
+
+### Acceptance Criteria
+
+- AI briefings use deterministic trip context and do not invent unsupported facts.
+- Every suggested action explains why it appears.
+- Users can accept, edit, dismiss, or ignore AI suggestions.
+- AI suggestions do not auto-create events, checklist items, or expenses.
+- The app remains useful if AI is unavailable.
+
 ## Phase 9: Contextual Suggestions And Personalization
 
 ### Goal

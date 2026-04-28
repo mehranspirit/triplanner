@@ -37,4 +37,12 @@ export interface TripFlightStatusesResponse {
     eventId: string;
     reason: 'missing_api_key' | 'missing_flight_number' | 'missing_date' | 'not_found' | string;
   }[];
+  diagnostics?: {
+    status: 'available' | 'partial' | 'not_configured' | 'no_targets' | 'provider_error' | 'no_data' | string;
+    configured: boolean;
+    reasonCounts: Record<string, number>;
+    attemptedFlights: number;
+    availableSnapshots: number;
+    message: string;
+  };
 }

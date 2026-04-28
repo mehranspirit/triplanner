@@ -12,6 +12,50 @@ const getProviderApiKey = (provider) => {
   return process.env.AVIATIONSTACK_API_KEY;
 };
 
+const countReasons = (skipped) => skipped.reduce((counts, item) => ({
+  ...counts,
+  [item.reason]: (counts[item.reason] || 0) + 1
+}), {});
+
+const buildDiagnostics = ({ provider, configured, snapshots, skipped, flightEventCount }) => {
+  const reasonCounts = countReasons(skipped);
+  const providerFailures = Object.entries(reasonCounts)
+    .filter(([reason]) => reason.startsWith('provider_'))
+    .reduce((sum, [, count]) => sum + count, 0);
+
+  let status = 'available';
+  let message = 'Flight status context is available.';
+
+  if (!configured) {
+    status = 'not_configured';
+    message = `${provider} API key is not configured.`;
+  } else if (flightEventCount === 0) {
+    status = 'no_targets';
+    message = 'No flight events were found in this trip.';
+  } else if (snapshots.length === 0 && providerFailures > 0) {
+    status = 'provider_error';
+    message = `${provider} rejected or failed all flight status requests.`;
+  } else if (snapshots.length === 0 && reasonCounts.not_found) {
+    status = 'no_data';
+    message = `${provider} did not return matching flight status data.`;
+  } else if (snapshots.length === 0) {
+    status = 'no_data';
+    message = 'No flight status data was available for the current itinerary.';
+  } else if (skipped.length > 0) {
+    status = 'partial';
+    message = 'Flight status context is available for some flights.';
+  }
+
+  return {
+    status,
+    configured,
+    reasonCounts,
+    attemptedFlights: flightEventCount,
+    availableSnapshots: snapshots.length,
+    message
+  };
+};
+
 const isValidDate = (date) => date instanceof Date && !Number.isNaN(date.getTime());
 
 const parseEventDateTime = (dateValue, timeValue) => {
@@ -136,12 +180,15 @@ const fetchAviationStackFlight = async ({ flightNumber, dateLocal }) => {
 
   const response = await fetch(url.toString());
   if (!response.ok) {
-    throw new Error(`Aviationstack returned ${response.status}`);
+    return { unavailable: true, reason: `provider_http_${response.status}` };
   }
 
   const data = await response.json();
   if (data.error) {
-    throw new Error(`Aviationstack error: ${data.error.message || data.error.code || 'unknown error'}`);
+    return {
+      unavailable: true,
+      reason: `provider_error_${data.error.code || response.status || 'unknown'}`
+    };
   }
 
   return data.data || [];
@@ -165,7 +212,7 @@ const fetchAeroDataBoxFlight = async ({ flightNumber, dateLocal }) => {
   });
 
   if (!response.ok) {
-    throw new Error(`AeroDataBox returned ${response.status}`);
+    return { unavailable: true, reason: `provider_http_${response.status}` };
   }
 
   return response.json();
@@ -212,6 +259,7 @@ const getTripFlightStatuses = async ({ trip, refresh = false }) => {
   const now = new Date();
   const provider = getProvider();
   const providerApiKey = getProviderApiKey(provider);
+  const flightEventCount = (trip.events || []).filter((event) => event.type === 'flight').length;
 
   for (const event of trip.events || []) {
     if (event.type !== 'flight') continue;
@@ -292,7 +340,14 @@ const getTripFlightStatuses = async ({ trip, refresh = false }) => {
     generatedAt: new Date().toISOString(),
     configured: Boolean(providerApiKey),
     snapshots,
-    skipped
+    skipped,
+    diagnostics: buildDiagnostics({
+      provider,
+      configured: Boolean(providerApiKey),
+      snapshots,
+      skipped,
+      flightEventCount
+    })
   };
 };
 

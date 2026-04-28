@@ -62,6 +62,17 @@ import { hashText } from '@/utils/hash';
 import { NotificationPreference, TripNotification } from '@/types/notificationTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
+import { TravelImport, TravelImportStatus } from '@/types/travelImportTypes';
+import {
+  AssistantActionTarget,
+  AssistantChecklistItem,
+  AssistantSuggestionFeedback,
+  TripAssistantBriefingResponse,
+  TripQuestionAnswerResponse,
+  TripReplanBriefingResponse,
+  TripTodayBriefingResponse
+} from '@/types/assistantBriefingTypes';
+import { networkAwareApi } from '@/services/networkAwareApi';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -82,6 +93,125 @@ const processText = (text: string | undefined | null): string => {
     console.warn('Failed to process text:', text, e);
     return text || '';
   }
+};
+
+const getAssistantChecklistItemId = (item: AssistantChecklistItem) => (
+  `${item.scope}:${item.text.trim().toLowerCase()}`
+);
+
+const getProviderLabel = (provider: string) => {
+  if (provider === 'aviationstack') return 'Aviationstack';
+  if (provider === 'aerodatabox') return 'AeroDataBox';
+  if (provider === 'open-meteo') return 'Open-Meteo';
+  return provider;
+};
+
+const getImportInboxStatus = (candidates: ParsedEventCandidate[]): TravelImportStatus => {
+  if (candidates.length === 0) return 'unsupported';
+  if (candidates.some(candidate => candidate.validation.duplicateEventIds.length > 0)) return 'duplicate';
+  if (candidates.some(candidate => candidate.validation.errors.length > 0)) return 'missing_info';
+  return 'needs_review';
+};
+
+type ImportInboxFilter = 'open' | 'needs_review' | 'missing_info' | 'duplicate' | 'done' | 'failed';
+
+const importInboxFilters: Array<{ id: ImportInboxFilter; label: string }> = [
+  { id: 'open', label: 'Open' },
+  { id: 'needs_review', label: 'Needs review' },
+  { id: 'missing_info', label: 'Missing info' },
+  { id: 'duplicate', label: 'Duplicates' },
+  { id: 'done', label: 'Done' },
+  { id: 'failed', label: 'Failed' },
+];
+
+const matchesImportInboxFilter = (travelImport: TravelImport, filter: ImportInboxFilter) => {
+  if (filter === 'open') {
+    return ['parsed', 'needs_review', 'missing_info', 'duplicate', 'unsupported'].includes(travelImport.status);
+  }
+  if (filter === 'done') {
+    return ['accepted', 'partially_accepted', 'dismissed'].includes(travelImport.status);
+  }
+  return travelImport.status === filter;
+};
+
+const getImportStatusLabel = (status: TravelImportStatus) => {
+  const labels: Record<TravelImportStatus, string> = {
+    parsed: 'Needs review',
+    needs_review: 'Needs review',
+    missing_info: 'Missing info',
+    duplicate: 'Possible duplicate',
+    failed: 'Failed',
+    accepted: 'Accepted',
+    partially_accepted: 'Partially accepted',
+    dismissed: 'Dismissed',
+    unsupported: 'Unsupported',
+  };
+  return labels[status] || status;
+};
+
+const getImportStatusClassName = (status: TravelImportStatus) => {
+  if (status === 'failed' || status === 'unsupported') return 'bg-red-100 text-red-700';
+  if (status === 'missing_info' || status === 'duplicate' || status === 'partially_accepted') return 'bg-amber-100 text-amber-700';
+  if (status === 'accepted') return 'bg-green-100 text-green-700';
+  if (status === 'dismissed') return 'bg-gray-100 text-gray-600';
+  return 'bg-blue-100 text-blue-700';
+};
+
+const redactImportSourceText = (text: string) => (
+  text
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+    .replace(/\+?\d[\d\s().-]{7,}\d/g, '[phone]')
+    .replace(/\b[A-Z0-9]{8,}\b/g, '[code]')
+    .replace(/\s+/g, ' ')
+    .trim()
+);
+
+const buildImportSourceSummary = (text: string) => {
+  const redacted = redactImportSourceText(text);
+  const firstLine = redactImportSourceText(text.split(/\r?\n/).find(line => line.trim()) || '');
+  return {
+    sourceTitle: (firstLine || 'Pasted import').slice(0, 140),
+    sourceExcerpt: redacted.slice(0, 500),
+  };
+};
+
+const getImportFallbackTitle = (travelImport: TravelImport) => {
+  const firstEvent = travelImport.parsedEvents?.[0];
+  if (firstEvent) return getEventDisplayName(firstEvent);
+  if (travelImport.status === 'failed') return 'Failed import';
+  return 'Pasted import';
+};
+
+const formatImportIssue = (issue: string) => (
+  issue
+    .replace(/^Missing required field:\s*/i, 'Missing ')
+    .replace(/^Missing or invalid start time$/i, 'Missing or invalid start time')
+    .replace(/^Missing or invalid end time$/i, 'Missing or invalid end time')
+);
+
+const getImportIssueSummaries = (travelImport: TravelImport, existingEvents: Event[]) => {
+  const issueSet = new Set<string>();
+
+  (travelImport.validationErrors || []).forEach((issue) => {
+    if (issue.trim()) issueSet.add(formatImportIssue(issue));
+  });
+
+  if (travelImport.duplicateOfImportId) {
+    issueSet.add('Same source as an earlier inbox item');
+  }
+
+  if (!['accepted', 'dismissed'].includes(travelImport.status) && travelImport.parsedEvents?.length > 0) {
+    buildParsedEventCandidates(travelImport.parsedEvents, existingEvents).forEach((candidate) => {
+      candidate.validation.errors.forEach((issue) => issueSet.add(formatImportIssue(issue)));
+      candidate.validation.warnings.forEach((issue) => issueSet.add(formatImportIssue(issue)));
+      candidate.validation.duplicateEventIds.forEach((eventId) => {
+        const eventName = existingEvents.find((event) => event.id === eventId);
+        issueSet.add(eventName ? `Possible duplicate of ${getEventDisplayName(eventName)}` : 'Possible duplicate of an existing event');
+      });
+    });
+  }
+
+  return Array.from(issueSet).slice(0, 4);
 };
 
 const NewTripDetails: React.FC = () => {
@@ -118,6 +248,19 @@ const NewTripDetails: React.FC = () => {
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [flightStatusSnapshots, setFlightStatusSnapshots] = useState<FlightStatusSnapshot[]>([]);
   const [flightStatusError, setFlightStatusError] = useState<string | null>(null);
+  const [assistantBriefing, setAssistantBriefing] = useState<TripAssistantBriefingResponse | null>(null);
+  const [assistantBriefingError, setAssistantBriefingError] = useState<string | null>(null);
+  const [isGeneratingAssistantBriefing, setIsGeneratingAssistantBriefing] = useState(false);
+  const [todayBriefing, setTodayBriefing] = useState<TripTodayBriefingResponse | null>(null);
+  const [todayBriefingError, setTodayBriefingError] = useState<string | null>(null);
+  const [isGeneratingTodayBriefing, setIsGeneratingTodayBriefing] = useState(false);
+  const [replanBriefing, setReplanBriefing] = useState<TripReplanBriefingResponse | null>(null);
+  const [replanBriefingError, setReplanBriefingError] = useState<string | null>(null);
+  const [isGeneratingReplanBriefing, setIsGeneratingReplanBriefing] = useState(false);
+  const [tripQuestionAnswer, setTripQuestionAnswer] = useState<TripQuestionAnswerResponse | null>(null);
+  const [tripQuestionError, setTripQuestionError] = useState<string | null>(null);
+  const [isAskingTripQuestion, setIsAskingTripQuestion] = useState(false);
+  const [assistantSuggestionFeedback, setAssistantSuggestionFeedback] = useState<AssistantSuggestionFeedback[]>([]);
   const [isAIParseModalOpen, setIsAIParseModalOpen] = useState(false);
   const [parseText, setParseText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -125,6 +268,11 @@ const NewTripDetails: React.FC = () => {
   const [parsedCandidates, setParsedCandidates] = useState<ParsedEventCandidate[]>([]);
   const [isAddingParsedEvents, setIsAddingParsedEvents] = useState(false);
   const [activeTravelImportId, setActiveTravelImportId] = useState<string | null>(null);
+  const [travelImports, setTravelImports] = useState<TravelImport[]>([]);
+  const [importInboxFilter, setImportInboxFilter] = useState<ImportInboxFilter>('open');
+  const [showAllTravelImports, setShowAllTravelImports] = useState(false);
+  const [isLoadingTravelImports, setIsLoadingTravelImports] = useState(false);
+  const [travelImportError, setTravelImportError] = useState<string | null>(null);
   const parseWarning = parsedCandidates.length === 1 && /Flight\s+1\s+of\s+\d+/i.test(parseText)
     ? 'This looks like a multi-flight receipt, but only one event was extracted. Review the text or try parsing again before saving.'
     : null;
@@ -148,7 +296,15 @@ const NewTripDetails: React.FC = () => {
     () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
     [tripInsights, dismissedInsightIds]
   );
+  const filteredTravelImports = useMemo(
+    () => travelImports.filter(travelImport => matchesImportInboxFilter(travelImport, importInboxFilter)),
+    [travelImports, importInboxFilter]
+  );
+  const visibleTravelImports = showAllTravelImports ? filteredTravelImports : filteredTravelImports.slice(0, 6);
   const unreadNotificationCount = notifications.filter(notification => !notification.readAt).length;
+  const handledAssistantChecklistItemIds = assistantSuggestionFeedback
+    .filter(feedback => feedback.suggestionType === 'assistant_checklist_item')
+    .map(feedback => feedback.suggestionId);
 
   const fetchNotifications = async (generate = true) => {
     if (!trip?._id) return;
@@ -170,6 +326,211 @@ const NewTripDetails: React.FC = () => {
     }
   };
 
+  const fetchTravelImports = async () => {
+    if (!trip?._id) return;
+
+    try {
+      setIsLoadingTravelImports(true);
+      setTravelImportError(null);
+      const imports = await api.getTravelImports(trip._id);
+      setTravelImports(imports);
+    } catch (error) {
+      console.error('Error loading travel imports:', error);
+      setTravelImportError(error instanceof Error ? error.message : 'Failed to load import inbox');
+    } finally {
+      setIsLoadingTravelImports(false);
+    }
+  };
+
+  const handleGenerateAssistantBriefing = async () => {
+    if (!trip?._id) return;
+
+    try {
+      setIsGeneratingAssistantBriefing(true);
+      setAssistantBriefingError(null);
+      const data = await api.generateTripAssistantBriefing(trip._id);
+      setAssistantBriefing(data);
+    } catch (error) {
+      console.error('Error generating assistant briefing:', error);
+      setAssistantBriefingError(error instanceof Error ? error.message : 'Failed to generate assistant briefing');
+    } finally {
+      setIsGeneratingAssistantBriefing(false);
+    }
+  };
+
+  const handleGenerateTodayBriefing = async () => {
+    if (!trip?._id) return;
+
+    try {
+      setIsGeneratingTodayBriefing(true);
+      setTodayBriefingError(null);
+      const data = await api.generateTripTodayBriefing(trip._id);
+      setTodayBriefing(data);
+    } catch (error) {
+      console.error('Error generating Today briefing:', error);
+      setTodayBriefingError(error instanceof Error ? error.message : 'Failed to generate Today briefing');
+    } finally {
+      setIsGeneratingTodayBriefing(false);
+    }
+  };
+
+  const handleGenerateReplanBriefing = async () => {
+    if (!trip?._id) return;
+
+    try {
+      setIsGeneratingReplanBriefing(true);
+      setReplanBriefingError(null);
+      const data = await api.generateTripReplanBriefing(trip._id);
+      setReplanBriefing(data);
+    } catch (error) {
+      console.error('Error generating day replan briefing:', error);
+      setReplanBriefingError(error instanceof Error ? error.message : 'Failed to generate day replan briefing');
+    } finally {
+      setIsGeneratingReplanBriefing(false);
+    }
+  };
+
+  const handleAskTripQuestion = async (question: string) => {
+    if (!trip?._id) return;
+
+    try {
+      setIsAskingTripQuestion(true);
+      setTripQuestionError(null);
+      const data = await api.askTripQuestion(trip._id, question);
+      setTripQuestionAnswer(data);
+    } catch (error) {
+      console.error('Error asking trip question:', error);
+      setTripQuestionError(error instanceof Error ? error.message : 'Failed to answer trip question');
+    } finally {
+      setIsAskingTripQuestion(false);
+    }
+  };
+
+  const saveAssistantChecklistFeedback = async (
+    item: AssistantChecklistItem,
+    status: 'accepted' | 'dismissed'
+  ) => {
+    if (!trip?._id) return;
+    const id = getAssistantChecklistItemId(item);
+    const optimisticFeedback: AssistantSuggestionFeedback = {
+      _id: `temp-${id}`,
+      userId: user?._id || '',
+      tripId: trip._id,
+      suggestionId: id,
+      suggestionType: 'assistant_checklist_item',
+      status,
+      scope: item.scope,
+      title: item.text,
+      reason: item.reason,
+      payload: item,
+      acceptedAt: status === 'accepted' ? new Date().toISOString() : undefined,
+      dismissedAt: status === 'dismissed' ? new Date().toISOString() : undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAssistantSuggestionFeedback(prev => [
+      optimisticFeedback,
+      ...prev.filter(feedback => feedback.suggestionId !== id)
+    ]);
+
+    const savedFeedback = await api.saveAssistantSuggestionFeedback(trip._id, {
+      suggestionId: id,
+      suggestionType: 'assistant_checklist_item',
+      status,
+      scope: item.scope,
+      title: item.text,
+      reason: item.reason,
+      payload: item,
+    });
+
+    setAssistantSuggestionFeedback(prev => [
+      savedFeedback,
+      ...prev.filter(feedback => feedback.suggestionId !== id)
+    ]);
+  };
+
+  const handleAssistantAction = (target: AssistantActionTarget, eventId?: string) => {
+    if (!trip) return;
+
+    switch (target) {
+      case 'event': {
+        const event = trip.events.find(tripEvent => tripEvent.id === eventId);
+        if (event) {
+          handleEditEventClick(event);
+        }
+        break;
+      }
+      case 'checklist':
+        setShowChecklist(true);
+        setShowToday(false);
+        setShowNotifications(false);
+        break;
+      case 'expenses':
+        navigate(`/trips/${trip._id}/expenses`);
+        break;
+      case 'today':
+        setShowToday(true);
+        setShowChecklist(false);
+        setShowNotifications(false);
+        setShowNotes(false);
+        setShowMap(false);
+        break;
+      case 'ai_import':
+        setIsAIParseModalOpen(true);
+        setShowToday(false);
+        setShowNotifications(false);
+        break;
+      case 'add_event':
+        handleAddEventClick('activity');
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleAcceptAssistantChecklistItem = async (item: AssistantChecklistItem) => {
+    if (!trip?._id || !canEdit) return;
+
+    try {
+      const checklistType = item.scope === 'personal' ? 'personal' : 'shared';
+      const bins = await networkAwareApi.getChecklist(trip._id, checklistType);
+      const normalizedText = item.text.trim().toLowerCase();
+      const alreadyExists = bins.some((bin) => (
+        bin.items.some((existingItem) => existingItem.text.trim().toLowerCase() === normalizedText)
+      ));
+
+      if (!alreadyExists) {
+        const targetBin = bins[0] || { id: crypto.randomUUID(), title: 'To Do', items: [] };
+        const nextBins = bins.length > 0
+          ? bins.map((bin) => (
+              bin.id === targetBin.id
+                ? { ...bin, items: [...bin.items, { id: crypto.randomUUID(), text: item.text.trim(), completed: false }] }
+                : bin
+            ))
+          : [{ ...targetBin, items: [{ id: crypto.randomUUID(), text: item.text.trim(), completed: false }] }];
+        await networkAwareApi.updateChecklist(trip._id, checklistType, nextBins);
+      }
+
+      await saveAssistantChecklistFeedback(item, 'accepted');
+      setShowChecklist(true);
+      setSuccess(`Added "${item.text}" to the ${checklistType} checklist.`);
+      setShowSuccessDialog(true);
+    } catch (error) {
+      console.error('Error accepting assistant checklist item:', error);
+      setAssistantBriefingError(error instanceof Error ? error.message : 'Failed to add checklist item');
+    }
+  };
+
+  const handleDismissAssistantChecklistItem = async (item: AssistantChecklistItem) => {
+    try {
+      await saveAssistantChecklistFeedback(item, 'dismissed');
+    } catch (error) {
+      console.error('Error dismissing assistant checklist item:', error);
+      setAssistantBriefingError(error instanceof Error ? error.message : 'Failed to dismiss checklist suggestion');
+    }
+  };
+
   useEffect(() => {
     if (!trip?._id) return;
 
@@ -183,9 +544,41 @@ const NewTripDetails: React.FC = () => {
   }, [trip?._id]);
 
   useEffect(() => {
+    setAssistantBriefing(null);
+    setAssistantBriefingError(null);
+    setTodayBriefing(null);
+    setTodayBriefingError(null);
+    setReplanBriefing(null);
+    setReplanBriefingError(null);
+    setTripQuestionAnswer(null);
+    setTripQuestionError(null);
+    if (!trip?._id) {
+      setAssistantSuggestionFeedback([]);
+      return;
+    }
+
+    const fetchAssistantFeedback = async () => {
+      try {
+        const feedback = await api.getAssistantSuggestionFeedback(trip._id);
+        setAssistantSuggestionFeedback(feedback);
+      } catch (error) {
+        console.error('Error loading assistant feedback:', error);
+        setAssistantSuggestionFeedback([]);
+      }
+    };
+
+    fetchAssistantFeedback();
+  }, [trip?._id]);
+
+  useEffect(() => {
     if (!trip?._id) return;
     fetchNotifications();
   }, [trip?._id, trip?.updatedAt]);
+
+  useEffect(() => {
+    if (!trip?._id || !isAIParseModalOpen) return;
+    fetchTravelImports();
+  }, [trip?._id, isAIParseModalOpen]);
 
   useEffect(() => {
     if (!trip?._id) return;
@@ -195,6 +588,10 @@ const NewTripDetails: React.FC = () => {
         setWeatherError(null);
         const data = await api.getTripWeather(trip._id);
         setWeatherSnapshots(data.snapshots || []);
+        const status = data.diagnostics?.status;
+        if (status && !['available', 'partial'].includes(status)) {
+          setWeatherError(`${getProviderLabel(data.provider)}: ${data.diagnostics?.message || 'Weather context is unavailable.'}`);
+        }
       } catch (error) {
         console.error('Error loading weather:', error);
         setWeatherError(error instanceof Error ? error.message : 'Failed to load trip weather');
@@ -213,13 +610,11 @@ const NewTripDetails: React.FC = () => {
         setFlightStatusError(null);
         const data = await api.getTripFlightStatuses(trip._id);
         setFlightStatusSnapshots(data.snapshots || []);
-        if (!data.configured) {
-          const providerLabel = data.provider === 'aviationstack'
-            ? 'Aviationstack'
-            : data.provider === 'aerodatabox'
-              ? 'AeroDataBox'
-              : data.provider;
-          setFlightStatusError(`${providerLabel} API key is not configured.`);
+        const status = data.diagnostics?.status;
+        if (status && !['available', 'partial', 'no_targets'].includes(status)) {
+          setFlightStatusError(`${getProviderLabel(data.provider)}: ${data.diagnostics?.message || 'Flight status context is unavailable.'}`);
+        } else if (!data.configured) {
+          setFlightStatusError(`${getProviderLabel(data.provider)} API key is not configured.`);
         }
       } catch (error) {
         console.error('Error loading flight statuses:', error);
@@ -495,15 +890,18 @@ const NewTripDetails: React.FC = () => {
 
       try {
         const sourceHash = await hashText(parseText);
+        const sourceSummary = buildImportSourceSummary(parseText);
         const travelImport = await api.createTravelImport(trip._id, {
           sourceType: 'manual_text',
           sourceHash,
-          status: 'parsed',
+          ...sourceSummary,
+          status: getImportInboxStatus(candidates),
           model: 'gemini-2.5-flash',
           parsedEvents: eventsToReview,
           validationErrors: candidates.flatMap(candidate => candidate.validation.errors),
         });
         setActiveTravelImportId(travelImport._id);
+        setTravelImports(prev => [travelImport, ...prev.filter(item => item._id !== travelImport._id)]);
       } catch (historyError) {
         console.warn('Failed to record travel import history:', historyError);
       }
@@ -514,12 +912,16 @@ const NewTripDetails: React.FC = () => {
 
       try {
         const sourceHash = await hashText(parseText);
+        const sourceSummary = buildImportSourceSummary(parseText);
         await api.createTravelImport(trip._id, {
           sourceType: 'manual_text',
           sourceHash,
+          ...sourceSummary,
           status: 'failed',
           model: 'gemini-2.5-flash',
           validationErrors: [message],
+        }).then((travelImport) => {
+          setTravelImports(prev => [travelImport, ...prev.filter(item => item._id !== travelImport._id)]);
         });
       } catch (historyError) {
         console.warn('Failed to record failed travel import:', historyError);
@@ -553,7 +955,7 @@ const NewTripDetails: React.FC = () => {
 
       if (activeTravelImportId) {
         try {
-          await api.updateTravelImport(trip._id, activeTravelImportId, {
+          const updatedImport = await api.updateTravelImport(trip._id, activeTravelImportId, {
             status: createdEventIds.length === selectedCandidates.length ? 'accepted' : 'partially_accepted',
             createdEventIds,
             validationErrors: parsedCandidates.flatMap(candidate => [
@@ -561,6 +963,7 @@ const NewTripDetails: React.FC = () => {
               ...candidate.validation.warnings,
             ]),
           });
+          setTravelImports(prev => prev.map(item => item._id === updatedImport._id ? updatedImport : item));
         } catch (historyError) {
           console.warn('Failed to update travel import history:', historyError);
         }
@@ -571,6 +974,29 @@ const NewTripDetails: React.FC = () => {
       setParseError(error instanceof Error ? error.message : 'Failed to add parsed events');
     } finally {
       setIsAddingParsedEvents(false);
+    }
+  };
+
+  const handleReviewTravelImport = (travelImport: TravelImport) => {
+    if (!trip) return;
+    const candidates = buildParsedEventCandidates(travelImport.parsedEvents || [], trip.events);
+    setParsedCandidates(candidates);
+    setActiveTravelImportId(travelImport._id);
+    setParseError(null);
+    setParseText('');
+  };
+
+  const handleDismissTravelImport = async (travelImport: TravelImport) => {
+    if (!trip?._id) return;
+
+    try {
+      const updatedImport = await api.updateTravelImport(trip._id, travelImport._id, {
+        status: 'dismissed',
+      });
+      setTravelImports(prev => prev.map(item => item._id === updatedImport._id ? updatedImport : item));
+    } catch (error) {
+      console.error('Error dismissing travel import:', error);
+      setTravelImportError(error instanceof Error ? error.message : 'Failed to dismiss import');
     }
   };
 
@@ -1172,6 +1598,20 @@ const NewTripDetails: React.FC = () => {
         onDismissInsight={handleDismissInsight}
         dismissedInsightCount={dismissedInsightIds.length}
         onRestoreDismissedInsights={handleRestoreDismissedInsights}
+        assistantBriefing={assistantBriefing?.briefing}
+        assistantBriefingGeneratedAt={assistantBriefing?.generatedAt}
+        isGeneratingAssistantBriefing={isGeneratingAssistantBriefing}
+        assistantBriefingError={assistantBriefingError}
+        onGenerateAssistantBriefing={handleGenerateAssistantBriefing}
+        onAssistantAction={handleAssistantAction}
+        onAcceptAssistantChecklistItem={handleAcceptAssistantChecklistItem}
+        onDismissAssistantChecklistItem={handleDismissAssistantChecklistItem}
+        getAssistantChecklistItemId={getAssistantChecklistItemId}
+        handledAssistantChecklistItemIds={handledAssistantChecklistItemIds}
+        tripQuestionAnswer={tripQuestionAnswer}
+        isAskingTripQuestion={isAskingTripQuestion}
+        tripQuestionError={tripQuestionError}
+        onAskTripQuestion={handleAskTripQuestion}
       />
       {weatherError && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -1585,6 +2025,16 @@ const NewTripDetails: React.FC = () => {
             canEdit={canEdit}
             weatherSnapshots={weatherSnapshots}
             flightStatusSnapshots={flightStatusSnapshots}
+            todayBriefing={todayBriefing?.briefing}
+            todayBriefingGeneratedAt={todayBriefing?.generatedAt}
+            todayBriefingError={todayBriefingError}
+            isGeneratingTodayBriefing={isGeneratingTodayBriefing}
+            onGenerateTodayBriefing={handleGenerateTodayBriefing}
+            replanBriefing={replanBriefing?.briefing}
+            replanBriefingGeneratedAt={replanBriefing?.generatedAt}
+            replanBriefingError={replanBriefingError}
+            isGeneratingReplanBriefing={isGeneratingReplanBriefing}
+            onGenerateReplanBriefing={handleGenerateReplanBriefing}
             onClose={() => setShowToday(false)}
             onOpenChecklist={() => {
               setShowToday(false);
@@ -1664,6 +2114,130 @@ const NewTripDetails: React.FC = () => {
           </DialogHeader>
           
           <div className="py-4 space-y-4 overflow-y-auto pr-1">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Import Inbox</h3>
+                  <p className="text-sm text-gray-500">
+                    Recent parsed inputs stay here until accepted, dismissed, or reviewed again.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={fetchTravelImports} disabled={isLoadingTravelImports}>
+                  {isLoadingTravelImports ? 'Refreshing...' : 'Refresh'}
+                </Button>
+              </div>
+              {travelImportError && (
+                <p className="mt-2 text-sm text-red-600">{travelImportError}</p>
+              )}
+              {travelImports.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {importInboxFilters.map((filter) => {
+                    const count = travelImports.filter(travelImport => matchesImportInboxFilter(travelImport, filter.id)).length;
+                    return (
+                      <Button
+                        key={filter.id}
+                        type="button"
+                        variant={importInboxFilter === filter.id ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          setImportInboxFilter(filter.id);
+                          setShowAllTravelImports(false);
+                        }}
+                      >
+                        {filter.label}
+                        <span className="ml-1 opacity-75">{count}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-3 space-y-2">
+                {travelImports.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-gray-300 bg-white p-3 text-sm text-gray-500">
+                    No imports yet. Paste booking text below to create the first inbox item.
+                  </p>
+                ) : filteredTravelImports.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-gray-300 bg-white p-3 text-sm text-gray-500">
+                    No imports match this filter.
+                  </p>
+                ) : (
+                  visibleTravelImports.map((travelImport) => {
+                    const parsedCount = travelImport.parsedEvents?.length || 0;
+                    const canReview = parsedCount > 0 && !['accepted', 'dismissed', 'failed', 'unsupported'].includes(travelImport.status);
+                    const sourceTitle = travelImport.sourceTitle || getImportFallbackTitle(travelImport);
+                    const issueSummaries = getImportIssueSummaries(travelImport, trip.events);
+                    return (
+                      <div key={travelImport._id} className="rounded-md border border-gray-200 bg-white p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getImportStatusClassName(travelImport.status)}`}>
+                                {getImportStatusLabel(travelImport.status)}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(travelImport.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="mt-2 truncate text-sm font-medium text-gray-900">
+                              {sourceTitle}
+                            </p>
+                            {travelImport.sourceExcerpt && (
+                              <p className="mt-1 line-clamp-2 text-xs text-gray-500">
+                                {travelImport.sourceExcerpt}
+                              </p>
+                            )}
+                            <p className="mt-2 text-sm text-gray-700">
+                              {parsedCount > 0
+                                ? `${parsedCount} extracted event${parsedCount === 1 ? '' : 's'}`
+                                : travelImport.status === 'failed'
+                                  ? 'Could not parse this input'
+                                  : 'No event candidates extracted'}
+                            </p>
+                            {issueSummaries.length > 0 && (
+                              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2">
+                                <p className="text-xs font-medium text-amber-800">Needs attention</p>
+                                <ul className="mt-1 space-y-0.5 text-xs text-amber-700">
+                                  {issueSummaries.map((issue) => (
+                                    <li key={issue}>{issue}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {canReview && (
+                              <Button variant="outline" size="sm" onClick={() => handleReviewTravelImport(travelImport)}>
+                                Review
+                              </Button>
+                            )}
+                            {!['accepted', 'dismissed'].includes(travelImport.status) && (
+                              <Button variant="ghost" size="sm" onClick={() => handleDismissTravelImport(travelImport)}>
+                                Dismiss
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {filteredTravelImports.length > 6 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 h-7 px-2 text-xs"
+                  onClick={() => setShowAllTravelImports(prev => !prev)}
+                >
+                  {showAllTravelImports
+                    ? 'Show less'
+                    : `Show all ${filteredTravelImports.length} imports`}
+                </Button>
+              )}
+            </div>
+
             <Textarea
               placeholder="Paste your text here..."
               value={parseText}

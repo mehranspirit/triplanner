@@ -1,7 +1,16 @@
 import { Event } from './eventTypes';
 
 export type TravelImportSourceType = 'email_text' | 'pdf_text' | 'manual_text' | 'image_text';
-export type TravelImportStatus = 'parsed' | 'failed' | 'accepted' | 'partially_accepted';
+export type TravelImportStatus =
+  | 'parsed'
+  | 'needs_review'
+  | 'missing_info'
+  | 'duplicate'
+  | 'failed'
+  | 'accepted'
+  | 'partially_accepted'
+  | 'dismissed'
+  | 'unsupported';
 
 export interface TravelImport {
   _id: string;
@@ -9,7 +18,10 @@ export interface TravelImport {
   userId: string;
   sourceType: TravelImportSourceType;
   sourceHash?: string;
+  sourceTitle?: string;
+  sourceExcerpt?: string;
   status: TravelImportStatus;
+  duplicateOfImportId?: string;
   model?: string;
   parsedEvents: Event[];
   validationErrors: string[];
@@ -21,6 +33,8 @@ export interface TravelImport {
 export interface CreateTravelImportRequest {
   sourceType?: TravelImportSourceType;
   sourceHash?: string;
+  sourceTitle?: string;
+  sourceExcerpt?: string;
   status?: TravelImportStatus;
   model?: string;
   parsedEvents?: Event[];

@@ -6,6 +6,49 @@ const PROVIDER = 'open-meteo';
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_FORECAST_DAYS = 16;
 
+const countReasons = (skipped) => skipped.reduce((counts, item) => ({
+  ...counts,
+  [item.reason]: (counts[item.reason] || 0) + 1
+}), {});
+
+const buildDiagnostics = ({ snapshots, skipped }) => {
+  const reasonCounts = countReasons(skipped);
+  const providerFailures = Object.entries(reasonCounts)
+    .filter(([reason]) => reason.startsWith('provider_'))
+    .reduce((sum, [, count]) => sum + count, 0);
+  const attemptedTargets = snapshots.length + skipped.length;
+
+  let status = 'available';
+  let message = 'Weather context is available.';
+
+  if (attemptedTargets === 0) {
+    status = 'no_targets';
+    message = 'No weather-supported events with usable dates and locations were found.';
+  } else if (snapshots.length === 0 && providerFailures > 0) {
+    status = 'provider_error';
+    message = 'Open-Meteo rejected or failed all weather requests.';
+  } else if (snapshots.length === 0 && reasonCounts.outside_forecast_window) {
+    status = 'outside_window';
+    message = `Weather is only available for the next ${MAX_FORECAST_DAYS} days.`;
+  } else if (snapshots.length === 0) {
+    status = 'no_data';
+    message = 'No weather forecasts were available for the current itinerary.';
+  } else if (skipped.length > 0) {
+    status = 'partial';
+    message = 'Weather context is available for some itinerary items.';
+  }
+
+  return {
+    status,
+    configured: true,
+    reasonCounts,
+    attemptedTargets,
+    availableSnapshots: snapshots.length,
+    forecastWindowDays: MAX_FORECAST_DAYS,
+    message
+  };
+};
+
 const isValidDate = (date) => date instanceof Date && !Number.isNaN(date.getTime());
 
 const parseEventDateTime = (dateValue, timeValue) => {
@@ -285,13 +328,25 @@ const getTripWeather = async ({ trip, refresh = false }) => {
 
       const startDate = formatDateKey(window.start);
       const endDate = formatDateKey(window.end);
-      const raw = await fetchOpenMeteoForecast({
-        lat: target.lat,
-        lng: target.lng,
-        startDate,
-        endDate,
-        timezone: trip.timezone
-      });
+      let raw;
+      try {
+        raw = await fetchOpenMeteoForecast({
+          lat: target.lat,
+          lng: target.lng,
+          startDate,
+          endDate,
+          timezone: trip.timezone
+        });
+      } catch (error) {
+        skipped.push({
+          eventId: event.id,
+          locationRole: target.locationRole,
+          reason: error.message?.includes('Weather provider returned')
+            ? error.message.replace('Weather provider returned ', 'provider_http_')
+            : 'provider_error'
+        });
+        continue;
+      }
 
       const snapshot = await WeatherSnapshot.findOneAndUpdate(
         {
@@ -333,7 +388,8 @@ const getTripWeather = async ({ trip, refresh = false }) => {
     provider: PROVIDER,
     generatedAt: new Date().toISOString(),
     snapshots,
-    skipped
+    skipped,
+    diagnostics: buildDiagnostics({ snapshots, skipped })
   };
 };
 
