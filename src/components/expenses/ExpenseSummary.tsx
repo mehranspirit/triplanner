@@ -69,7 +69,7 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
     value
   }));
   const currentUserBalance = expenseSummary.perPersonBalances[currentUser._id] || 0;
-  const hasMixedCurrencies = Boolean(expenseSummary.hasMixedCurrencies);
+  const hasMixedCurrencies = Boolean(expenseSummary.hasMixedCurrencies) || expenseSummary.currency === 'MULTI';
   const currencyTotals = Object.entries(expenseSummary.currencyTotals || {});
 
   return (
