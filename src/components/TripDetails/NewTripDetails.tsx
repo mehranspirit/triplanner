@@ -1585,6 +1585,7 @@ const NewTripDetails: React.FC = () => {
         trip={trip}
         insights={visibleTripInsights}
         canEdit={canEdit}
+        currentUserId={user?._id}
         onOpenAIImport={() => setIsAIParseModalOpen(true)}
         onOpenChecklist={() => setShowChecklist(true)}
         onOpenExpenses={() => navigate(`/trips/${trip._id}/expenses`)}

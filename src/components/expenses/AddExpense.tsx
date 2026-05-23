@@ -15,9 +15,21 @@ interface AddExpenseProps {
   participants: User[];
   currentUser: User;
   onExpenseAdded?: () => void;
+  onCancel?: () => void;
 }
 
-export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, currentUser, onExpenseAdded }) => {
+const getInitialCurrency = () => {
+  if (typeof window === 'undefined') return 'USD';
+  return window.localStorage.getItem('expense:lastCurrency') || 'USD';
+};
+
+const getInitialSplitMethod = (): SplitMethod => {
+  if (typeof window === 'undefined') return 'equal';
+  const stored = window.localStorage.getItem('expense:lastSplitMethod') as SplitMethod | null;
+  return stored && ['equal', 'custom', 'percentage', 'shares'].includes(stored) ? stored : 'equal';
+};
+
+export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, currentUser, onExpenseAdded, onCancel }) => {
   const { addExpense, expenses } = useExpense();
   const { events } = useEvent();
   const defaultPayerId = participants.some(p => p._id === currentUser._id)
@@ -26,9 +38,9 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState(getInitialCurrency);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [splitMethod, setSplitMethod] = useState<SplitMethod>('equal');
+  const [splitMethod, setSplitMethod] = useState<SplitMethod>(getInitialSplitMethod);
   const [participantShares, setParticipantShares] = useState<{ [key: string]: number }>({});
   const [selectedPayer, setSelectedPayer] = useState(defaultPayerId);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
@@ -45,6 +57,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [allowDuplicate, setAllowDuplicate] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(splitMethod !== 'equal');
 
   // Filter events with cost
   const eventsWithCost = events.filter(e => typeof e.cost === 'number' && e.cost > 0);
@@ -268,6 +281,8 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     };
 
     try {
+      window.localStorage.setItem('expense:lastCurrency', currency);
+      window.localStorage.setItem('expense:lastSplitMethod', splitMethod);
       await addExpense(tripId, expense);
       
       // Reset form
@@ -276,6 +291,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
       setSplitMethod('equal');
+      setShowAdvanced(false);
       setParticipantShares({});
       setSelectedPayer(defaultPayerId);
       setSelectedParticipants(participants.map(p => p._id));
@@ -369,6 +385,27 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     }
   };
 
+  const handlePaidByMe = () => {
+    setSelectedPayer(defaultPayerId);
+    setFormError(null);
+  };
+
+  const handleEveryone = () => {
+    setSelectedParticipants(participants.map(p => p._id));
+    setFormError(null);
+  };
+
+  const handleJustMeAnd = () => {
+    const otherParticipant = participants.find(p => p._id !== defaultPayerId);
+    setSelectedParticipants([defaultPayerId, otherParticipant?._id].filter(Boolean) as string[]);
+    setFormError(null);
+  };
+
+  const handleFromItinerary = () => {
+    setExpenseSource('event');
+    setShowAdvanced(true);
+  };
+
   const handlePayerChange = (payerId: string) => {
     setSelectedPayer(payerId);
     setFormError(null);
@@ -402,111 +439,95 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     }
   };
 
+  const expenseAmount = parseFloat(amount);
+  const selectedPayerName = participants.find(p => p._id === selectedPayer)?.name || 'Someone';
+  const splitPreview = (() => {
+    if (!Number.isFinite(expenseAmount) || expenseAmount <= 0) {
+      return 'Enter an amount to preview the split.';
+    }
+    if (selectedParticipants.length === 0) {
+      return 'Choose who should share this expense.';
+    }
+    if (splitMethod === 'equal') {
+      return `${selectedPayerName} paid ${formatCurrency(expenseAmount, currency)}. ${selectedParticipants.length} ${selectedParticipants.length === 1 ? 'person splits' : 'people split'} it equally: ${formatCurrency(calculateEqualShare(expenseAmount, selectedParticipants.length), currency)} each.`;
+    }
+    return `${selectedPayerName} paid ${formatCurrency(expenseAmount, currency)}. Review the advanced split before adding.`;
+  })();
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Expense Source Dropdown */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Add Expense</label>
-        <select
-          value={expenseSource}
-          onChange={e => setExpenseSource(e.target.value as 'manual' | 'event')}
-          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-        >
-          <option value="manual">Enter Manually</option>
-          <option value="event">From Event with Cost</option>
-        </select>
-      </div>
-      {expenseSource === 'event' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Select Event</label>
-          <select
-            value={selectedEventId}
-            onChange={e => setSelectedEventId(e.target.value)}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-          >
-            <option value="">-- Select an event --</option>
-            {eventsWithCost.map(event => (
-              <option key={event.id} value={event.id}>
-                {getEventTitle(event)} | {formatCurrency(event.cost || 0, currency)} | {formatEventDateRange(event)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+    <form onSubmit={handleSubmit} className="space-y-5">
       {formError && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
           {formError}
         </div>
       )}
-      <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-          Title
-        </label>
-        <input
-          type="text"
-          id="title"
-          value={title}
-          onChange={handleTitleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-          placeholder="Enter expense title"
-        />
-        {showSuggestion && categorySuggestion && (
-          <div className="mt-2 text-sm">
-            <div className="flex items-center space-x-2">
+
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={handlePaidByMe} className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Paid by me
+        </button>
+        <button type="button" onClick={handleEveryone} className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Everyone
+        </button>
+        <button type="button" onClick={handleJustMeAnd} className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Just me and...
+        </button>
+        {eventsWithCost.length > 0 && (
+          <button type="button" onClick={handleFromItinerary} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100">
+            From itinerary cost
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_180px]">
+        <div>
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+            What was it?
+          </label>
+          <input
+            type="text"
+            id="title"
+            value={title}
+            onChange={handleTitleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            placeholder="Dinner, taxi, hotel..."
+          />
+          {showSuggestion && categorySuggestion && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="text-gray-600">Suggested category:</span>
               <button
                 type="button"
                 onClick={handleApplySuggestion}
-                className="text-blue-600 hover:text-blue-800 font-medium"
+                className="font-medium text-blue-600 hover:text-blue-800"
               >
-                {categorySuggestion.mainCategory} → {categorySuggestion.subCategory}
+                {categorySuggestion.mainCategory} / {categorySuggestion.subCategory}
               </button>
               <button
                 type="button"
                 onClick={() => setShowSuggestion(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
-                ×
+                Dismiss
               </button>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-          Description
-        </label>
-        <textarea
-          id="description"
-          value={description}
-          onChange={handleDescriptionChange}
-          rows={3}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-          placeholder="Enter expense description"
-        />
-      </div>
-
-      <div className="space-y-4">
-        {/* Basic Info Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Amount</label>
+          <div className="mt-1 flex gap-2">
             <input
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              className="block min-w-0 flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
               step="0.01"
               required
             />
-          </div>
-          <div className="w-24">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              className="w-24 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
             >
               {EXPENSE_CURRENCIES.map(option => (
                 <option key={option} value={option}>{option}</option>
@@ -514,235 +535,258 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
             </select>
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Split Method</label>
-            <select
-              value={splitMethod}
-              onChange={handleSplitMethodChange}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Paid by</label>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {participants.map((participant) => (
+            <label
+              key={participant._id}
+              className={`flex min-h-[44px] items-center space-x-2 rounded-lg border p-2 cursor-pointer hover:bg-gray-50 ${
+                selectedPayer === participant._id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+              }`}
             >
-              <option value="equal">Equal</option>
-              <option value="percentage">Percentage</option>
-              <option value="shares">Shares</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
+              <input
+                type="radio"
+                name="payer"
+                value={participant._id}
+                checked={selectedPayer === participant._id}
+                onChange={() => handlePayerChange(participant._id)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+              />
+              <Avatar photoUrl={participant.photoUrl || null} name={participant.name} size="sm" className="border border-gray-200" />
+              <span className="truncate text-sm text-gray-700">{participant.name}</span>
+            </label>
+          ))}
         </div>
+      </div>
 
-        {/* Category Selection */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => {
-                setSelectedCategory(e.target.value);
-                setSelectedSubcategory(''); // Reset subcategory when main category changes
-              }}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Split between</label>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {participants.map((participant) => (
+            <label
+              key={participant._id}
+              className={`flex min-h-[44px] items-center space-x-2 rounded-lg border p-2 cursor-pointer hover:bg-gray-50 ${
+                selectedParticipants.includes(participant._id) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+              }`}
             >
-              <option value="">Select a category</option>
-              {Object.keys(EXPENSE_CATEGORIES).map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-          </div>
+              <input
+                type="checkbox"
+                checked={selectedParticipants.includes(participant._id)}
+                onChange={() => handleParticipantToggle(participant._id)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <Avatar photoUrl={participant.photoUrl || null} name={participant.name} size="sm" className="border border-gray-200" />
+              <span className="truncate text-sm text-gray-700">{participant.name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
 
-          {selectedCategory && EXPENSE_CATEGORIES[selectedCategory as keyof typeof EXPENSE_CATEGORIES] && (
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+        {splitPreview}
+      </div>
+
+      <div className="rounded-lg border border-gray-200">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(prev => !prev)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-900"
+          aria-expanded={showAdvanced}
+        >
+          <span>Optional details and advanced split</span>
+          <span className="text-blue-600">{showAdvanced ? 'Hide' : 'Show'}</span>
+        </button>
+
+        {showAdvanced && (
+          <div className="space-y-4 border-t border-gray-100 p-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Subcategory</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Expense source</label>
               <select
-                value={selectedSubcategory}
-                onChange={(e) => setSelectedSubcategory(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                value={expenseSource}
+                onChange={e => setExpenseSource(e.target.value as 'manual' | 'event')}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
               >
-                <option value="">Select a subcategory</option>
-                {EXPENSE_CATEGORIES[selectedCategory as keyof typeof EXPENSE_CATEGORIES].map(subcategory => (
-                  <option key={subcategory} value={subcategory}>{subcategory}</option>
-                ))}
+                <option value="manual">Enter manually</option>
+                <option value="event">From event with cost</option>
               </select>
             </div>
-          )}
-        </div>
 
-        {/* Payer Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Paid by</label>
-          <p className="mb-2 text-xs text-gray-500">
-            The payer can be different from the people sharing the cost.
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {participants.map((participant) => (
-              <label
-                key={participant._id}
-                className="flex items-center space-x-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"
-              >
-                <input
-                  type="radio"
-                  name="payer"
-                  value={participant._id}
-                  checked={selectedPayer === participant._id}
-                  onChange={() => handlePayerChange(participant._id)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                />
-                <div className="flex items-center space-x-2">
-                  <Avatar
-                    photoUrl={participant.photoUrl || null}
-                    name={participant.name}
-                    size="sm"
-                    className="border border-gray-200"
-                  />
-                  <span className="text-sm text-gray-700">{participant.name}</span>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Participants Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Split between</label>
-          <p className="mb-2 text-xs text-gray-500">
-            Select only the people who should be charged for this expense.
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {participants.map((participant) => (
-              <label
-                key={participant._id}
-                className="flex items-center space-x-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedParticipants.includes(participant._id)}
-                  onChange={() => handleParticipantToggle(participant._id)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <div className="flex items-center space-x-2">
-                  <Avatar
-                    photoUrl={participant.photoUrl || null}
-                    name={participant.name}
-                    size="sm"
-                    className="border border-gray-200"
-                  />
-                  <span className="text-sm text-gray-700">{participant.name}</span>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Share Inputs */}
-        {splitMethod !== 'equal' && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-700">Individual shares</h4>
-            {splitWarning && (
-              <div className="p-2 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
-                {splitWarning}
+            {expenseSource === 'event' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select event</label>
+                <select
+                  value={selectedEventId}
+                  onChange={e => setSelectedEventId(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="">Select an event</option>
+                  {eventsWithCost.map(event => (
+                    <option key={event.id} value={event.id}>
+                      {getEventTitle(event)} | {formatCurrency(event.cost || 0, currency)} | {formatEventDateRange(event)}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {participants
-                .filter(p => selectedParticipants.includes(p._id))
-                .map((participant) => (
-                  <div key={participant._id} className="flex items-center space-x-2">
-                    <Avatar
-                      photoUrl={participant.photoUrl || null}
-                      name={participant.name}
-                      size="sm"
-                      className="border border-gray-200"
-                    />
-                    <div className="flex-1">
-                      <label className="block text-sm text-gray-700">{participant.name}</label>
-                      <div className="mt-1 flex items-center space-x-2">
-                        <input
-                          type="number"
-                          value={participantShares[participant._id] || ''}
-                          onChange={(e) => handleShareChange(participant._id, e.target.value)}
-                          className={`block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm ${
-                            splitWarning ? 'border-red-300' : 'border-gray-300'
-                          }`}
-                          step="0.01"
-                          min="0"
-                        />
-                        <span className="text-sm text-gray-500">
-                          {splitMethod === 'percentage' ? '%' : currency}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
 
-        {/* Duplicate Warning */}
-        {duplicateWarning && (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                  required
+                />
               </div>
-              <div className="ml-3">
-                <p className="text-sm text-yellow-700">{duplicateWarning}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAllowDuplicate(true);
-                    setDuplicateWarning(null);
-                  }}
-                  className="mt-2 text-sm font-medium text-yellow-800 underline hover:text-yellow-900"
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Split method</label>
+                <select
+                  value={splitMethod}
+                  onChange={handleSplitMethodChange}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                 >
-                  Add it anyway
-                </button>
+                  <option value="equal">Equal</option>
+                  <option value="percentage">Percentage</option>
+                  <option value="shares">Shares</option>
+                  <option value="custom">Custom</option>
+                </select>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => {
+                    setSelectedCategory(e.target.value);
+                    setSelectedSubcategory('');
+                  }}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                >
+                  <option value="">Select a category</option>
+                  {Object.keys(EXPENSE_CATEGORIES).map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedCategory && EXPENSE_CATEGORIES[selectedCategory as keyof typeof EXPENSE_CATEGORIES] && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Subcategory</label>
+                  <select
+                    value={selectedSubcategory}
+                    onChange={(e) => setSelectedSubcategory(e.target.value)}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                  >
+                    <option value="">Select a subcategory</option>
+                    {EXPENSE_CATEGORIES[selectedCategory as keyof typeof EXPENSE_CATEGORIES].map(subcategory => (
+                      <option key={subcategory} value={subcategory}>{subcategory}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                Notes
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={handleDescriptionChange}
+                rows={3}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                placeholder="Optional context"
+              />
+            </div>
+
+            {splitMethod !== 'equal' && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-700">Individual shares</h4>
+                {splitWarning && (
+                  <div className="p-2 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
+                    {splitWarning}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {participants
+                    .filter(p => selectedParticipants.includes(p._id))
+                    .map((participant) => (
+                      <div key={participant._id} className="flex items-center space-x-2">
+                        <Avatar photoUrl={participant.photoUrl || null} name={participant.name} size="sm" className="border border-gray-200" />
+                        <div className="flex-1">
+                          <label className="block text-sm text-gray-700">{participant.name}</label>
+                          <div className="mt-1 flex items-center space-x-2">
+                            <input
+                              type="number"
+                              value={participantShares[participant._id] || ''}
+                              onChange={(e) => handleShareChange(participant._id, e.target.value)}
+                              className={`block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm ${
+                                splitWarning ? 'border-red-300' : 'border-gray-300'
+                              }`}
+                              step="0.01"
+                              min="0"
+                            />
+                            <span className="text-sm text-gray-500">
+                              {splitMethod === 'percentage' ? '%' : currency}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
+      </div>
 
-        {/* Submit Button */}
-        <div className="flex justify-end space-x-3">
+      {duplicateWarning && (
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3">
+          <p className="text-sm text-yellow-700">{duplicateWarning}</p>
           <button
             type="button"
-            onClick={onExpenseAdded}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            disabled={isSaving}
+            onClick={() => {
+              setAllowDuplicate(true);
+              setDuplicateWarning(null);
+            }}
+            className="mt-2 text-sm font-medium text-yellow-800 underline hover:text-yellow-900"
           >
-            Cancel
+            Add it anyway
           </button>
-          <button
-            type="submit"
-            disabled={isSaving}
-            className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative ${
-              isSaving ? 'opacity-75 cursor-not-allowed' : ''
-            }`}
-          >
-            {isSaving ? (
-              <div className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Saving...
-              </div>
-            ) : (
-              'Add Expense'
-            )}
-          </button>
+        </div>
+      )}
+
+      <div className="sticky bottom-0 -mx-4 border-t border-gray-200 bg-white p-4 sm:-mx-6 sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-600">{splitPreview}</p>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onCancel || onExpenseAdded}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                isSaving ? 'opacity-75 cursor-not-allowed' : ''
+              }`}
+            >
+              {isSaving ? 'Saving...' : 'Add Expense'}
+            </button>
+          </div>
         </div>
       </div>
     </form>

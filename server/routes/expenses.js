@@ -173,14 +173,9 @@ const buildSettlementPayload = (body, tripId) => {
 };
 
 const calculateSummary = (trip, expenses, settlements) => {
-  const perPersonBalances = {};
   const participantIds = getTripParticipantIds(trip);
-
-  participantIds.forEach(participantId => {
-    perPersonBalances[participantId] = 0;
-  });
-
   const totalsByCurrency = {};
+
   const ensureCurrencyTotals = (currency) => {
     if (!totalsByCurrency[currency]) {
       totalsByCurrency[currency] = {
@@ -191,10 +186,23 @@ const calculateSummary = (trip, expenses, settlements) => {
     return totalsByCurrency[currency];
   };
 
+  const perCurrencyBalances = {};
+  const ensureCurrencyBalances = (currency) => {
+    ensureCurrencyTotals(currency);
+    if (!perCurrencyBalances[currency]) {
+      perCurrencyBalances[currency] = {};
+      participantIds.forEach(participantId => {
+        perCurrencyBalances[currency][participantId] = 0;
+      });
+    }
+    return perCurrencyBalances[currency];
+  };
+
   expenses.forEach(expense => {
     const currency = expense.currency || 'USD';
     const payerId = getId(expense.paidBy);
     const amount = Number(expense.amount) || 0;
+    const currencyBalances = ensureCurrencyBalances(currency);
 
     ensureCurrencyTotals(currency).totalAmount += amount;
 
@@ -202,42 +210,51 @@ const calculateSummary = (trip, expenses, settlements) => {
       if (participant.settled) return;
       const participantId = getId(participant.userId);
       const share = Number(participant.share) || 0;
-      perPersonBalances[payerId] = (perPersonBalances[payerId] || 0) + share;
-      perPersonBalances[participantId] = (perPersonBalances[participantId] || 0) - share;
+      currencyBalances[payerId] = (currencyBalances[payerId] || 0) + share;
+      currencyBalances[participantId] = (currencyBalances[participantId] || 0) - share;
     });
   });
 
   settlements.forEach(settlement => {
     if (settlement.status !== 'completed') return;
 
+    const currency = settlement.currency || 'USD';
     const fromUserId = getId(settlement.fromUserId);
     const toUserId = getId(settlement.toUserId);
     const amount = Number(settlement.amount) || 0;
+    const currencyBalances = ensureCurrencyBalances(currency);
 
-    perPersonBalances[fromUserId] = (perPersonBalances[fromUserId] || 0) + amount;
-    perPersonBalances[toUserId] = (perPersonBalances[toUserId] || 0) - amount;
+    currencyBalances[fromUserId] = (currencyBalances[fromUserId] || 0) + amount;
+    currencyBalances[toUserId] = (currencyBalances[toUserId] || 0) - amount;
   });
 
-  const unsettledAmount = Object.values(perPersonBalances).reduce((sum, balance) => {
-    return sum + Math.max(0, Number(balance) || 0);
-  }, 0);
+  Object.entries(perCurrencyBalances).forEach(([currency, balances]) => {
+    ensureCurrencyTotals(currency).unsettledAmount = Object.values(balances).reduce((sum, balance) => {
+      return sum + Math.max(0, Number(balance) || 0);
+    }, 0);
+  });
 
   const currencies = Object.keys(totalsByCurrency);
+  const hasMixedCurrencies = currencies.length > 1;
   const totalAmount = currencies.length === 1
     ? totalsByCurrency[currencies[0]].totalAmount
     : 0;
-
-  if (currencies.length === 1) {
-    totalsByCurrency[currencies[0]].unsettledAmount = unsettledAmount;
-  }
+  const perPersonBalances = currencies.length === 1
+    ? perCurrencyBalances[currencies[0]]
+    : {};
+  const unsettledAmount = currencies.length === 1
+    ? totalsByCurrency[currencies[0]].unsettledAmount
+    : 0;
 
   return {
     totalAmount,
     perPersonBalances,
+    perCurrencyBalances,
     unsettledAmount,
-    currency: currencies.length === 1 ? currencies[0] : 'MULTI',
+    currency: hasMixedCurrencies ? 'MULTI' : currencies[0] || 'USD',
     currencyTotals: totalsByCurrency,
-    hasMixedCurrencies: currencies.length > 1
+    hasMixedCurrencies,
+    includesSettlements: true
   };
 };
 
@@ -416,8 +433,10 @@ router.post('/trips/:tripId/expenses/:expenseId/settle', auth, async (req, res) 
 
     participant.settled = true;
     await expense.save();
+    await expense.populate('paidBy', 'name email photoUrl');
+    await expense.populate('participants.userId', 'name email photoUrl');
 
-    res.json(expense);
+    res.json(transformExpense(expense));
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

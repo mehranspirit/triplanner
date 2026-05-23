@@ -2,7 +2,9 @@ const path = require('path');
 
 const envPath = path.join(__dirname, '.env');
 require('dotenv').config({ path: envPath });
-console.log('Loaded server environment configuration');
+const logger = require('./utils/logger');
+console.log = logger.debug;
+logger.debug('Loaded server environment configuration');
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -300,7 +302,7 @@ app.patch('/api/users/:userId/role', auth, async (req, res) => {
 });
 
 // Connect to MongoDB
-console.log('Attempting to connect with URI:', process.env.MONGODB_URI);
+logger.info('Connecting to MongoDB');
 mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
@@ -310,7 +312,7 @@ mongoose.connect(process.env.MONGODB_URI, {
   retryReads: true
 })
   .then(async () => {
-    console.log('Connected to MongoDB');
+    logger.info('Connected to MongoDB');
     // Initialize admin user
     await User.initializeAdmin();
   })
@@ -1699,5 +1701,5 @@ app.post('/api/trips/:id/checklist/personal', auth, async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  logger.info(`Server is running on port ${PORT}`);
 }); 

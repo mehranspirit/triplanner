@@ -76,6 +76,7 @@ export interface Settlement {
 export interface ExpenseSummary {
   totalAmount: number;
   perPersonBalances: Record<string, number>;
+  perCurrencyBalances?: Record<string, Record<string, number>>;
   unsettledAmount: number;
   currency: string;
   currencyTotals?: Record<string, {
@@ -83,6 +84,8 @@ export interface ExpenseSummary {
     unsettledAmount: number;
   }>;
   hasMixedCurrencies?: boolean;
+  includesSettlements?: boolean;
+  isOfflineEstimate?: boolean;
 }
 
 export interface SettlementMatrix {

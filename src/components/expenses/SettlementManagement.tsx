@@ -3,7 +3,7 @@ import { useExpense } from '../../context/ExpenseContext';
 import { Settlement } from '../../types/expenseTypes';
 import { User } from '../../types/eventTypes';
 import { formatCurrency } from '../../utils/format';
-import { networkAwareApi } from '../../services/networkAwareApi';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 import { simplifyDebts } from '../../utils/debtSimplification';
 import { EXPENSE_CURRENCIES } from '../../utils/expenseOptions';
@@ -38,6 +38,9 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const completionDialogRef = React.useRef<HTMLDivElement>(null);
+  const completionTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const isOnline = useOnlineStatus();
 
   const getParticipantName = (userId: string) => participants.find(p => p._id === userId)?.name || 'Unknown traveler';
 
@@ -83,7 +86,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
       setIsSaving(true);
       await addSettlement(tripId, settlement);
       await refreshData(tripId);
-      setActionMessage('Settlement recorded.');
+      setActionMessage('Payment recorded.');
       // Reset form
       setFromUserId('');
       setToUserId('');
@@ -97,8 +100,45 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
   };
 
   const handleMarkCompleted = async (settlement: Settlement) => {
+    completionTriggerRef.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
     setSettlementToComplete(settlement);
   };
+
+  React.useEffect(() => {
+    if (!settlementToComplete) return;
+
+    const dialog = completionDialogRef.current;
+    const focusableElements = dialog?.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    focusableElements?.[0]?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSettlementToComplete(null);
+        return;
+      }
+
+      if (event.key !== 'Tab' || !focusableElements?.length) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      completionTriggerRef.current?.focus();
+    };
+  }, [settlementToComplete]);
 
   const handleConfirmCompletion = async () => {
     if (!settlementToComplete) return;
@@ -112,7 +152,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
       await refreshData(tripId);
       setSettlementToComplete(null);
       setCompletionMethod('cash');
-      setActionMessage('Settlement marked as completed.');
+      setActionMessage('Payment marked as paid.');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to mark settlement as completed.');
     }
@@ -123,7 +163,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
 
     try {
       await deleteSettlement(tripId, settlement._id);
-      setActionMessage('Settlement deleted.');
+      setActionMessage('Payment deleted.');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to delete settlement.');
     }
@@ -134,12 +174,12 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
     resetFeedback();
 
     if (expenseSummary.hasMixedCurrencies) {
-      setActionError('Debt simplification is available after expenses are recorded in a single currency.');
+      setActionError('Suggested payments are available after expenses are recorded in a single currency.');
       return;
     }
 
     // Convert perPersonBalances to the format expected by simplifyDebts
-    const balances = Object.entries(expenseSummary.perPersonBalances).map(([userId, amount]) => ({
+    const balances = Object.entries(expenseSummary.perCurrencyBalances?.[settlementCurrency] || expenseSummary.perPersonBalances).map(([userId, amount]) => ({
       userId,
       amount: amount as number
     }));
@@ -149,7 +189,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
     setPreviewSettlements(simplifiedSettlements);
 
     if (simplifiedSettlements.length === 0) {
-      setActionMessage('No settlements are needed. Everyone is balanced.');
+      setActionMessage('No payments are needed. Everyone is balanced.');
     }
   };
 
@@ -181,14 +221,14 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
         currency: settlementCurrency,
         status: 'pending',
         date: new Date().toISOString(),
-        notes: 'Automatically generated by debt simplification'
+        notes: 'Automatically generated suggested payment'
       });
     }
 
     setHasSimplifiedDebts(true);
       setPreviewSettlements([]);
     await refreshData(tripId);
-      setActionMessage('Simplified settlements created.');
+      setActionMessage('Suggested payments created.');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to create simplified settlements.');
     } finally {
@@ -204,7 +244,6 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
 
   const pendingSettlements = settlements.filter(s => s.status === 'pending');
   const completedSettlements = settlements.filter(s => s.status === 'completed');
-  const isOnline = networkAwareApi.getIsOnline();
   const settlementCurrency = expenseSummary?.currency === 'MULTI'
     ? currency
     : expenseSummary?.currency || currency;
@@ -219,12 +258,12 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Settlements Not Available Offline</h3>
+          <h3 className="text-lg font-semibold text-yellow-800 mb-2">Payments Not Available Offline</h3>
           <p className="text-yellow-700 mb-4">
-            Settlement management requires an internet connection. Please connect to the internet to view and manage settlements.
+            Payment management requires an internet connection. Please connect to the internet to view and manage payments.
           </p>
           <p className="text-sm text-yellow-600">
-            You can still view and manage expenses while offline.
+            You can still view and add expenses while offline.
           </p>
         </div>
       </div>
@@ -245,9 +284,33 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
         </div>
       )}
 
-      {/* Add Settlement Form */}
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <h2 className="text-xl font-semibold">Add Settlement</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Suggested payments</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Generate the smallest set of payments needed to balance everyone.
+            </p>
+            {expenseSummary?.hasMixedCurrencies && (
+              <p className="mt-2 rounded-md border border-yellow-200 bg-yellow-50 p-2 text-sm text-yellow-800">
+                Suggested payments are available after expenses are recorded in a single currency.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleSimplifyDebts}
+            disabled={Boolean(expenseSummary?.hasMixedCurrencies)}
+            className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Suggest payments
+          </button>
+        </div>
+      </div>
+
+      {/* Add Payment Form */}
+      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <h2 className="text-xl font-semibold">Record a custom payment</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -321,30 +384,13 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-end space-x-4">
-            {previewSettlements.length > 0 ? (
-              <button
-                type="button"
-                onClick={handleResetSimplification}
-                className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
-                Discard Preview
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSimplifyDebts}
-                className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              >
-                Preview Simplified Debts
-              </button>
-            )}
+          <div className="flex justify-end">
             <button
               type="submit"
               disabled={isSaving}
               className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              {isSaving ? 'Saving...' : 'Record Settlement'}
+              {isSaving ? 'Saving...' : 'Record Payment'}
             </button>
           </div>
         </form>
@@ -352,9 +398,9 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
 
       {previewSettlements.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-2">Review Simplified Settlements</h2>
+          <h2 className="text-xl font-semibold mb-2">Review suggested payments</h2>
           <p className="text-sm text-gray-600 mb-4">
-            These pending settlements will be created only after you confirm.
+            These pending payments will be created only after you confirm.
           </p>
           <div className="space-y-3">
             {previewSettlements.map((settlement, index) => (
@@ -381,19 +427,19 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
               disabled={isSaving}
               className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
             >
-              {isSaving ? 'Creating...' : `Create ${previewSettlements.length} Settlement${previewSettlements.length === 1 ? '' : 's'}`}
+              {isSaving ? 'Creating...' : `Create ${previewSettlements.length} Payment${previewSettlements.length === 1 ? '' : 's'}`}
             </button>
           </div>
         </div>
       )}
 
-      {/* Pending Settlements */}
+      {/* Pending Payments */}
       {pendingSettlements.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Pending Settlements</h2>
+          <h2 className="text-xl font-semibold mb-4">Pending payments</h2>
           <div className="space-y-4">
             {pendingSettlements.map(settlement => (
-              <div key={settlement._id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+              <div key={settlement._id} className="flex flex-col gap-3 p-4 bg-gray-50 rounded-lg sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="font-medium">
                     {settlement.fromUserId.name} pays {settlement.toUserId.name}
@@ -405,13 +451,13 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
                     <div className="text-sm text-gray-600 mt-1">{settlement.notes}</div>
                   )}
                 </div>
-                <div className="flex items-center space-x-4">
+                <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                   <div className="text-sm text-yellow-600">Pending</div>
                   <button
                     onClick={() => handleMarkCompleted(settlement)}
                     className="text-sm text-green-600 hover:text-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                   >
-                    Mark as Completed
+                    Mark paid
                   </button>
                   <button
                     onClick={() => handleDeleteSettlement(settlement)}
@@ -428,9 +474,26 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
 
       {/* Completion Modal */}
       {settlementToComplete && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6" role="dialog" aria-modal="true" aria-labelledby="complete-settlement-title">
-            <h3 id="complete-settlement-title" className="text-lg font-medium mb-4">Complete Settlement</h3>
+        <div
+          className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSettlementToComplete(null);
+            }
+          }}
+        >
+          <div
+            ref={completionDialogRef}
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complete-settlement-title"
+            aria-describedby="complete-settlement-description"
+          >
+            <h3 id="complete-settlement-title" className="text-lg font-medium mb-4">Mark payment as paid</h3>
+            <p id="complete-settlement-description" className="mb-4 text-sm text-gray-600">
+              Choose how this payment was made. This updates the trip balances once saved.
+            </p>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Payment Method</label>
@@ -456,7 +519,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
                   onClick={handleConfirmCompletion}
                   className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                 >
-                  Complete
+                  Mark paid
                 </button>
               </div>
             </div>
@@ -464,13 +527,13 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
         </div>
       )}
 
-      {/* Completed Settlements */}
+      {/* Completed Payments */}
       {completedSettlements.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Completed Settlements</h2>
+          <h2 className="text-xl font-semibold mb-4">Completed payments</h2>
           <div className="space-y-4">
             {completedSettlements.map(settlement => (
-              <div key={settlement._id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+              <div key={settlement._id} className="flex flex-col gap-3 p-4 bg-gray-50 rounded-lg sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="font-medium">
                     {settlement.fromUserId.name} paid {settlement.toUserId.name}
@@ -482,7 +545,7 @@ export const SettlementManagement: React.FC<SettlementManagementProps> = ({
                     <div className="text-sm text-gray-600 mt-1">{settlement.notes}</div>
                   )}
                 </div>
-                <div className="flex items-center space-x-4">
+                <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                   <div className="text-sm text-green-600">Completed</div>
                   <button
                     onClick={() => handleDeleteSettlement(settlement)}

@@ -11,7 +11,10 @@ interface ExpenseListProps {
   tripId: string;
   participants: User[];
   currentUser: User;
+  onAddExpense?: () => void;
 }
+
+type ExpenseFilter = 'all' | 'paidByMe' | 'iOwe' | 'unsettled';
 
 const renderSplitDetails = (participant: ExpenseParticipant, expense: Expense) => {
   const { splitDetails } = participant;
@@ -27,25 +30,51 @@ const renderSplitDetails = (participant: ExpenseParticipant, expense: Expense) =
   }
 };
 
-export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, currentUser }) => {
+export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, currentUser, onAddExpense }) => {
   const { expenses, deleteExpense, refreshData, loading, error } = useExpense();
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
   const [deletingExpenses, setDeletingExpenses] = useState<Set<string>>(new Set());
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<ExpenseFilter>('all');
+  const editDialogRef = React.useRef<HTMLDivElement>(null);
+  const editTriggerRef = React.useRef<HTMLButtonElement | null>(null);
 
   React.useEffect(() => {
     if (!editingExpense) return;
 
+    const dialog = editDialogRef.current;
+    const focusableElements = dialog?.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    focusableElements?.[0]?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setEditingExpense(null);
+        return;
+      }
+
+      if (event.key !== 'Tab' || !focusableElements?.length) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      editTriggerRef.current?.focus();
+    };
   }, [editingExpense]);
 
   // Filter out temporary expenses that have corresponding real expenses
@@ -62,8 +91,48 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
       );
     });
     
-    return [...realExpenses, ...validTempExpenses];
+    return [...realExpenses, ...validTempExpenses].sort((a, b) => (
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    ));
   }, [expenses]);
+
+  const getCurrentUserParticipant = (expense: Expense) => (
+    expense.participants.find(participant => participant.userId === currentUser._id)
+  );
+
+  const getPersonalImpact = (expense: Expense) => {
+    const paidByMe = expense.paidBy._id === currentUser._id;
+    const userParticipant = getCurrentUserParticipant(expense);
+
+    if (paidByMe) {
+      const owedByOthers = expense.participants
+        .filter(participant => participant.userId !== currentUser._id && !participant.settled)
+        .reduce((sum, participant) => sum + participant.share, 0);
+      return owedByOthers > 0
+        ? `You paid. Others owe ${formatCurrency(owedByOthers, expense.currency)}`
+        : `You paid ${formatCurrency(expense.amount, expense.currency)}`;
+    }
+
+    if (userParticipant) {
+      return userParticipant.settled
+        ? `Your share is settled`
+        : `Your share: ${formatCurrency(userParticipant.share, expense.currency)}`;
+    }
+
+    return 'Not split with you';
+  };
+
+  const visibleExpenses = filteredExpenses.filter(expense => {
+    if (activeFilter === 'paidByMe') return expense.paidBy._id === currentUser._id;
+    if (activeFilter === 'iOwe') {
+      const userParticipant = getCurrentUserParticipant(expense);
+      return expense.paidBy._id !== currentUser._id && Boolean(userParticipant && !userParticipant.settled);
+    }
+    if (activeFilter === 'unsettled') {
+      return expense.participants.some(participant => !participant.settled);
+    }
+    return true;
+  });
 
   const handleDelete = async (expenseId: string) => {
     try {
@@ -97,14 +166,27 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
   return (
     <div className="space-y-4">
       {editingExpense && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" role="presentation">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setEditingExpense(null);
+            }
+          }}
+        >
           <div
+            ref={editDialogRef}
             className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-expense-title"
+            aria-describedby="edit-expense-description"
             tabIndex={-1}
           >
+            <p id="edit-expense-description" className="sr-only">
+              Update the expense details, split, payer, participants, and category.
+            </p>
             <div className="p-6">
               <EditExpense
                 tripId={tripId}
@@ -148,6 +230,39 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
           <p className="mt-2 text-sm text-gray-600">
             Add your first trip expense to start tracking shared costs and balances.
           </p>
+          {onAddExpense && (
+            <button
+              type="button"
+              onClick={onAddExpense}
+              className="mt-4 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+            >
+              Add first expense
+            </button>
+          )}
+        </div>
+      )}
+
+      {!loading && !error && filteredExpenses.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {[
+            ['all', 'All'],
+            ['paidByMe', 'Paid by me'],
+            ['iOwe', 'I owe'],
+            ['unsettled', 'Unsettled']
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveFilter(id as ExpenseFilter)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                activeFilter === id
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       )}
 
@@ -157,7 +272,14 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
         </div>
       )}
 
-      {filteredExpenses.map((expense) => (
+      {!loading && !error && filteredExpenses.length > 0 && visibleExpenses.length === 0 && (
+        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center">
+          <h3 className="text-base font-semibold text-gray-900">No expenses match this filter</h3>
+          <p className="mt-2 text-sm text-gray-600">Try a different filter or add a new expense.</p>
+        </div>
+      )}
+
+      {visibleExpenses.map((expense) => (
         <div
           key={expense._id}
           className={cn(
@@ -194,6 +316,7 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
                   {expense.category && (
                     <p className="mt-1 text-xs text-gray-500">{expense.category}</p>
                   )}
+                  <p className="mt-1 text-xs font-medium text-blue-700">{getPersonalImpact(expense)}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between gap-4 sm:justify-end">
@@ -204,6 +327,7 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ tripId, participants, 
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      editTriggerRef.current = e.currentTarget;
                       setEditingExpense(expense);
                     }}
                     className="rounded text-gray-500 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"

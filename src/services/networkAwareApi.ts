@@ -8,6 +8,7 @@ class NetworkAwareApiService {
   private syncInProgress = false;
   private pendingOperations: Set<string> = new Set();
   private syncTimeout: NodeJS.Timeout | null = null;
+  private onlineStatusListeners = new Set<(isOnline: boolean) => void>();
 
   constructor() {
     // Initialize offline service
@@ -17,12 +18,14 @@ class NetworkAwareApiService {
     window.addEventListener('online', () => {
       console.log('Network: Back online');
       this.isOnline = true;
+      this.notifyOnlineStatusListeners();
       this.debouncedSync();
     });
 
     window.addEventListener('offline', () => {
       console.log('Network: Gone offline');
       this.isOnline = false;
+      this.notifyOnlineStatusListeners();
     });
 
     // Periodically check for sync when online
@@ -52,6 +55,15 @@ class NetworkAwareApiService {
   // Network status methods
   getIsOnline(): boolean {
     return this.isOnline;
+  }
+
+  subscribeOnlineStatus(listener: (isOnline: boolean) => void): () => void {
+    this.onlineStatusListeners.add(listener);
+    return () => this.onlineStatusListeners.delete(listener);
+  }
+
+  private notifyOnlineStatusListeners() {
+    this.onlineStatusListeners.forEach(listener => listener(this.isOnline));
   }
 
   async hasPendingSync(): Promise<boolean> {
@@ -294,18 +306,8 @@ class NetworkAwareApiService {
 
         const realExpense = await response.json();
         
-        // Remove the temporary expense from cache if it exists
-        const cachedExpenses = await offlineService.getCachedExpenses(tripId);
-        const tempExpense = cachedExpenses.find(e => 
-          e.title === expenseData.title && 
-          e.amount === expenseData.amount && 
-          e._id.startsWith('temp-expense-')
-        );
-        
-        if (tempExpense) {
-          await offlineService.deleteCachedExpense(tempExpense._id);
-          console.log(`Removed temporary expense ${tempExpense._id} after creating real expense ${realExpense._id}`);
-        }
+        await offlineService.deleteCachedExpense(tempId);
+        console.log(`Removed temporary expense ${tempId} after creating real expense ${realExpense._id}`);
         
         await offlineService.updateCachedExpense(tripId, realExpense);
         return realExpense;
@@ -458,6 +460,9 @@ class NetworkAwareApiService {
         if (!response.ok) {
           throw new Error(`Failed to settle expense: ${response.statusText}`);
         }
+
+        const settledExpense = await response.json();
+        await offlineService.updateCachedExpense(tripId, settledExpense);
       } catch (error) {
         console.error('Failed to settle expense via API, queuing for sync:', error);
         await offlineService.addToSyncQueue({
@@ -496,7 +501,9 @@ class NetworkAwareApiService {
       throw new Error(`Failed to fetch settlements: ${response.statusText}`);
     }
 
-    return await response.json();
+    const settlements = await response.json();
+    await offlineService.cacheSettlements(tripId, settlements);
+    return settlements;
   }
 
   async addSettlement(tripId: string, settlementData: Omit<Settlement, '_id'>): Promise<Settlement> {
@@ -517,7 +524,9 @@ class NetworkAwareApiService {
       throw new Error(`Failed to add settlement: ${response.statusText}`);
     }
 
-    return await response.json();
+    const settlement = await response.json();
+    await offlineService.updateCachedSettlement(settlement);
+    return settlement;
   }
 
   async updateSettlement(tripId: string, settlementId: string, updates: Partial<Settlement>): Promise<Settlement> {
@@ -538,7 +547,9 @@ class NetworkAwareApiService {
       throw new Error(`Failed to update settlement: ${response.statusText}`);
     }
 
-    return await response.json();
+    const settlement = await response.json();
+    await offlineService.updateCachedSettlement(settlement);
+    return settlement;
   }
 
   async deleteSettlement(tripId: string, settlementId: string): Promise<void> {
@@ -556,6 +567,8 @@ class NetworkAwareApiService {
     if (!response.ok) {
       throw new Error(`Failed to delete settlement: ${response.statusText}`);
     }
+
+    await offlineService.deleteCachedSettlement(settlementId);
   }
 
   async getExpenseSummary(tripId: string): Promise<ExpenseSummary | undefined> {
@@ -589,64 +602,114 @@ class NetworkAwareApiService {
   private async calculateExpenseSummaryLocally(tripId: string): Promise<ExpenseSummary | undefined> {
     try {
       const expenses = await offlineService.getCachedExpenses(tripId);
+      const settlements = await offlineService.getCachedSettlements(tripId);
       
       if (expenses.length === 0) {
+        const settlementCurrencies = Array.from(new Set(
+          settlements
+            .filter(settlement => settlement.status === 'completed')
+            .map(settlement => settlement.currency || 'USD')
+        ));
+        if (settlementCurrencies.length === 0) {
+          return {
+            totalAmount: 0,
+            perPersonBalances: {},
+            perCurrencyBalances: {},
+            unsettledAmount: 0,
+            currency: 'USD',
+            currencyTotals: {},
+            includesSettlements: true,
+            isOfflineEstimate: true
+          };
+        }
+        // Fall through to include cached completed settlements even if there
+        // are no cached expenses.
+      }
+
+      if (expenses.length === 0 && settlements.length === 0) {
         return {
           totalAmount: 0,
           perPersonBalances: {},
+          perCurrencyBalances: {},
           unsettledAmount: 0,
-          currency: 'USD'
+          currency: 'USD',
+          currencyTotals: {},
+          includesSettlements: true,
+          isOfflineEstimate: true
         };
       }
 
       // Calculate total amount and per-person balances
-      const perPersonBalances: Record<string, number> = {};
+      const perCurrencyBalances: Record<string, Record<string, number>> = {};
       const currencyTotals: Record<string, { totalAmount: number; unsettledAmount: number }> = {};
+
+      const ensureCurrency = (currency: string) => {
+        if (!currencyTotals[currency]) {
+          currencyTotals[currency] = { totalAmount: 0, unsettledAmount: 0 };
+        }
+        if (!perCurrencyBalances[currency]) {
+          perCurrencyBalances[currency] = {};
+        }
+        return perCurrencyBalances[currency];
+      };
 
       // Process expenses
       for (const expense of expenses) {
         const currency = expense.currency || 'USD';
-        if (!currencyTotals[currency]) {
-          currencyTotals[currency] = { totalAmount: 0, unsettledAmount: 0 };
-        }
+        const paidById = typeof expense.paidBy === 'string'
+          ? expense.paidBy
+          : expense.paidBy._id;
+        const currencyBalances = ensureCurrency(currency);
         currencyTotals[currency].totalAmount += expense.amount;
         
-        if (!perPersonBalances[expense.paidBy._id]) {
-          perPersonBalances[expense.paidBy._id] = 0;
+        if (!currencyBalances[paidById]) {
+          currencyBalances[paidById] = 0;
         }
 
         // Only unsettled shares affect balances. The payer is owed each open share.
         for (const participant of expense.participants) {
-          if (!perPersonBalances[participant.userId]) {
-            perPersonBalances[participant.userId] = 0;
+          if (!currencyBalances[participant.userId]) {
+            currencyBalances[participant.userId] = 0;
           }
           if (!participant.settled) {
-            perPersonBalances[expense.paidBy._id] += participant.share;
-            perPersonBalances[participant.userId] -= participant.share;
+            currencyBalances[paidById] += participant.share;
+            currencyBalances[participant.userId] -= participant.share;
           }
         }
       }
+
+      for (const settlement of settlements) {
+        if (settlement.status !== 'completed') continue;
+        const currency = settlement.currency || 'USD';
+        const currencyBalances = ensureCurrency(currency);
+        const fromUserId = settlement.fromUserId._id;
+        const toUserId = settlement.toUserId._id;
+        currencyBalances[fromUserId] = (currencyBalances[fromUserId] || 0) + settlement.amount;
+        currencyBalances[toUserId] = (currencyBalances[toUserId] || 0) - settlement.amount;
+      }
       
-      // Match the server convention: positive balances are amounts owed to people.
-      const unsettledAmount = Object.values(perPersonBalances)
-        .reduce((sum, balance) => sum + Math.max(0, balance), 0);
+      for (const [currency, balances] of Object.entries(perCurrencyBalances)) {
+        currencyTotals[currency].unsettledAmount = Object.values(balances)
+          .reduce((sum, balance) => sum + Math.max(0, balance), 0);
+      }
 
       const currencies = Object.keys(currencyTotals);
       const hasMixedCurrencies = currencies.length > 1;
       const currency = hasMixedCurrencies ? 'MULTI' : currencies[0] || 'USD';
       const totalAmount = hasMixedCurrencies ? 0 : currencyTotals[currency]?.totalAmount || 0;
-
-      if (!hasMixedCurrencies && currencyTotals[currency]) {
-        currencyTotals[currency].unsettledAmount = unsettledAmount;
-      }
+      const perPersonBalances = hasMixedCurrencies ? {} : perCurrencyBalances[currency] || {};
+      const unsettledAmount = hasMixedCurrencies ? 0 : currencyTotals[currency]?.unsettledAmount || 0;
 
       const summary = {
         totalAmount,
         perPersonBalances,
+        perCurrencyBalances,
         unsettledAmount,
         currency,
         currencyTotals,
-        hasMixedCurrencies
+        hasMixedCurrencies,
+        includesSettlements: true,
+        isOfflineEstimate: !this.isOnline
       };
 
       // Cache the calculated summary
@@ -1082,8 +1145,8 @@ class NetworkAwareApiService {
         tempId = operation.data.tempId;
       } else if (operation.type === 'DELETE_EXPENSE' && operation.data.expenseId?.startsWith('temp-expense-')) {
         tempId = operation.data.expenseId;
-      } else if (operation.type === 'UPDATE_EXPENSE' && operation.data._id?.startsWith('temp-expense-')) {
-        tempId = operation.data._id;
+      } else if (operation.type === 'UPDATE_EXPENSE' && operation.data.expenseId?.startsWith('temp-expense-')) {
+        tempId = operation.data.expenseId;
       } else if (operation.type === 'SETTLE_EXPENSE' && operation.data.expenseId?.startsWith('temp-expense-')) {
         tempId = operation.data.expenseId;
       }
@@ -1101,10 +1164,10 @@ class NetworkAwareApiService {
 
     // Process temporary item operations
     for (const [tempId, operations] of tempItemOperations) {
-      const hasCreate = operations.some(op => op.type.startsWith('CREATE_'));
-      const hasDelete = operations.some(op => op.type.startsWith('DELETE_'));
+      const createOperation = operations.find(op => op.type === 'CREATE_EXPENSE');
+      const hasDelete = operations.some(op => op.type === 'DELETE_EXPENSE');
       
-      if (hasCreate && hasDelete) {
+      if (createOperation && hasDelete) {
         // If both create and delete exist, skip all operations for this temp item
         console.log(`Skipping sync for temporary item ${tempId} (created and deleted offline)`);
         
@@ -1121,8 +1184,47 @@ class NetworkAwareApiService {
           }
         }
       } else {
-        // Keep operations that don't have both create and delete
-        optimizedQueue.push(...operations);
+        if (!createOperation) {
+          // Stale temp-only mutations cannot be replayed without the original
+          // create payload. Remove them instead of retrying forever.
+          console.log(`Removing stale temporary operations for ${tempId}`);
+          for (const operation of operations) {
+            if (operation.id) {
+              await offlineService.removeSyncOperation(operation.id);
+            }
+          }
+          continue;
+        }
+
+        const mergedCreateOperation: SyncOperation = {
+          ...createOperation,
+          data: { ...createOperation.data }
+        };
+
+        for (const operation of operations) {
+          if (operation === createOperation) continue;
+
+          if (operation.type === 'UPDATE_EXPENSE') {
+            mergedCreateOperation.data = {
+              ...mergedCreateOperation.data,
+              ...operation.data.updates,
+              tempId
+            };
+          }
+
+          if (operation.type === 'SETTLE_EXPENSE') {
+            const participantId = operation.data.participantId;
+            mergedCreateOperation.data.participants = (mergedCreateOperation.data.participants || []).map((participant: any) => (
+              participant.userId === participantId ? { ...participant, settled: true } : participant
+            ));
+          }
+
+          if (operation.id) {
+            await offlineService.removeSyncOperation(operation.id);
+          }
+        }
+
+        optimizedQueue.push(mergedCreateOperation);
       }
     }
 
@@ -1201,7 +1303,8 @@ class NetworkAwareApiService {
           console.log(`Skipping settle of temporary expense: ${operation.data.expenseId}`);
           break;
         }
-        await api.settleExpense(operation.tripId!, operation.data.expenseId, operation.data.participantId);
+        const settledExpense = await api.settleExpense(operation.tripId!, operation.data.expenseId, operation.data.participantId);
+        await offlineService.updateCachedExpense(operation.tripId!, settledExpense);
         break;
         
       case 'UPDATE_NOTES':
@@ -1552,3 +1655,5 @@ class NetworkAwareApiService {
 }
 
 export const networkAwareApi = new NetworkAwareApiService(); 
+export const networkAwareApi = new NetworkAwareApiService(); 
+

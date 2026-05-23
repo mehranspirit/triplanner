@@ -91,7 +91,7 @@ interface API {
   addExpense: (tripId: string, expense: Omit<Expense, '_id'>) => Promise<Expense>;
   updateExpense: (tripId: string, expenseId: string, updates: Partial<Expense>) => Promise<Expense>;
   deleteExpense: (tripId: string, expenseId: string) => Promise<void>;
-  settleExpense: (tripId: string, expenseId: string, participantId: string) => Promise<void>;
+  settleExpense: (tripId: string, expenseId: string, participantId: string) => Promise<Expense>;
   getSettlements: (tripId: string) => Promise<Settlement[]>;
   addSettlement: (tripId: string, settlement: Omit<Settlement, '_id'>) => Promise<Settlement>;
   updateSettlement: (tripId: string, settlementId: string, updates: Partial<Settlement>) => Promise<Settlement>;
@@ -921,13 +921,14 @@ export const api: API = {
     if (!response.ok) await throwApiError(response, 'Failed to delete expense');
   },
 
-  settleExpense: async (tripId: string, expenseId: string, participantId: string): Promise<void> => {
+  settleExpense: async (tripId: string, expenseId: string, participantId: string): Promise<Expense> => {
     const response = await fetch(`${API_URL}/api/trips/${tripId}/expenses/${expenseId}/settle`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ participantId }),
     });
     if (!response.ok) await throwApiError(response, 'Failed to settle expense');
+    return response.json();
   },
 
   // Settlement Management

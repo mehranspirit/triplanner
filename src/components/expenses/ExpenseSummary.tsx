@@ -10,12 +10,13 @@ interface ExpenseSummaryProps {
   tripId: string;
   participants: User[];
   currentUser: User;
+  onSettleUp?: () => void;
 }
 
 // Define colors for different categories
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C43'];
 
-export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, participants, currentUser }) => {
+export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, participants, currentUser, onSettleUp }) => {
   const { expenseSummary, expenses, loading, error, refreshData } = useExpense();
   const [showChart, setShowChart] = useState(true);
 
@@ -52,62 +53,127 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
     );
   }
 
-  // Create a map of user IDs to user objects for easy lookup
-  const userMap = new Map(participants.map(user => [user._id, user]));
-
-  // Calculate category totals (only main categories)
+  // Calculate category totals (only main categories), keeping currencies separate
+  // so mixed-currency trips do not imply a converted total.
   const categoryTotals = expenses.reduce((acc, expense) => {
     const category = expense.category || 'Uncategorized';
     const mainCategory = getMainExpenseCategory(category);
-    acc[mainCategory] = (acc[mainCategory] || 0) + expense.amount;
+    const currency = expense.currency || 'USD';
+    acc[mainCategory] = acc[mainCategory] || {};
+    acc[mainCategory][currency] = (acc[mainCategory][currency] || 0) + expense.amount;
     return acc;
-  }, {} as Record<string, number>);
+  }, {} as Record<string, Record<string, number>>);
 
   // Transform category totals into data for the pie chart
-  const pieData = Object.entries(categoryTotals).map(([name, value]) => ({
+  const pieData = Object.entries(categoryTotals).map(([name, totalsByCurrency]) => ({
     name,
-    value
+    value: totalsByCurrency[expenseSummary.currency] || 0
   }));
-  const currentUserBalance = expenseSummary.perPersonBalances[currentUser._id] || 0;
   const hasMixedCurrencies = Boolean(expenseSummary.hasMixedCurrencies) || expenseSummary.currency === 'MULTI';
   const currencyTotals = Object.entries(expenseSummary.currencyTotals || {});
+  const perCurrencyBalances = expenseSummary.perCurrencyBalances || (
+    expenseSummary.currency !== 'MULTI'
+      ? { [expenseSummary.currency]: expenseSummary.perPersonBalances }
+      : {}
+  );
+  const currentUserCurrencyBalances = Object.entries(perCurrencyBalances)
+    .map(([currencyCode, balances]) => [currencyCode, balances[currentUser._id] || 0] as const)
+    .filter(([, balance]) => Math.abs(balance) > 0.005);
+  const singleCurrencyBalance = expenseSummary.perPersonBalances[currentUser._id] || 0;
+  const currentUserHasPositiveMixedBalance = currentUserCurrencyBalances.some(([, balance]) => balance > 0);
+  const currentUserHasNegativeMixedBalance = currentUserCurrencyBalances.some(([, balance]) => balance < 0);
+
+  const formatCurrencyBalanceList = (balances: readonly (readonly [string, number])[]) => {
+    if (balances.length === 0) return 'Balanced';
+    return balances.map(([currencyCode, balance]) => formatCurrency(balance, currencyCode)).join(' / ');
+  };
+  const currentUserOutcome = (() => {
+    if (hasMixedCurrencies) {
+      if (currentUserCurrencyBalances.length === 0) return 'You are balanced';
+      if (currentUserHasNegativeMixedBalance && !currentUserHasPositiveMixedBalance) {
+        return `You owe ${formatCurrencyBalanceList(currentUserCurrencyBalances.map(([currencyCode, balance]) => [currencyCode, Math.abs(balance)] as const))}`;
+      }
+      if (currentUserHasPositiveMixedBalance && !currentUserHasNegativeMixedBalance) {
+        return `You are owed ${formatCurrencyBalanceList(currentUserCurrencyBalances)}`;
+      }
+      return `You have mixed balances: ${formatCurrencyBalanceList(currentUserCurrencyBalances)}`;
+    }
+
+    if (Math.abs(singleCurrencyBalance) <= 0.005) return 'You are balanced';
+    return singleCurrencyBalance > 0
+      ? `You are owed ${formatCurrency(singleCurrencyBalance, expenseSummary.currency)}`
+      : `You owe ${formatCurrency(Math.abs(singleCurrencyBalance), expenseSummary.currency)}`;
+  })();
+  const hasOpenBalances = hasMixedCurrencies
+    ? currentUserCurrencyBalances.length > 0 || Object.values(perCurrencyBalances).some(balances => (
+      Object.values(balances).some(balance => Math.abs(balance) > 0.005)
+    ))
+    : expenseSummary.unsettledAmount > 0.005;
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-xl font-semibold mb-4">Expense Summary</h2>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Expense Summary</h2>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{currentUserOutcome}</p>
+        </div>
+        {hasOpenBalances && onSettleUp && (
+          <button
+            type="button"
+            onClick={onSettleUp}
+            className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          >
+            Settle up
+          </button>
+        )}
+      </div>
       
       <div className="space-y-6">
         {hasMixedCurrencies && (
           <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-            This trip has expenses in multiple currencies, so totals are shown by currency instead of as one combined amount.
+            This trip has expenses in multiple currencies, so balances and totals are shown by currency instead of as one combined amount.
+          </div>
+        )}
+
+        {expenseSummary.isOfflineEstimate && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+            You are viewing an offline estimate from cached expenses and settlements. It may change after sync.
           </div>
         )}
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border border-gray-200 p-4">
-            <span className="text-sm text-gray-600">Total Expenses</span>
+            <span className="text-sm text-gray-600">Total spending</span>
             <div className="mt-1 text-xl font-bold text-gray-900">
               {hasMixedCurrencies ? `${currencyTotals.length} currencies` : formatCurrency(expenseSummary.totalAmount, expenseSummary.currency)}
             </div>
           </div>
 
           <div className="rounded-lg border border-gray-200 p-4">
-            <span className="text-sm text-gray-600">Unsettled Amount</span>
+            <span className="text-sm text-gray-600">Still to settle</span>
             <div className="mt-1 text-xl font-bold text-red-500">
-              {hasMixedCurrencies ? 'See balances' : formatCurrency(expenseSummary.unsettledAmount, expenseSummary.currency)}
+              {hasMixedCurrencies
+                ? `${currencyTotals.length} currency balances`
+                : formatCurrency(expenseSummary.unsettledAmount, expenseSummary.currency)}
             </div>
           </div>
 
           <div className="rounded-lg border border-gray-200 p-4">
-            <span className="text-sm text-gray-600">Expenses</span>
+            <span className="text-sm text-gray-600">Expense count</span>
             <div className="mt-1 text-xl font-bold text-gray-900">{expenses.length}</div>
           </div>
 
           <div className="rounded-lg border border-gray-200 p-4">
-            <span className="text-sm text-gray-600">Your Net Position</span>
-            <div className={`mt-1 text-xl font-bold ${currentUserBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {hasMixedCurrencies ? 'Mixed' : formatCurrency(currentUserBalance, expenseSummary.currency)}
+            <span className="text-sm text-gray-600">Your balance</span>
+            <div className={`mt-1 text-xl font-bold ${
+              hasMixedCurrencies
+                ? currentUserHasNegativeMixedBalance && !currentUserHasPositiveMixedBalance ? 'text-red-600' : 'text-green-600'
+                : singleCurrencyBalance >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {hasMixedCurrencies
+                ? formatCurrencyBalanceList(currentUserCurrencyBalances)
+                : formatCurrency(singleCurrencyBalance, expenseSummary.currency)}
             </div>
           </div>
         </div>
@@ -129,29 +195,31 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
         {/* Category Distribution */}
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium">Expense Categories</h3>
-            <button
-              onClick={() => setShowChart(!showChart)}
-              className="text-sm text-gray-600 hover:text-gray-900 flex items-center space-x-1"
-              aria-expanded={showChart}
-              aria-controls="expense-category-chart"
-            >
-              <span>{showChart ? 'Hide Chart' : 'Show Chart'}</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-4 w-4 transform transition-transform ${showChart ? 'rotate-180' : ''}`}
-                viewBox="0 0 20 20"
-                fill="currentColor"
+            <h3 className="text-lg font-medium">Spending by category</h3>
+            {!hasMixedCurrencies && (
+              <button
+                onClick={() => setShowChart(!showChart)}
+                className="text-sm text-gray-600 hover:text-gray-900 flex items-center space-x-1"
+                aria-expanded={showChart}
+                aria-controls="expense-category-chart"
               >
-                <path
-                  fillRule="evenodd"
-                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
+                <span>{showChart ? 'Hide Chart' : 'Show Chart'}</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className={`h-4 w-4 transform transition-transform ${showChart ? 'rotate-180' : ''}`}
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
-          {showChart && (
+          {!hasMixedCurrencies && showChart && (
             <div id="expense-category-chart" className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -163,7 +231,7 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
-                    label={({ name, value }) => `${name}\n${hasMixedCurrencies ? Math.round(value).toString() : formatCurrency(Math.round(value), expenseSummary.currency)}`}
+                    label={({ name, value }) => `${name}\n${formatCurrency(Math.round(value), expenseSummary.currency)}`}
                     style={{ fontSize: '12px', fontWeight: '500' }}
                   >
                     {pieData.map((entry, index) => (
@@ -171,28 +239,52 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => hasMixedCurrencies ? value.toFixed(2) : formatCurrency(value, expenseSummary.currency)}
+                    formatter={(value: number) => formatCurrency(value, expenseSummary.currency)}
                     labelStyle={{ color: '#374151' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           )}
+          <div className="mt-3 overflow-hidden rounded-lg border border-gray-200">
+            <div className="grid grid-cols-[1fr_auto] bg-gray-50 px-3 py-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <span>Category</span>
+              <span>Total</span>
+            </div>
+            {Object.entries(categoryTotals).map(([category, totalsByCurrency]) => (
+              <div key={category} className="grid grid-cols-[1fr_auto] gap-4 border-t border-gray-100 px-3 py-2 text-sm">
+                <span className="text-gray-700">{category}</span>
+                <span className="text-right font-medium text-gray-900">
+                  {Object.entries(totalsByCurrency)
+                    .map(([currencyCode, total]) => formatCurrency(total, currencyCode))
+                    .join(' / ')}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Per Person Balances */}
         <div>
-          <h3 className="text-lg font-medium mb-4">Per Person Balances</h3>
+          <h3 className="text-lg font-medium mb-4">Who owes what</h3>
           <p className="mb-3 text-sm text-gray-500">
             Positive balances mean the person is owed money. Negative balances mean the person owes money.
           </p>
           <div className="space-y-2">
-            {Object.entries(expenseSummary.perPersonBalances).map(([userId, balance]) => {
-              const user = userMap.get(userId);
-              if (!user) return null;
+            {participants.map(user => {
+              const balancesByCurrency = Object.entries(perCurrencyBalances)
+                .map(([currencyCode, balances]) => [currencyCode, balances[user._id] || 0] as const)
+                .filter(([, balance]) => Math.abs(balance) > 0.005);
+              const balance = expenseSummary.perPersonBalances[user._id] || 0;
+              const displayedBalance = hasMixedCurrencies
+                ? formatCurrencyBalanceList(balancesByCurrency)
+                : formatCurrency(balance, expenseSummary.currency);
+              const isPositive = hasMixedCurrencies
+                ? balancesByCurrency.some(([, currencyBalance]) => currencyBalance > 0)
+                : balance >= 0;
               
               return (
-                <div key={userId} className="flex justify-between items-center">
+                <div key={user._id} className="flex justify-between items-center">
                   <div className="flex items-center space-x-3">
                     <Avatar 
                       photoUrl={user.photoUrl || null}
@@ -202,8 +294,8 @@ export const ExpenseSummary: React.FC<ExpenseSummaryProps> = ({ tripId, particip
                     />
                     <span className="text-gray-600">{user.name}</span>
                   </div>
-                  <span className={balance >= 0 ? 'text-green-500' : 'text-red-500'}>
-                    {hasMixedCurrencies ? balance.toFixed(2) : formatCurrency(balance, expenseSummary.currency)}
+                  <span className={isPositive ? 'text-green-500' : 'text-red-500'}>
+                    {displayedBalance}
                   </span>
                 </div>
               );

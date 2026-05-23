@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { AlertCircle, CalendarClock, CheckCircle2, Clock, Lightbulb, MapPin, Send, Sparkles, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, CalendarClock, CheckCircle2, Clock, DollarSign, Lightbulb, MapPin, Send, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Trip, Event, EventType } from '@/types/eventTypes';
 import { TripInsight } from '@/types/insightTypes';
+import { ExpenseSummary } from '@/types/expenseTypes';
 import {
   AssistantActionTarget,
   AssistantChecklistItem,
@@ -10,6 +11,8 @@ import {
   TripQuestionAnswerResponse
 } from '@/types/assistantBriefingTypes';
 import { Textarea } from '@/components/ui/textarea';
+import { networkAwareApi } from '@/services/networkAwareApi';
+import { formatCurrency } from '@/utils/format';
 import {
   formatEventDateTime,
   getCurrentEvent,
@@ -24,6 +27,7 @@ interface TripCommandCenterProps {
   trip: Trip;
   insights: TripInsight[];
   canEdit: boolean;
+  currentUserId?: string;
   onOpenAIImport: () => void;
   onOpenChecklist: () => void;
   onOpenExpenses: () => void;
@@ -115,6 +119,55 @@ const EventSummary: React.FC<{ label: string; event: Event | null }> = ({ label,
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+const ExpenseStatusCard: React.FC<{
+  summary: ExpenseSummary | null;
+  currentUserId?: string;
+  isLoading: boolean;
+  onOpenExpenses: () => void;
+}> = ({ summary, currentUserId, isLoading, onOpenExpenses }) => {
+  const perCurrencyBalances = summary?.perCurrencyBalances || (
+    summary && summary.currency !== 'MULTI'
+      ? { [summary.currency]: summary.perPersonBalances }
+      : {}
+  );
+  const userBalances = currentUserId
+    ? Object.entries(perCurrencyBalances)
+      .map(([currency, balances]) => [currency, balances[currentUserId] || 0] as const)
+      .filter(([, balance]) => Math.abs(balance) > 0.005)
+    : [];
+  const balanceLabel = userBalances.length > 0
+    ? userBalances.map(([currency, balance]) => formatCurrency(balance, currency)).join(' / ')
+    : 'Balanced';
+  const owesMoney = userBalances.some(([, balance]) => balance < 0);
+  const isOwedMoney = userBalances.some(([, balance]) => balance > 0);
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
+        <DollarSign className="h-4 w-4" />
+        Expenses
+      </div>
+      {isLoading ? (
+        <p className="mt-2 text-sm text-gray-500">Loading balances...</p>
+      ) : summary ? (
+        <>
+          <p className="mt-2 font-semibold text-gray-900">
+            {owesMoney ? 'You owe' : isOwedMoney ? 'You are owed' : 'You are balanced'}
+          </p>
+          <p className={`mt-1 text-sm ${owesMoney ? 'text-red-600' : isOwedMoney ? 'text-green-600' : 'text-gray-600'}`}>
+            {balanceLabel}
+          </p>
+        </>
+      ) : (
+        <p className="mt-2 text-sm text-gray-500">No expense summary yet.</p>
+      )}
+      <Button variant="outline" size="sm" onClick={onOpenExpenses} className="mt-3">
+        Manage expenses
+      </Button>
     </div>
   );
 };
@@ -399,6 +452,7 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
   trip,
   insights,
   canEdit,
+  currentUserId,
   onOpenAIImport,
   onOpenChecklist,
   onOpenExpenses,
@@ -423,6 +477,8 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
   onAskTripQuestion,
 }) => {
   const now = new Date();
+  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
+  const [isLoadingExpenseSummary, setIsLoadingExpenseSummary] = useState(false);
   const currentEvent = getCurrentEvent(trip.events, now);
   const nextEvent = getNextEvent(trip.events, now);
   const priorityInsights = [...insights]
@@ -431,6 +487,34 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
       return rank[a.severity] - rank[b.severity];
     })
     .slice(0, 4);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadExpenseSummary = async () => {
+      setIsLoadingExpenseSummary(true);
+      try {
+        const summary = await networkAwareApi.getExpenseSummary(trip._id);
+        if (isMounted) {
+          setExpenseSummary(summary || null);
+        }
+      } catch {
+        if (isMounted) {
+          setExpenseSummary(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingExpenseSummary(false);
+        }
+      }
+    };
+
+    loadExpenseSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [trip._id]);
 
   return (
     <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 md:p-5">
@@ -461,9 +545,15 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
             <CalendarClock className="h-4 w-4 text-gray-500" />
             <h3 className="text-sm font-semibold text-gray-900">Planning snapshot</h3>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <EventSummary label="Now" event={currentEvent} />
             <EventSummary label="Next" event={nextEvent} />
+            <ExpenseStatusCard
+              summary={expenseSummary}
+              currentUserId={currentUserId}
+              isLoading={isLoadingExpenseSummary}
+              onOpenExpenses={onOpenExpenses}
+            />
           </div>
         </section>
 
