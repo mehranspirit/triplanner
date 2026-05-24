@@ -4,16 +4,15 @@ const auth = require('../middleware/auth');
 const Trip = require('../models/Trip');
 const TripInvitation = require('../models/TripInvitation');
 const { logActivity } = require('../utils/activityLogger');
+const { getFrontendUrl } = require('../utils/frontendUrl');
 
 const router = express.Router();
 
-const getFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
-
-const serializeInviteLink = (invitation, frontendUrl = getFrontendUrl()) => ({
+const serializeInviteLink = (invitation, req) => ({
   _id: invitation._id,
   role: invitation.role,
   status: invitation.status,
-  inviteUrl: `${frontendUrl}/trips/invite/${invitation.token}`,
+  inviteUrl: `${getFrontendUrl(req)}/trips/invite/${invitation.token}`,
   expiresAt: invitation.expiresAt,
   createdAt: invitation.createdAt,
   createdBy: invitation.createdBy,
@@ -113,7 +112,7 @@ router.get('/trips/:id/invite-links', auth, async (req, res) => {
       .populate('createdBy', 'name email photoUrl')
       .populate('acceptedUsers.user', 'name email photoUrl');
 
-    res.json(invitations.map(invitation => serializeInviteLink(invitation)));
+    res.json(invitations.map(invitation => serializeInviteLink(invitation, req)));
   } catch (error) {
     console.error('Error loading trip invite links:', error);
     res.status(500).json({ message: error.message || 'Failed to load invite links' });
@@ -164,7 +163,7 @@ router.post('/trips/:id/invite-links', auth, async (req, res) => {
       }
     });
 
-    res.status(201).json(serializeInviteLink(invitation));
+    res.status(201).json(serializeInviteLink(invitation, req));
   } catch (error) {
     console.error('Error creating trip invite link:', error);
     res.status(500).json({ message: error.message || 'Failed to create invite link' });

@@ -22,6 +22,7 @@ import {
   TripReplanBriefingResponse,
   TripTodayBriefingResponse
 } from '../types/assistantBriefingTypes';
+import { resolvePublicAppUrl } from '../utils/publicAppUrl';
 
 export interface TripInviteLink {
   _id: string;
@@ -33,6 +34,11 @@ export interface TripInviteLink {
   createdBy?: User;
   acceptedUsers?: Array<{ user: User; acceptedAt: string }>;
 }
+
+const normalizeInviteLink = (link: TripInviteLink): TripInviteLink => ({
+  ...link,
+  inviteUrl: resolvePublicAppUrl(link.inviteUrl),
+});
 
 const throwApiError = async (response: Response, fallbackMessage: string): Promise<never> => {
   let message = fallbackMessage;
@@ -532,7 +538,8 @@ export const api: API = {
     if (!response.ok) {
       await throwApiError(response, 'Failed to load invite links');
     }
-    return response.json();
+    const links = await response.json();
+    return links.map(normalizeInviteLink);
   },
 
   createTripInviteLink: async (tripId: string, role: 'editor' | 'viewer'): Promise<TripInviteLink> => {
@@ -545,7 +552,8 @@ export const api: API = {
     if (!response.ok) {
       await throwApiError(response, 'Failed to create invite link');
     }
-    return response.json();
+    const link = await response.json();
+    return normalizeInviteLink(link);
   },
 
   revokeTripInviteLink: async (tripId: string, inviteId: string): Promise<void> => {

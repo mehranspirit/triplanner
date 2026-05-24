@@ -7,6 +7,7 @@ import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Check, Copy, Link2, Trash2, X, Plus, User as UserIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { copyTextToClipboard } from '@/utils/publicAppUrl';
 
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
@@ -154,8 +155,15 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     try {
       const inviteLink = await api.createTripInviteLink(trip._id, inviteLinkRole);
       setInviteLinks(prev => [inviteLink, ...prev]);
-      setSuccess(`Created a ${inviteLinkRole} invite link.`);
-      await handleCopyInviteLink(inviteLink);
+
+      const copied = await copyTextToClipboard(inviteLink.inviteUrl);
+      if (copied) {
+        setCopiedInviteId(inviteLink._id);
+        setSuccess(`Created a ${inviteLinkRole} invite link and copied it to your clipboard.`);
+        setTimeout(() => setCopiedInviteId(null), 2000);
+      } else {
+        setSuccess(`Created a ${inviteLinkRole} invite link. Use Copy to share it.`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create invite link');
     } finally {
@@ -163,39 +171,18 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
   };
 
-  const copyTextToClipboard = async (text: string) => {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.setAttribute('readonly', '');
-    textArea.style.position = 'fixed';
-    textArea.style.top = '-9999px';
-    textArea.style.left = '-9999px';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-
-    const copied = document.execCommand('copy');
-    document.body.removeChild(textArea);
-
-    if (!copied) {
-      throw new Error('Copy command failed');
-    }
-  };
-
   const handleCopyInviteLink = async (inviteLink: TripInviteLink) => {
-    try {
-      await copyTextToClipboard(inviteLink.inviteUrl);
+    const copied = await copyTextToClipboard(inviteLink.inviteUrl);
+    if (copied) {
+      setError('');
       setCopiedInviteId(inviteLink._id);
       setSuccess('Invite link copied.');
       setTimeout(() => setCopiedInviteId(null), 2000);
-    } catch {
-      setError('Copying failed. Select the link field and copy it manually.');
+      return;
     }
+
+    setSuccess('');
+    setError('Copying failed. Select the link field and copy it manually.');
   };
 
   const handleRevokeInviteLink = async (inviteLink: TripInviteLink) => {
@@ -326,7 +313,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
               </Select>
               <Button type="button" onClick={handleCreateInviteLink} disabled={isCreatingLink}>
                 <Link2 className="mr-2 h-4 w-4" />
-                {isCreatingLink ? 'Creating...' : 'Create and copy link'}
+                {isCreatingLink ? 'Creating...' : 'Create link'}
               </Button>
             </div>
             {inviteLinks.length > 0 && (
