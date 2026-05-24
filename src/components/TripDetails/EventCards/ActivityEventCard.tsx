@@ -1,34 +1,26 @@
 import React, { useState } from 'react';
-import { Card, CardTitle } from '@/components/ui/card';
+import { CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ActivityEvent } from '@/types/eventTypes';
 import { format, parse } from 'date-fns';
 import { 
   Clock, 
   MapPin, 
-  Edit, 
-  Trash2, 
   Info, 
-  MoreVertical, 
   CheckCircle2, 
   Search,
   Map,
-  Share,
-  Calendar,
   ExternalLink,
   Ticket
 } from 'lucide-react';
 import { FaMountain } from 'react-icons/fa';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
+import EventCardActions from './EventCardActions';
+import EventCardShell from './EventCardShell';
 
 interface ActivityEventCardProps {
   event: ActivityEvent;
@@ -93,197 +85,27 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
   const hasLongContent = (event.description?.length || 0) > 100 || (event.notes?.length || 0) > 100;
 
   return (
-    <Card className={cn(
-      "overflow-hidden h-full transition-all duration-200 group relative",
-      isExploring 
-        ? "bg-white border-2 border-gray-300 border-dashed" 
-        : "bg-white"
-    )}>
-      {/* Action Menu Button */}
-      <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 md:block hidden">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-full bg-white/80 hover:bg-white shadow-sm border border-gray-100/50 backdrop-blur-sm transition-all duration-200 data-[state=open]:bg-gray-100/80"
-            >
-              <MoreVertical className="h-4 w-4 text-gray-500 transition-transform duration-200 ease-in-out data-[state=open]:rotate-90" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent 
-            className="w-10 p-1 rounded-xl shadow-lg border border-gray-100/50 bg-white/95 backdrop-blur-sm animate-in fade-in-0 zoom-in-95 data-[side=right]:slide-in-from-left-2 data-[side=left]:slide-in-from-right-2 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2" 
-            align="center"
-            side="bottom"
-            alignOffset={-28}
-            sideOffset={5}
+    <EventCardShell isExploring={isExploring}>
+      <EventCardActions
+        isExploring={isExploring}
+        onAddToCalendar={handleAddToCalendar}
+        onShare={handleShare}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onStatusChange={onStatusChange}
+      >
+        {event.address && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg transition-colors duration-200 hover:bg-slate-50"
+            onClick={handleOpenInMaps}
+            title="Open in Maps"
           >
-            <div 
-              className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
-            >
-              {event.address && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={handleOpenInMaps}
-                  title="Open in Maps"
-                >
-                  <Map className="h-4 w-4 text-gray-500" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                onClick={handleAddToCalendar}
-                title="Add to Calendar"
-              >
-                <Calendar className="h-4 w-4 text-gray-500" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                onClick={handleShare}
-                title="Share"
-              >
-                <Share className="h-4 w-4 text-gray-500" />
-              </Button>
-              {onStatusChange && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => onStatusChange(isExploring ? 'confirmed' : 'exploring')}
-                  title={isExploring ? "Mark as Confirmed" : "Change to Exploring"}
-                >
-                  {isExploring ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Search className="h-4 w-4 text-gray-500" />
-                  )}
-                </Button>
-              )}
-              {onEdit && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={onEdit}
-                  title="Edit"
-                >
-                  <Edit className="h-4 w-4 text-gray-500" />
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors duration-200"
-                  onClick={onDelete}
-                  title="Delete"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      {/* Mobile Action Menu Button */}
-      <div className="absolute right-2 top-[4.5rem] opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 md:hidden block">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-full bg-white/80 hover:bg-white shadow-sm border border-gray-100/50 backdrop-blur-sm transition-all duration-200 data-[state=open]:bg-gray-100/80"
-            >
-              <MoreVertical className="h-4 w-4 text-gray-500 transition-transform duration-200 ease-in-out data-[state=open]:rotate-90" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent 
-            className="w-10 p-1 rounded-xl shadow-lg border border-gray-100/50 bg-white/95 backdrop-blur-sm animate-in fade-in-0 zoom-in-95 data-[side=right]:slide-in-from-left-2 data-[side=left]:slide-in-from-right-2 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2" 
-            align="center"
-            side="bottom"
-            alignOffset={-28}
-            sideOffset={5}
-          >
-            <div 
-              className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
-            >
-              {event.address && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={handleOpenInMaps}
-                  title="Open in Maps"
-                >
-                  <Map className="h-4 w-4 text-gray-500" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                onClick={handleAddToCalendar}
-                title="Add to Calendar"
-              >
-                <Calendar className="h-4 w-4 text-gray-500" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                onClick={handleShare}
-                title="Share"
-              >
-                <Share className="h-4 w-4 text-gray-500" />
-              </Button>
-              {onStatusChange && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => onStatusChange(isExploring ? 'confirmed' : 'exploring')}
-                  title={isExploring ? "Mark as Confirmed" : "Change to Exploring"}
-                >
-                  {isExploring ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Search className="h-4 w-4 text-gray-500" />
-                  )}
-                </Button>
-              )}
-              {onEdit && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={onEdit}
-                  title="Edit"
-                >
-                  <Edit className="h-4 w-4 text-gray-500" />
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors duration-200"
-                  onClick={onDelete}
-                  title="Delete"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+            <Map className="h-4 w-4 text-slate-500" />
+          </Button>
+        )}
+      </EventCardActions>
 
       <div className="flex h-full">
         <div className="w-1/4 relative md:block hidden">
@@ -293,13 +115,13 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
               alt={event.title}
               className={cn(
                 "w-full h-full object-cover transition-all duration-200",
-                isExploring && "grayscale opacity-30 contrast-125"
+                isExploring && "saturate-75 opacity-50 contrast-110"
               )}
             />
             <div className={cn(
               "absolute inset-0 transition-all duration-200",
               isExploring 
-                ? "bg-gradient-to-br from-white/80 to-transparent"
+                ? "bg-gradient-to-br from-amber-100/80 to-transparent"
                 : "bg-gradient-to-br from-indigo-500/10 to-indigo-900/30"
             )}></div>
             {isExploring && (
@@ -325,7 +147,7 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
           <div className={cn(
             "absolute top-2 left-2 px-3 py-1 rounded-sm flex items-center gap-1.5 transition-all duration-200",
             isExploring 
-              ? "bg-white border-2 border-gray-300 border-dashed text-gray-600"
+              ? "bg-amber-100 border border-amber-200 text-amber-800"
               : "bg-indigo-600 text-white"
           )}>
             {isExploring ? (
@@ -350,13 +172,13 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
               alt={event.title}
               className={cn(
                 "w-full h-full object-cover transition-all duration-200",
-                isExploring && "grayscale opacity-30 contrast-125"
+                isExploring && "saturate-75 opacity-50 contrast-110"
               )}
             />
             <div className={cn(
               "absolute inset-0 transition-all duration-200",
               isExploring 
-                ? "bg-gradient-to-br from-white/80 to-transparent"
+                ? "bg-gradient-to-br from-amber-100/80 to-transparent"
                 : "bg-gradient-to-br from-indigo-500/10 to-indigo-900/30"
             )}></div>
             {isExploring && (
@@ -505,7 +327,7 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
           </div>
         </div>
       </div>
-    </Card>
+    </EventCardShell>
   );
 };
 

@@ -1,66 +1,32 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTripDetails } from './hooks';
-// import EventCard from './EventCard'; // Placeholder
 import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"; // Assuming Shadcn UI Card
 import { Event, EventType, ActivityEvent, DestinationEvent } from '@/types/eventTypes'; // Import EventType
-import { EVENT_TYPES } from '@/eventTypes/registry'; // Correct import name
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-} from "@/components/ui/dropdown-menu";
-import { parse, format } from 'date-fns';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { getDefaultThumbnail } from './thumbnailHelpers';
-import { CollaboratorAvatars } from './CollaboratorAvatars';
-import TripMap from '@/components/TripMap';
-import { MapIcon, X, StickyNote, MapPin, FileText, Sparkles, Plus, Wand2, Trash2, CheckSquare, CalendarDays, Bell, CloudSun } from 'lucide-react';
-import TripNotes from '@/components/TripNotes';
-import TripChecklist from '@/components/TripDetails/TripChecklist';
-import TripCommandCenter from '@/components/TripDetails/TripCommandCenter';
-import InTripAssistant from '@/components/TripDetails/InTripAssistant';
-import TripNotifications from '@/components/TripDetails/TripNotifications';
-
-// Import icons
-import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
-import { Clock, Info } from 'lucide-react';
+import { Sparkles, Clock } from 'lucide-react';
+import TripDetailsToolbar from '@/components/TripDetails/TripDetailsToolbar';
+import MobileTripActionsFab from '@/components/TripDetails/MobileTripActionsFab';
+import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
+import TripOverviewCard from '@/components/TripDetails/TripOverviewCard';
+import TripPanelHost from '@/components/TripDetails/panels/TripPanelHost';
+import { useTripPanelManager } from '@/components/TripDetails/hooks/useTripPanelManager';
+import TripTimeline from '@/components/TripDetails/timeline/TripTimeline';
+import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/imports/TravelImportDialog';
 
 // Import the new specific modals
-import ArrivalFormModal from './EventFormModals/ArrivalFormModal';
-import StayFormModal from './EventFormModals/StayFormModal';
-import RentalCarFormModal from './EventFormModals/RentalCarFormModal';
-import FlightFormModal from './EventFormModals/FlightFormModal';
-// TODO: Import modals for other event types (Activity, Bus, Train, Destination, Departure)
-import ActivityFormModal from './EventFormModals/ActivityFormModal';
-import BusFormModal from './EventFormModals/BusFormModal';
-import TrainFormModal from './EventFormModals/TrainFormModal';
-import DestinationFormModal from './EventFormModals/DestinationFormModal';
-import DepartureFormModal from './EventFormModals/DepartureFormModal';
+import EventFormModalRouter from './EventFormModalRouter';
 
-// Import TripActions component
-import TripActions from './TripActions';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TripLoading from '@/components/ui/trip-loading';
-import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { generateTripInsights } from '@/services/tripInsights';
 import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/travelImportValidation';
-import { formatEventDateTime, getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
 import { api } from '@/services/api';
 import { hashText } from '@/utils/hash';
 import { NotificationPreference, TripNotification } from '@/types/notificationTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
-import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
+import { WeatherSnapshot } from '@/types/weatherTypes';
 import { TravelImport, TravelImportStatus } from '@/types/travelImportTypes';
 import {
   AssistantActionTarget,
@@ -112,50 +78,6 @@ const getImportInboxStatus = (candidates: ParsedEventCandidate[]): TravelImportS
   return 'needs_review';
 };
 
-type ImportInboxFilter = 'open' | 'needs_review' | 'missing_info' | 'duplicate' | 'done' | 'failed';
-
-const importInboxFilters: Array<{ id: ImportInboxFilter; label: string }> = [
-  { id: 'open', label: 'Open' },
-  { id: 'needs_review', label: 'Needs review' },
-  { id: 'missing_info', label: 'Missing info' },
-  { id: 'duplicate', label: 'Duplicates' },
-  { id: 'done', label: 'Done' },
-  { id: 'failed', label: 'Failed' },
-];
-
-const matchesImportInboxFilter = (travelImport: TravelImport, filter: ImportInboxFilter) => {
-  if (filter === 'open') {
-    return ['parsed', 'needs_review', 'missing_info', 'duplicate', 'unsupported'].includes(travelImport.status);
-  }
-  if (filter === 'done') {
-    return ['accepted', 'partially_accepted', 'dismissed'].includes(travelImport.status);
-  }
-  return travelImport.status === filter;
-};
-
-const getImportStatusLabel = (status: TravelImportStatus) => {
-  const labels: Record<TravelImportStatus, string> = {
-    parsed: 'Needs review',
-    needs_review: 'Needs review',
-    missing_info: 'Missing info',
-    duplicate: 'Possible duplicate',
-    failed: 'Failed',
-    accepted: 'Accepted',
-    partially_accepted: 'Partially accepted',
-    dismissed: 'Dismissed',
-    unsupported: 'Unsupported',
-  };
-  return labels[status] || status;
-};
-
-const getImportStatusClassName = (status: TravelImportStatus) => {
-  if (status === 'failed' || status === 'unsupported') return 'bg-red-100 text-red-700';
-  if (status === 'missing_info' || status === 'duplicate' || status === 'partially_accepted') return 'bg-amber-100 text-amber-700';
-  if (status === 'accepted') return 'bg-green-100 text-green-700';
-  if (status === 'dismissed') return 'bg-gray-100 text-gray-600';
-  return 'bg-blue-100 text-blue-700';
-};
-
 const redactImportSourceText = (text: string) => (
   text
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
@@ -172,45 +94,6 @@ const buildImportSourceSummary = (text: string) => {
     sourceTitle: (firstLine || 'Pasted import').slice(0, 140),
     sourceExcerpt: redacted.slice(0, 500),
   };
-};
-
-const getImportFallbackTitle = (travelImport: TravelImport) => {
-  const firstEvent = travelImport.parsedEvents?.[0];
-  if (firstEvent) return getEventDisplayName(firstEvent);
-  if (travelImport.status === 'failed') return 'Failed import';
-  return 'Pasted import';
-};
-
-const formatImportIssue = (issue: string) => (
-  issue
-    .replace(/^Missing required field:\s*/i, 'Missing ')
-    .replace(/^Missing or invalid start time$/i, 'Missing or invalid start time')
-    .replace(/^Missing or invalid end time$/i, 'Missing or invalid end time')
-);
-
-const getImportIssueSummaries = (travelImport: TravelImport, existingEvents: Event[]) => {
-  const issueSet = new Set<string>();
-
-  (travelImport.validationErrors || []).forEach((issue) => {
-    if (issue.trim()) issueSet.add(formatImportIssue(issue));
-  });
-
-  if (travelImport.duplicateOfImportId) {
-    issueSet.add('Same source as an earlier inbox item');
-  }
-
-  if (!['accepted', 'dismissed'].includes(travelImport.status) && travelImport.parsedEvents?.length > 0) {
-    buildParsedEventCandidates(travelImport.parsedEvents, existingEvents).forEach((candidate) => {
-      candidate.validation.errors.forEach((issue) => issueSet.add(formatImportIssue(issue)));
-      candidate.validation.warnings.forEach((issue) => issueSet.add(formatImportIssue(issue)));
-      candidate.validation.duplicateEventIds.forEach((eventId) => {
-        const eventName = existingEvents.find((event) => event.id === eventId);
-        issueSet.add(eventName ? `Possible duplicate of ${getEventDisplayName(eventName)}` : 'Possible duplicate of an existing event');
-      });
-    });
-  }
-
-  return Array.from(issueSet).slice(0, 4);
 };
 
 const NewTripDetails: React.FC = () => {
@@ -235,10 +118,7 @@ const NewTripDetails: React.FC = () => {
   const [modalType, setModalType] = useState<EventType | null>(null); // State to track which modal to show
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [isCondensedView, setIsCondensedView] = useState(false);
-  const [showMap, setShowMap] = useState(false);
-  const [showNotes, setShowNotes] = useState(false);
-  const [showToday, setShowToday] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const { activePanel, openPanel, closePanel } = useTripPanelManager();
   const [notifications, setNotifications] = useState<TripNotification[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference | null>(null);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
@@ -282,7 +162,6 @@ const NewTripDetails: React.FC = () => {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [generatedSuggestions, setGeneratedSuggestions] = useState<Event[]>([]);
   const [deletingEvents, setDeletingEvents] = useState<Set<string>>(new Set());
-  const [showChecklist, setShowChecklist] = useState(false);
   const [isAddingSuggestions, setIsAddingSuggestions] = useState(false);
   const [isImprovingLocations, setIsImprovingLocations] = useState(false);
   const [addingProgress, setAddingProgress] = useState(0);
@@ -295,11 +174,6 @@ const NewTripDetails: React.FC = () => {
     () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
     [tripInsights, dismissedInsightIds]
   );
-  const filteredTravelImports = useMemo(
-    () => travelImports.filter(travelImport => matchesImportInboxFilter(travelImport, importInboxFilter)),
-    [travelImports, importInboxFilter]
-  );
-  const visibleTravelImports = showAllTravelImports ? filteredTravelImports : filteredTravelImports.slice(0, 6);
   const unreadNotificationCount = notifications.filter(notification => !notification.readAt).length;
   const handledAssistantChecklistItemIds = assistantSuggestionFeedback
     .filter(feedback => feedback.suggestionType === 'assistant_checklist_item')
@@ -461,24 +335,17 @@ const NewTripDetails: React.FC = () => {
         break;
       }
       case 'checklist':
-        setShowChecklist(true);
-        setShowToday(false);
-        setShowNotifications(false);
+        openPanel('checklist');
         break;
       case 'expenses':
         navigate(`/trips/${trip._id}/expenses`);
         break;
       case 'today':
-        setShowToday(true);
-        setShowChecklist(false);
-        setShowNotifications(false);
-        setShowNotes(false);
-        setShowMap(false);
+        openPanel('today');
         break;
       case 'ai_import':
         setIsAIParseModalOpen(true);
-        setShowToday(false);
-        setShowNotifications(false);
+        closePanel();
         break;
       case 'add_event':
         handleAddEventClick('activity');
@@ -512,7 +379,7 @@ const NewTripDetails: React.FC = () => {
       }
 
       await saveAssistantChecklistFeedback(item, 'accepted');
-      setShowChecklist(true);
+      openPanel('checklist');
       setSuccess(`Added "${item.text}" to the ${checklistType} checklist.`);
       setShowSuccessDialog(true);
     } catch (error) {
@@ -672,32 +539,30 @@ const NewTripDetails: React.FC = () => {
       case 'event': {
         const event = trip.events.find(tripEvent => tripEvent.id === notification.eventId);
         if (event) {
-          setShowNotifications(false);
+          closePanel();
           handleEditEventClick(event);
         }
         break;
       }
       case 'checklist':
-        setShowNotifications(false);
-        setShowChecklist(true);
+        openPanel('checklist');
         break;
       case 'expenses':
         navigate(`/trips/${trip._id}/expenses`);
         break;
       case 'today':
-        setShowNotifications(false);
-        setShowToday(true);
+        openPanel('today');
         break;
       case 'ai_import':
-        setShowNotifications(false);
+        closePanel();
         setIsAIParseModalOpen(true);
         break;
       case 'add_event':
-        setShowNotifications(false);
+        closePanel();
         handleAddEventClick(notification.title.toLowerCase().includes('stay') ? 'stay' : 'rental_car');
         break;
       default:
-        setShowNotifications(false);
+        closePanel();
         break;
     }
   };
@@ -1071,451 +936,6 @@ const NewTripDetails: React.FC = () => {
   if (error) return <div className="p-4 text-red-600">Error: {error}</div>;
   if (!trip) return <div className="p-4">Trip not found.</div>;
 
-  // Sort events by startDate, earliest first
-  const sortedEvents = sortEventsByStart(trip.events);
-
-  const getTimelineDateKey = (event: Event) => {
-    const start = getEventStart(event);
-    if (!start) return '';
-
-    const year = start.getFullYear();
-    const month = String(start.getMonth() + 1).padStart(2, '0');
-    const day = String(start.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const tripDateRange = (() => {
-    const start = trip.startDate ? new Date(trip.startDate) : null;
-    const end = trip.endDate ? new Date(trip.endDate) : null;
-
-    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return null;
-    }
-
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  })();
-
-  const outOfRangeEvents = tripDateRange
-    ? sortedEvents.filter((event) => {
-        const start = getEventStart(event);
-        return !!start && (start < tripDateRange.start || start > tripDateRange.end);
-      })
-    : [];
-
-  const getEventWeatherSnapshots = (eventId: string) => {
-    return weatherSnapshots.filter(snapshot => (
-      (snapshot.originalEventId || snapshot.eventId) === eventId && snapshot.daily?.length > 0
-    ));
-  };
-
-  const formatWeatherForecast = (forecast: WeatherDay) => {
-    const parts = [
-      forecast.condition,
-      typeof forecast.temperatureMax === 'number' && typeof forecast.temperatureMin === 'number'
-        ? `${Math.round(forecast.temperatureMax)}/${Math.round(forecast.temperatureMin)} deg F`
-        : null,
-      typeof forecast.precipitationProbabilityMax === 'number'
-        ? `${forecast.precipitationProbabilityMax}% rain`
-        : null,
-      typeof forecast.windSpeedMax === 'number' && forecast.windSpeedMax >= 15
-        ? `${Math.round(forecast.windSpeedMax)} mph wind`
-        : null,
-    ].filter(Boolean);
-
-    return parts.join(', ');
-  };
-
-  const EventWeatherForecast: React.FC<{ event: Event }> = ({ event }) => {
-    const snapshots = getEventWeatherSnapshots(event.id);
-    if (snapshots.length === 0) return null;
-
-    return (
-      <div className="mt-2 space-y-1 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-900">
-        {snapshots.map((snapshot) => {
-          const forecast = snapshot.daily?.[0];
-          if (!forecast) return null;
-          const label = snapshot.locationRole === 'departure'
-            ? 'Departure weather'
-            : snapshot.locationRole === 'arrival'
-              ? 'Arrival weather'
-              : 'Weather forecast';
-
-          return (
-            <div key={snapshot._id || `${snapshot.eventId}-${snapshot.date}`} className="flex items-center gap-2">
-        <CloudSun className="h-4 w-4 flex-shrink-0 text-sky-600" />
-        <span>
-                <span className="font-medium">{label}:</span> {formatWeatherForecast(forecast)}
-        </span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const FlightStatusSummary: React.FC<{ event: Event }> = ({ event }) => {
-    if (event.type !== 'flight') return null;
-
-    const snapshot = flightStatusSnapshots.find(status => status.eventId === event.id);
-    if (!snapshot) return null;
-
-    const departureParts = [
-      snapshot.departure?.terminal ? `Terminal ${snapshot.departure.terminal}` : null,
-      snapshot.departure?.gate ? `Gate ${snapshot.departure.gate}` : null,
-      typeof snapshot.departure?.delayMinutes === 'number' && snapshot.departure.delayMinutes > 0
-        ? `${snapshot.departure.delayMinutes} min delay`
-        : null,
-    ].filter(Boolean);
-    const arrivalDelay = typeof snapshot.arrival?.delayMinutes === 'number' && snapshot.arrival.delayMinutes > 0
-      ? `Arrival ${snapshot.arrival.delayMinutes} min delay`
-      : null;
-
-    return (
-      <div className="mt-2 flex items-center gap-2 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs text-violet-900">
-        <FaPlane className="h-4 w-4 flex-shrink-0 text-violet-600" />
-        <span>
-          <span className="font-medium">Flight status:</span> {[snapshot.status, ...departureParts, arrivalDelay].filter(Boolean).join(' | ')}
-        </span>
-      </div>
-    );
-  };
-
-  // Update the CondensedEventCard component to include icons
-  const CondensedEventCard: React.FC<{ event: Event; thumbnail: string }> = ({ event, thumbnail }) => {
-    const registryItem = EVENT_TYPES[event.type];
-    if (!registryItem) return null;
-
-    const isDeleting = deletingEvents.has(event.id);
-    const isExploring = event.status === 'exploring';
-    const isActive = isEventCurrentlyActive(event);
-
-    const getEventIcon = () => {
-      switch (event.type) {
-        case 'flight':
-          return <FaPlane className="w-5 h-5 text-blue-500" />;
-        case 'arrival':
-          return <FaPlane className="w-5 h-5 text-green-500 transform rotate-45" />;
-        case 'departure':
-          return <FaPlane className="w-5 h-5 text-red-500 transform -rotate-45" />;
-        case 'train':
-          return <FaTrain className="w-5 h-5 text-green-500" />;
-        case 'bus':
-          return <FaBus className="w-5 h-5 text-purple-500" />;
-        case 'rental_car':
-          return <FaCar className="w-5 h-5 text-red-500" />;
-        case 'stay':
-          return <FaHotel className="w-5 h-5 text-yellow-500" />;
-        case 'destination':
-          return <FaMapMarkerAlt className="w-5 h-5 text-pink-500" />;
-        case 'activity':
-          return <FaMountain className="w-5 h-5 text-indigo-500" />;
-        default:
-          return <FaMapMarkerAlt className="w-5 h-5 text-gray-500" />;
-      }
-    };
-
-    const formatDate = (dateStr: string | undefined, timeStr?: string) => {
-      if (!dateStr) return '';
-      try {
-        // Handle both ISO and simple YYYY-MM-DD formats
-        const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-        const [year, month, day] = datePart.split('-').map(Number);
-        
-        // Validate date parts
-        if (isNaN(year) || isNaN(month) || isNaN(day)) {
-          console.warn('Invalid date parts:', { year, month, day, dateStr });
-          return dateStr;
-        }
-
-        // Create date with time set to noon to avoid timezone issues
-        const date = new Date(year, month - 1, day, 12);
-        
-        // Validate the date
-        if (isNaN(date.getTime())) {
-          console.warn('Invalid date:', dateStr);
-          return dateStr;
-        }
-
-        const formattedDate = format(date, 'MMM d');
-        return timeStr ? `${formattedDate} ${timeStr}` : formattedDate;
-      } catch (error) {
-        console.warn('Error formatting date:', error, dateStr);
-        return dateStr;
-      }
-    };
-
-    const getTimeInfo = () => {
-      switch (event.type) {
-        case 'stay':
-          const stayEvent = event as any;
-          return (
-            <>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Check-in: {formatDate(stayEvent.checkIn, stayEvent.checkInTime)}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Check-out: {formatDate(stayEvent.checkOut, stayEvent.checkOutTime)}</span>
-              </div>
-            </>
-          );
-        case 'rental_car':
-          const carEvent = event as any;
-          return (
-            <>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Pickup: {formatDate(carEvent.date, carEvent.pickupTime)}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Dropoff: {formatDate(carEvent.dropoffDate, carEvent.dropoffTime)}</span>
-              </div>
-            </>
-          );
-        case 'destination':
-          const destEvent = event as any;
-          return (
-            <>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Start: {formatDate(destEvent.startDate, destEvent.startTime)}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>End: {formatDate(destEvent.endDate, destEvent.endTime)}</span>
-              </div>
-            </>
-          );
-        case 'activity':
-          const activityEvent = event as any;
-          return (
-            <>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Start: {formatDate(activityEvent.startDate, activityEvent.startTime)}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>End: {formatDate(activityEvent.endDate, activityEvent.endTime)}</span>
-              </div>
-            </>
-          );
-        case 'flight':
-        case 'train':
-        case 'bus':
-          const transportEvent = event as any;
-          const startTime = event.startDate?.split('T')[1]?.substring(0, 5) || transportEvent.departureTime;
-          const endTime = event.endDate?.split('T')[1]?.substring(0, 5) || transportEvent.arrivalTime;
-          return (
-            <>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Departure: {formatDate(event.startDate?.split('T')[0], startTime)}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Clock className="w-3 h-3" />
-                <span>Arrival: {formatDate(event.endDate?.split('T')[0], endTime)}</span>
-              </div>
-            </>
-          );
-        case 'arrival':
-        case 'departure':
-          const airportEvent = event as any;
-          return (
-            <div className="flex items-center space-x-1">
-              <Clock className="w-3 h-3" />
-              <span>Time: {formatDate(airportEvent.date, airportEvent.time)}</span>
-            </div>
-          );
-        default:
-          return null;
-      }
-    };
-
-    return (
-      <div className={cn(
-        "flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-all duration-200 relative",
-        event.status === 'exploring' && "bg-white border-2 border-gray-300 border-dashed",
-        isDeleting && "animate-fade-out opacity-0",
-        isActive && !isExploring && "bg-gradient-to-r from-white to-gray-50"
-      )}>
-        {isActive && !isExploring && (
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-transparent via-blue-500 to-transparent animate-pulse" />
-        )}
-        <div className="w-16 h-16 flex-shrink-0 relative">
-          <img 
-            src={thumbnail} 
-            alt={event.type} 
-            className={cn(
-              "w-full h-full object-cover rounded-md transition-all duration-200",
-              event.status === 'exploring' && "grayscale opacity-70"
-            )}
-          />
-          <div className={cn(
-            "absolute inset-0 bg-gradient-to-br rounded-md transition-all duration-200",
-            event.status === 'exploring' 
-              ? "from-gray-500/5 to-gray-700/30" 
-              : "from-gray-500/10 to-gray-900/50"
-          )}></div>
-          <div className={cn(
-            "absolute -bottom-2 -right-2 rounded-full p-2 transition-all duration-200",
-            event.status === 'exploring'
-              ? "bg-white border border-gray-200 shadow-sm"
-              : isActive 
-                ? "bg-white shadow-lg ring-2 ring-blue-500 ring-opacity-50"
-                : "bg-white shadow-md"
-          )}>
-            <div className={cn(
-              "transition-all duration-200",
-              event.status === 'exploring' && "filter saturate-150",
-              isActive && !isExploring && "scale-110"
-            )}>
-              {getEventIcon()}
-            </div>
-          </div>
-        </div>
-        <div className="flex-grow min-w-0">
-          <div className="flex items-center justify-between">
-            <h3 className={cn(
-              "text-sm font-medium line-clamp-1 transition-all duration-200",
-              event.status === 'exploring' && "text-gray-600"
-            )}>
-              {(() => {
-                switch (event.type) {
-                  case 'activity':
-                    return (event as any).title;
-                  case 'destination':
-                    return (event as any).placeName;
-                  case 'stay':
-                    return (event as any).accommodationName;
-                  case 'flight':
-                    return `${(event as any).airline || 'Flight'} ${(event as any).flightNumber || ''}`;
-                  case 'train':
-                    return `${(event as any).trainOperator || 'Train'} ${(event as any).trainNumber || ''}`;
-                  case 'bus':
-                    return `${(event as any).busOperator || 'Bus'} ${(event as any).busNumber || ''}`;
-                  case 'rental_car':
-                    return `${(event as any).carCompany || 'Rental Car'}`;
-                  case 'arrival':
-                    return `Arrival at ${(event as any).airport}`;
-                  case 'departure':
-                    return `Departure from ${(event as any).airport}`;
-                  default:
-                    return event.type;
-                }
-              })()}
-            </h3>
-            {(() => {
-              switch (event.type) {
-                case 'stay':
-                  return (
-                    <span className={cn(
-                      "text-xs px-2 py-1 rounded-full",
-                      isActive && !isExploring ? "bg-yellow-200 text-yellow-900" : "bg-yellow-100 text-yellow-800"
-                    )}>
-                      {formatDate((event as any).checkIn)} - {formatDate((event as any).checkOut)}
-                    </span>
-                  );
-                case 'activity':
-                  return (
-                    <span className={cn(
-                      "text-xs px-2 py-1 rounded-full",
-                      isActive && !isExploring ? "bg-indigo-200 text-indigo-900" : "bg-indigo-100 text-indigo-800"
-                    )}>
-                      {formatDate((event as any).startDate)} - {formatDate((event as any).endDate)}
-                    </span>
-                  );
-                case 'rental_car':
-                  return (
-                    <span className={cn(
-                      "text-xs px-2 py-1 rounded-full",
-                      isActive && !isExploring ? "bg-red-200 text-red-900" : "bg-red-100 text-red-800"
-                    )}>
-                      {formatDate((event as any).date)} - {formatDate((event as any).dropoffDate)}
-                    </span>
-                  );
-                case 'destination':
-                  return (
-                    <span className={cn(
-                      "text-xs px-2 py-1 rounded-full",
-                      isActive && !isExploring ? "bg-pink-200 text-pink-900" : "bg-pink-100 text-pink-800"
-                    )}>
-                      {formatDate((event as any).startDate)} - {formatDate((event as any).endDate)}
-                    </span>
-                  );
-                case 'flight':
-                case 'train':
-                case 'bus':
-                  const startDate = event.startDate?.split('T')[0];
-                  const endDate = event.endDate?.split('T')[0];
-                  if (startDate && endDate && startDate !== endDate) {
-                    return (
-                      <span className={cn(
-                        "text-xs px-2 py-1 rounded-full",
-                        event.type === 'flight' && (isActive && !isExploring ? "bg-blue-200 text-blue-900" : "bg-blue-100 text-blue-800"),
-                        event.type === 'train' && (isActive && !isExploring ? "bg-green-200 text-green-900" : "bg-green-100 text-green-800"),
-                        event.type === 'bus' && (isActive && !isExploring ? "bg-purple-200 text-purple-900" : "bg-purple-100 text-purple-800")
-                      )}>
-                        {formatDate(startDate)} - {formatDate(endDate)}
-                      </span>
-                    );
-                  }
-                  return null;
-                default:
-                  return null;
-              }
-            })()}
-          </div>
-          <div className="text-xs text-gray-500 mt-1 space-y-0.5">
-            {getTimeInfo()}
-            {event.location?.quality && event.location.quality !== 'exact' && (
-              <div className="flex items-center space-x-1">
-                <MapPin className="w-3 h-3" />
-                <span>
-                  Location {event.location.quality}
-                  {event.location.source ? ` via ${event.location.source}` : ''}
-                </span>
-              </div>
-            )}
-            {(() => {
-              switch (event.type) {
-                case 'stay':
-                  return (event as any).reservationNumber && (
-                    <div className="flex items-center space-x-1">
-                      <Info className="w-3 h-3" />
-                      <span>Reservation: {(event as any).reservationNumber}</span>
-                    </div>
-                  );
-                case 'rental_car':
-                  return (event as any).bookingReference && (
-                    <div className="flex items-center space-x-1">
-                      <Info className="w-3 h-3" />
-                      <span>Booking: {(event as any).bookingReference}</span>
-                    </div>
-                  );
-                case 'destination':
-                  return (event as any).address && (
-                    <div className="flex items-center space-x-1">
-                      <MapPin className="w-3 h-3" />
-                      <span>{(event as any).address}</span>
-                    </div>
-                  );
-                default:
-                  return null;
-              }
-            })()}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-
-
   // Define which event types can be added from the dropdown
   // Adjust this array as needed
   const addableEventTypes: EventType[] = [
@@ -1523,379 +943,77 @@ const NewTripDetails: React.FC = () => {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
-      {/* Header with Trip Info and Actions */}
-      <div className="relative">
-        {/* Background Image with Overlay */}
-        <div className="relative h-[200px] w-full overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5 md:h-[250px]">
-          <img
-            src={trip.thumbnailUrl || tripThumbnail}
-            alt={trip.name}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent"></div>
-          
-          {/* Trip Actions */}
-          <div className="absolute top-4 right-4 z-20">
-            <TripActions
-              trip={trip}
-              isOwner={isOwner}
-              canEdit={canEdit}
-              onExport={handleExportHTML}
-              onTripUpdate={async (updatedTrip) => {
-                try {
-                  await handleTripUpdate(updatedTrip);
-                  return Promise.resolve();
-                } catch (error) {
-                  console.error('Error updating trip:', error);
-                  return Promise.reject(error);
-                }
-              }}
-            />
-          </div>
-          
-          {/* Trip Title */}
-          <div className="absolute bottom-6 left-6 right-6 text-white z-5">
-            <div className="flex flex-col">
-              <div className="mb-4">
-                <h1 className="text-3xl font-bold text-white drop-shadow-lg">{trip.name}</h1>
-                {trip.description && (
-                  <p 
-                    className="mt-2 text-lg text-white/90 drop-shadow-md"
-                    dangerouslySetInnerHTML={{ __html: processText(trip.description) }}
-                  />
-                )}
-              </div>
-              <div className="flex justify-end">
-                <CollaboratorAvatars
-                  owner={trip.owner}
-                  collaborators={trip.collaborators.filter((c): c is { user: typeof trip.owner; role: 'viewer' | 'editor' } => 
-                    typeof c === 'object' && c !== null && 'user' in c && 'role' in c
-                  )}
-                  currentUserId={user?._id}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-100/70">
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
+      <TripDetailsHero
+        trip={trip}
+        tripThumbnail={tripThumbnail}
+        currentUserId={user?._id}
+        isOwner={isOwner}
+        canEdit={canEdit}
+        descriptionHtml={processText(trip.description)}
+        onExport={handleExportHTML}
+        onTripUpdate={async (updatedTrip) => {
+          try {
+            await handleTripUpdate(updatedTrip);
+            return Promise.resolve();
+          } catch (error) {
+            console.error('Error updating trip:', error);
+            return Promise.reject(error);
+          }
+        }}
+      />
 
-      {/* Add Event & View Options */}
-      <div className="sticky top-0 z-40 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {canEdit && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Event
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Add New Event</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setIsAIParseModalOpen(true)}>
-                  <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
-                  Parse with AI
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Manual Entry
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {addableEventTypes.map(type => {
-                      const eventType = EVENT_TYPES[type];
-                      if (!eventType) return null;
-                      return (
-                        <DropdownMenuItem
-                          key={type}
-                          onClick={() => handleAddEventClick(type)}
-                        >
-                          {type === 'flight' && <FaPlane className="mr-2 h-4 w-4 text-blue-500" />}
-                          {type === 'arrival' && <FaPlane className="mr-2 h-4 w-4 text-green-500 transform rotate-45" />}
-                          {type === 'departure' && <FaPlane className="mr-2 h-4 w-4 text-red-500 transform -rotate-45" />}
-                          {type === 'train' && <FaTrain className="mr-2 h-4 w-4 text-green-500" />}
-                          {type === 'bus' && <FaBus className="mr-2 h-4 w-4 text-purple-500" />}
-                          {type === 'rental_car' && <FaCar className="mr-2 h-4 w-4 text-red-500" />}
-                          {type === 'stay' && <FaHotel className="mr-2 h-4 w-4 text-yellow-500" />}
-                          {type === 'destination' && <FaMapMarkerAlt className="mr-2 h-4 w-4 text-pink-500" />}
-                          {type === 'activity' && <FaMountain className="mr-2 h-4 w-4 text-indigo-500" />}
-                          {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          
-          {canEdit && (
-            <Button
-              variant="outline"
-              onClick={handleGenerateSuggestions}
-              disabled={isGeneratingSuggestions}
-            >
-              <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
-              {isGeneratingSuggestions ? 'Generating...' : 'AI Suggestions'}
-            </Button>
-          )}
-          {canEdit && (
-            <Button
-              variant="outline"
-              onClick={handleImproveLocations}
-              disabled={isImprovingLocations}
-            >
-              <MapPin className="mr-2 h-4 w-4 text-green-500" />
-              {isImprovingLocations ? 'Improving...' : 'Improve locations'}
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowToday(true);
-              setShowNotifications(false);
-              setShowChecklist(false);
-              setShowNotes(false);
-              setShowMap(false);
-            }}
-          >
-            <CalendarDays className="mr-2 h-4 w-4 text-blue-500" />
-            Today
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowNotifications(true);
-              setShowToday(false);
-              setShowChecklist(false);
-              setShowNotes(false);
-              setShowMap(false);
-              fetchNotifications();
-            }}
-          >
-            <Bell className="mr-2 h-4 w-4 text-amber-500" />
-            Notifications
-            {unreadNotificationCount > 0 && (
-              <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
-                {unreadNotificationCount}
-              </span>
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowChecklist(true);
-              setShowNotifications(false);
-              setShowToday(false);
-              setShowNotes(false);
-              setShowMap(false);
-            }}
-          >
-            <CheckSquare className="mr-2 h-4 w-4 text-green-500" />
-            Checklist
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowNotes(true);
-              setShowNotifications(false);
-              setShowToday(false);
-              setShowChecklist(false);
-              setShowMap(false);
-            }}
-          >
-            <FileText className="mr-2 h-4 w-4 text-purple-500" />
-            Notes
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowMap(true);
-              setShowNotifications(false);
-              setShowToday(false);
-              setShowChecklist(false);
-              setShowNotes(false);
-            }}
-          >
-            <MapIcon className="mr-2 h-4 w-4 text-blue-500" />
-            Map
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => navigate(`/trips/${trip._id}/expenses`)}
-          >
-            Expenses
-          </Button>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Label htmlFor="condensed-view" className="cursor-pointer">Condensed View</Label>
-          <Switch
-            id="condensed-view"
-            checked={isCondensedView}
-            onCheckedChange={setIsCondensedView}
-          />
-        </div>
-      </div>
+      <TripDetailsToolbar
+        tripId={trip._id}
+        canEdit={canEdit}
+        addableEventTypes={addableEventTypes}
+        activePanel={activePanel}
+        unreadNotificationCount={unreadNotificationCount}
+        isCondensedView={isCondensedView}
+        isGeneratingSuggestions={isGeneratingSuggestions}
+        isImprovingLocations={isImprovingLocations}
+        onOpenAIImport={() => setIsAIParseModalOpen(true)}
+        onAddEvent={handleAddEventClick}
+        onGenerateSuggestions={handleGenerateSuggestions}
+        onImproveLocations={handleImproveLocations}
+        onOpenPanel={openPanel}
+        onOpenNotifications={() => {
+          openPanel('notifications');
+          fetchNotifications();
+        }}
+        onCondensedViewChange={setIsCondensedView}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <main className="min-w-0 space-y-6">
-      {/* Events Timeline */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xl ring-1 ring-gray-100 md:p-6">
-        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-blue-700">Main itinerary</p>
-            <h2 className="text-2xl font-semibold text-gray-950">Trip Timeline</h2>
-          </div>
-          <p className="text-sm text-gray-500">{sortedEvents.length} event{sortedEvents.length === 1 ? '' : 's'}</p>
-        </div>
-        {outOfRangeEvents.length > 0 && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-            <p className="font-semibold">Some events are outside this trip&apos;s dates</p>
-            <p className="mt-1">
-              {outOfRangeEvents.map(getEventDisplayName).join(', ')} {outOfRangeEvents.length === 1 ? 'has' : 'have'} dates that do not match the trip range. Edit the event date to fix the timeline order.
-            </p>
-          </div>
-        )}
-      
-        <div className="mt-4 space-y-6">
-          {sortedEvents.length === 0 ? (
-            <p className="text-gray-500">No events added yet.</p>
-          ) : (
-            <div className="relative">
-              <div className="space-y-6">
-                {(() => {
-                  // Group events by date
-                  const groupedEvents = sortedEvents.reduce((groups, event) => {
-                    const dateKey = getTimelineDateKey(event);
-                    if (!dateKey) {
-                      console.warn(`No valid date found for event of type ${event.type}`, event);
-                      return groups;
-                    }
-                    if (!groups[dateKey]) {
-                      groups[dateKey] = [];
-                    }
-                    groups[dateKey].push(event);
-                    return groups;
-                  }, {} as Record<string, typeof sortedEvents>);
-
-                  return Object.entries(groupedEvents).map(([dateKey, events]) => (
-                    <div key={dateKey} className="relative">
-                      <div className="sticky top-20 z-30 mb-4 bg-white/90 py-2 backdrop-blur">
-                        <div className="inline-block rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-900 shadow-sm">
-                          {(() => {
-                            try {
-                              // Handle both ISO and simple YYYY-MM-DD formats
-                              const datePart = dateKey.includes('T') ? dateKey.split('T')[0] : dateKey;
-                              const [year, month, day] = datePart.split('-').map(Number);
-                              
-                              // Validate date parts
-                              if (isNaN(year) || isNaN(month) || isNaN(day)) {
-                                console.warn('Invalid date parts:', { year, month, day, dateKey });
-                                return dateKey;
-                              }
-
-                              // Create date with time set to noon to avoid timezone issues
-                              const date = new Date(year, month - 1, day, 12);
-                              
-                              // Validate the date
-                              if (isNaN(date.getTime())) {
-                                console.warn('Invalid date:', dateKey);
-                                return dateKey;
-                              }
-
-                              return format(date, 'EEEE, MMMM d, yyyy');
-                            } catch (error) {
-                              console.warn('Error formatting date:', error, dateKey);
-                              return dateKey;
-                            }
-                          })()}
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        {sortEventsByStart(events)
-                          .map((event) => {
-                            const registryItem = EVENT_TYPES[event.type];
-                            if (!registryItem) return <div key={event.id}>Unknown event type: {event.type}</div>;
-                            
-                            const EventCardComponent = registryItem.cardComponent;
-                            const thumbnail = eventThumbnails[event.id] || registryItem.defaultThumbnail;
-
-                            if (!EventCardComponent) return <div key={event.id}>No card component for {event.type}</div>;
-
-                            const isDeleting = deletingEvents.has(event.id);
-
-                            return (
-                              <div 
-                                key={event.id} 
-                                className={cn(
-                                  "relative transition-all duration-300",
-                                  isDeleting && "animate-fade-out opacity-0"
-                                )}
-                              >
-                                {isCondensedView ? (
-                                  <CondensedEventCard event={event} thumbnail={thumbnail} />
-                                ) : (
-                                  <EventCardComponent 
-                                    event={event} 
-                                    thumbnail={thumbnail}
-                                    onEdit={canEdit ? () => handleEditEventClick(event) : undefined}
-                                    onDelete={canEdit ? () => handleDeleteEvent(event.id) : undefined}
-                                    onStatusChange={canEdit ? (newStatus) => handleStatusChange(event, newStatus) : undefined}
-                                  />
-                                )}
-                                <FlightStatusSummary event={event} />
-                                <EventWeatherForecast event={event} />
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  ));
-                })()}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+          <TripTimeline
+            events={trip.events}
+            tripStartDate={trip.startDate}
+            tripEndDate={trip.endDate}
+            eventThumbnails={eventThumbnails}
+            isCondensedView={isCondensedView}
+            canEdit={canEdit}
+            deletingEvents={deletingEvents}
+            weatherSnapshots={weatherSnapshots}
+            flightStatusSnapshots={flightStatusSnapshots}
+            onEditEvent={handleEditEventClick}
+            onDeleteEvent={handleDeleteEvent}
+            onStatusChange={handleStatusChange}
+            onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
+          />
         </main>
 
-        <aside className="space-y-4 lg:sticky lg:top-24">
-          <TripCommandCenter
+        <div className="space-y-4">
+          <TripOverviewCard
             trip={trip}
             insights={visibleTripInsights}
             canEdit={canEdit}
-            currentUserId={user?._id}
+            unreadNotificationCount={unreadNotificationCount}
+            pendingImportCount={travelImports.filter(travelImport => ['needs_review', 'missing_info', 'duplicate'].includes(travelImport.status)).length}
+            onOpenPanel={openPanel}
             onOpenAIImport={() => setIsAIParseModalOpen(true)}
-            onOpenChecklist={() => setShowChecklist(true)}
-            onOpenExpenses={() => navigate(`/trips/${trip._id}/expenses`)}
-            onAddEvent={(eventType = 'stay') => handleAddEventClick(eventType)}
-            onEditEvent={(eventId) => {
-              const event = trip.events.find(tripEvent => tripEvent.id === eventId);
-              if (event) {
-                handleEditEventClick(event);
-              }
-            }}
-            onDismissInsight={handleDismissInsight}
-            dismissedInsightCount={dismissedInsightIds.length}
-            onRestoreDismissedInsights={handleRestoreDismissedInsights}
-            assistantBriefing={assistantBriefing?.briefing}
-            assistantBriefingGeneratedAt={assistantBriefing?.generatedAt}
-            isGeneratingAssistantBriefing={isGeneratingAssistantBriefing}
-            assistantBriefingError={assistantBriefingError}
-            onGenerateAssistantBriefing={handleGenerateAssistantBriefing}
-            onAssistantAction={handleAssistantAction}
-            onAcceptAssistantChecklistItem={handleAcceptAssistantChecklistItem}
-            onDismissAssistantChecklistItem={handleDismissAssistantChecklistItem}
-            getAssistantChecklistItemId={getAssistantChecklistItemId}
-            handledAssistantChecklistItemIds={handledAssistantChecklistItemIds}
-            tripQuestionAnswer={tripQuestionAnswer}
-            isAskingTripQuestion={isAskingTripQuestion}
-            tripQuestionError={tripQuestionError}
-            onAskTripQuestion={handleAskTripQuestion}
+            onAddEvent={() => handleAddEventClick('stay')}
           />
           {weatherError && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-sm">
@@ -1907,249 +1025,52 @@ const NewTripDetails: React.FC = () => {
               Flight status context is unavailable right now: {flightStatusError}
             </div>
           )}
-        </aside>
+        </div>
       </div>
 
-      {/* Notifications Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "fixed bottom-[318px] right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
-          showNotifications ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-white hover:bg-gray-50"
-        )}
-        onClick={() => {
-          setShowNotifications(!showNotifications);
-          if (!showNotifications) {
-            setShowToday(false);
-            setShowChecklist(false);
-            setShowNotes(false);
-            setShowMap(false);
-            fetchNotifications();
-          }
+      <MobileTripActionsFab
+        activePanel={activePanel}
+        unreadNotificationCount={unreadNotificationCount}
+        onOpenPanel={openPanel}
+        onOpenNotifications={() => {
+          openPanel('notifications');
+          fetchNotifications();
         }}
-      >
-        {showNotifications ? (
-          <X className="h-8 w-8" />
-        ) : (
-          <div className="relative">
-            <Bell className="h-8 w-8 text-amber-500" />
-            {unreadNotificationCount > 0 && (
-              <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-amber-500 px-1 text-xs text-white">
-                {unreadNotificationCount}
-              </span>
-            )}
-          </div>
-        )}
-      </Button>
+        onClosePanel={closePanel}
+      />
 
-      {/* Today Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "fixed bottom-[244px] right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
-          showToday ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
-        )}
-        onClick={() => {
-          setShowToday(!showToday);
-          if (!showToday) {
-            setShowNotifications(false);
-            setShowChecklist(false);
-            setShowNotes(false);
-            setShowMap(false);
-          }
-        }}
-      >
-        {showToday ? (
-          <X className="h-8 w-8" />
-        ) : (
-          <CalendarDays className="h-8 w-8 text-blue-500" />
-        )}
-      </Button>
+      <TripPanelHost
+        activePanel={activePanel}
+        trip={trip}
+        canEdit={canEdit}
+        insights={visibleTripInsights}
+        notifications={notifications}
+        notificationPreferences={notificationPreferences}
+        isLoadingNotifications={isLoadingNotifications}
+        notificationError={notificationError}
+        weatherSnapshots={weatherSnapshots}
+        flightStatusSnapshots={flightStatusSnapshots}
+        todayBriefing={todayBriefing?.briefing}
+        todayBriefingGeneratedAt={todayBriefing?.generatedAt}
+        todayBriefingError={todayBriefingError}
+        isGeneratingTodayBriefing={isGeneratingTodayBriefing}
+        replanBriefing={replanBriefing?.briefing}
+        replanBriefingGeneratedAt={replanBriefing?.generatedAt}
+        replanBriefingError={replanBriefingError}
+        isGeneratingReplanBriefing={isGeneratingReplanBriefing}
+        onClose={closePanel}
+        onOpenPanel={openPanel}
+        onRefreshNotifications={() => fetchNotifications()}
+        onMarkNotificationRead={(notification) => handleUpdateNotification(notification, { read: true })}
+        onDismissNotification={(notification) => handleUpdateNotification(notification, { dismissed: true })}
+        onNotificationAction={handleNotificationAction}
+        onUpdateNotificationPreferences={handleUpdateNotificationPreferences}
+        onGenerateTodayBriefing={handleGenerateTodayBriefing}
+        onGenerateReplanBriefing={handleGenerateReplanBriefing}
+        onEditEvent={handleEditEventClick}
+      />
 
-      {/* Checklist Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "fixed bottom-[170px] right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
-          showChecklist ? "bg-green-500 text-white hover:bg-green-600" : "bg-white hover:bg-gray-50"
-        )}
-        onClick={() => {
-          setShowChecklist(!showChecklist);
-          if (!showChecklist) {
-            setShowNotifications(false);
-            setShowToday(false);
-            setShowNotes(false);
-            setShowMap(false);
-          }
-        }}
-      >
-        {showChecklist ? (
-          <X className="h-8 w-8" />
-        ) : (
-          <CheckSquare className="h-8 w-8 text-green-500" />
-        )}
-      </Button>
-
-      {/* Notes Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "fixed bottom-24 right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
-          showNotes ? "bg-purple-500 text-white hover:bg-purple-600" : "bg-white hover:bg-gray-50"
-        )}
-        onClick={() => {
-          setShowNotes(!showNotes);
-          if (!showNotes) {
-            setShowNotifications(false);
-            setShowToday(false);
-            setShowChecklist(false);
-            setShowMap(false);
-          }
-        }}
-      >
-        {showNotes ? (
-          <X className="h-8 w-8" />
-        ) : (
-          <FileText className="h-8 w-8 text-purple-500" />
-        )}
-      </Button>
-
-      {/* Map Toggle Button */}
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "fixed bottom-6 right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
-          showMap ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
-        )}
-        onClick={() => {
-          setShowMap(!showMap);
-          if (!showMap) {
-            setShowNotifications(false);
-            setShowToday(false);
-            setShowChecklist(false);
-            setShowNotes(false);
-          }
-        }}
-      >
-        {showMap ? (
-          <X className="h-8 w-8" />
-        ) : (
-          <MapPin className="h-8 w-8 text-blue-500" />
-        )}
-      </Button>
-
-      {/* Trip Notifications */}
-      {showNotifications && (
-        <div className={cn(
-          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
-          "bottom-0 inset-x-0 h-[85vh]",
-          "md:w-[440px] md:h-[640px] md:bottom-6 md:right-6 md:left-auto md:rounded-lg",
-          "bg-white border-gray-200"
-        )}>
-          <TripNotifications
-            notifications={notifications}
-            preferences={notificationPreferences}
-            loading={isLoadingNotifications}
-            error={notificationError}
-            onClose={() => setShowNotifications(false)}
-            onRefresh={() => fetchNotifications()}
-            onMarkRead={(notification) => handleUpdateNotification(notification, { read: true })}
-            onDismiss={(notification) => handleUpdateNotification(notification, { dismissed: true })}
-            onAction={handleNotificationAction}
-            onUpdatePreferences={handleUpdateNotificationPreferences}
-          />
-        </div>
-      )}
-
-      {/* Today Assistant */}
-      {showToday && (
-        <div className={cn(
-          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
-          "bottom-0 inset-x-0 h-[85vh]",
-          "md:w-[440px] md:h-[640px] md:bottom-6 md:right-6 md:left-auto md:rounded-lg",
-          "bg-white border-gray-200"
-        )}>
-          <InTripAssistant
-            trip={trip}
-            insights={visibleTripInsights}
-            canEdit={canEdit}
-            weatherSnapshots={weatherSnapshots}
-            flightStatusSnapshots={flightStatusSnapshots}
-            todayBriefing={todayBriefing?.briefing}
-            todayBriefingGeneratedAt={todayBriefing?.generatedAt}
-            todayBriefingError={todayBriefingError}
-            isGeneratingTodayBriefing={isGeneratingTodayBriefing}
-            onGenerateTodayBriefing={handleGenerateTodayBriefing}
-            replanBriefing={replanBriefing?.briefing}
-            replanBriefingGeneratedAt={replanBriefing?.generatedAt}
-            replanBriefingError={replanBriefingError}
-            isGeneratingReplanBriefing={isGeneratingReplanBriefing}
-            onGenerateReplanBriefing={handleGenerateReplanBriefing}
-            onClose={() => setShowToday(false)}
-            onOpenChecklist={() => {
-              setShowToday(false);
-              setShowChecklist(true);
-            }}
-            onEditEvent={(event) => {
-              setShowToday(false);
-              handleEditEventClick(event);
-            }}
-          />
-        </div>
-      )}
-
-      {/* Trip Checklist */}
-      {showChecklist && (
-        <div className={cn(
-          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
-          "bottom-0 inset-x-0 h-[85vh]",
-          "md:w-[400px] md:h-[600px] md:bottom-6 md:right-6 md:left-auto md:rounded-lg",
-          "bg-white border-gray-200"
-        )}>
-          <TripChecklist 
-            tripId={trip._id} 
-            trip={trip}
-            canEdit={canEdit} 
-            onClose={() => setShowChecklist(false)}
-          />
-        </div>
-      )}
-
-      {/* Trip Notes */}
-      {showNotes && (
-        <div className={cn(
-          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
-          "bottom-0 inset-x-0 h-[85vh]",
-          "md:w-[400px] md:h-[600px] md:bottom-24 md:right-6 md:left-auto md:rounded-lg",
-          "bg-white border-gray-200"
-        )}>
-          <TripNotes 
-            tripId={trip._id} 
-            canEdit={canEdit}
-            onClose={() => setShowNotes(false)}
-          />
-        </div>
-      )}
-
-      {/* Trip Map */}
-      {showMap && (
-        <div className={cn(
-          "fixed z-[140] rounded-t-lg shadow-xl overflow-hidden border",
-          "bottom-0 inset-x-0 h-[85vh]",
-          "md:w-[400px] md:h-[600px] md:bottom-40 md:right-6 md:left-auto md:rounded-lg",
-          "bg-white border-gray-200"
-        )}>
-          <TripMap trip={trip} />
-        </div>
-      )}
-
-      {/* AI Parse Modal */}
-      <Dialog
+      <TravelImportDialog
         open={isAIParseModalOpen}
         onOpenChange={(open) => {
           if (open) {
@@ -2158,321 +1079,39 @@ const NewTripDetails: React.FC = () => {
             resetAIParseModal();
           }
         }}
-      >
-        <DialogContent className="sm:max-w-[720px] max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Import booking details</DialogTitle>
-            <DialogDescription>
-              Paste your event details, reservation email, or natural language description.
-              The AI will extract event candidates for you to review before anything is saved.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4 space-y-4 overflow-y-auto pr-1">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Import Inbox</h3>
-                  <p className="text-sm text-gray-500">
-                    Recent parsed inputs stay here until accepted, dismissed, or reviewed again.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={fetchTravelImports} disabled={isLoadingTravelImports}>
-                  {isLoadingTravelImports ? 'Refreshing...' : 'Refresh'}
-                </Button>
-              </div>
-              {travelImportError && (
-                <p className="mt-2 text-sm text-red-600">{travelImportError}</p>
-              )}
-              {travelImports.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {importInboxFilters.map((filter) => {
-                    const count = travelImports.filter(travelImport => matchesImportInboxFilter(travelImport, filter.id)).length;
-                    return (
-                      <Button
-                        key={filter.id}
-                        type="button"
-                        variant={importInboxFilter === filter.id ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onClick={() => {
-                          setImportInboxFilter(filter.id);
-                          setShowAllTravelImports(false);
-                        }}
-                      >
-                        {filter.label}
-                        <span className="ml-1 opacity-75">{count}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="mt-3 space-y-2">
-                {travelImports.length === 0 ? (
-                  <p className="rounded-md border border-dashed border-gray-300 bg-white p-3 text-sm text-gray-500">
-                    No imports yet. Paste booking text below to create the first inbox item.
-                  </p>
-                ) : filteredTravelImports.length === 0 ? (
-                  <p className="rounded-md border border-dashed border-gray-300 bg-white p-3 text-sm text-gray-500">
-                    No imports match this filter.
-                  </p>
-                ) : (
-                  visibleTravelImports.map((travelImport) => {
-                    const parsedCount = travelImport.parsedEvents?.length || 0;
-                    const canReview = parsedCount > 0 && !['accepted', 'dismissed', 'failed', 'unsupported'].includes(travelImport.status);
-                    const sourceTitle = travelImport.sourceTitle || getImportFallbackTitle(travelImport);
-                    const issueSummaries = getImportIssueSummaries(travelImport, trip.events);
-                    return (
-                      <div key={travelImport._id} className="rounded-md border border-gray-200 bg-white p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getImportStatusClassName(travelImport.status)}`}>
-                                {getImportStatusLabel(travelImport.status)}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {new Date(travelImport.createdAt).toLocaleString()}
-                              </span>
-                            </div>
-                            <p className="mt-2 truncate text-sm font-medium text-gray-900">
-                              {sourceTitle}
-                            </p>
-                            {travelImport.sourceExcerpt && (
-                              <p className="mt-1 line-clamp-2 text-xs text-gray-500">
-                                {travelImport.sourceExcerpt}
-                              </p>
-                            )}
-                            <p className="mt-2 text-sm text-gray-700">
-                              {parsedCount > 0
-                                ? `${parsedCount} extracted event${parsedCount === 1 ? '' : 's'}`
-                                : travelImport.status === 'failed'
-                                  ? 'Could not parse this input'
-                                  : 'No event candidates extracted'}
-                            </p>
-                            {issueSummaries.length > 0 && (
-                              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2">
-                                <p className="text-xs font-medium text-amber-800">Needs attention</p>
-                                <ul className="mt-1 space-y-0.5 text-xs text-amber-700">
-                                  {issueSummaries.map((issue) => (
-                                    <li key={issue}>{issue}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {canReview && (
-                              <Button variant="outline" size="sm" onClick={() => handleReviewTravelImport(travelImport)}>
-                                Review
-                              </Button>
-                            )}
-                            {!['accepted', 'dismissed'].includes(travelImport.status) && (
-                              <Button variant="ghost" size="sm" onClick={() => handleDismissTravelImport(travelImport)}>
-                                Dismiss
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              {filteredTravelImports.length > 6 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="mt-2 h-7 px-2 text-xs"
-                  onClick={() => setShowAllTravelImports(prev => !prev)}
-                >
-                  {showAllTravelImports
-                    ? 'Show less'
-                    : `Show all ${filteredTravelImports.length} imports`}
-                </Button>
-              )}
-            </div>
+        parseText={parseText}
+        onParseTextChange={(text) => {
+          setParseText(text);
+          setParsedCandidates([]);
+        }}
+        isParsing={isParsing}
+        parseError={parseError}
+        parseWarning={parseWarning}
+        parsedCandidates={parsedCandidates}
+        onParsedCandidatesChange={setParsedCandidates}
+        isAddingParsedEvents={isAddingParsedEvents}
+        travelImports={travelImports}
+        importInboxFilter={importInboxFilter}
+        onImportInboxFilterChange={setImportInboxFilter}
+        showAllTravelImports={showAllTravelImports}
+        onShowAllTravelImportsChange={setShowAllTravelImports}
+        isLoadingTravelImports={isLoadingTravelImports}
+        travelImportError={travelImportError}
+        existingEvents={trip.events}
+        onRefreshTravelImports={fetchTravelImports}
+        onReviewTravelImport={handleReviewTravelImport}
+        onDismissTravelImport={handleDismissTravelImport}
+        onCancel={resetAIParseModal}
+        onParse={handleAIParse}
+        onAddParsedCandidates={handleAddParsedCandidates}
+      />
 
-            <Textarea
-              placeholder="Paste your text here..."
-              value={parseText}
-              onChange={(e) => {
-                setParseText(e.target.value);
-                setParsedCandidates([]);
-              }}
-              className="min-h-[200px]"
-              disabled={isParsing || isAddingParsedEvents}
-            />
-            {parseError && (
-              <p className="mt-2 text-sm text-red-500">{parseError}</p>
-            )}
-            {parseWarning && (
-              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-                {parseWarning}
-              </p>
-            )}
-
-            {parsedCandidates.length > 0 && (
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Review extracted events</h3>
-                  <p className="text-sm text-gray-500">
-                    Select the valid events you want to add. Candidates with errors must be fixed manually before they can be saved.
-                  </p>
-                </div>
-                {parsedCandidates.map((candidate, index) => {
-                  const start = getEventStart(candidate.event);
-                  const hasIssues = candidate.validation.errors.length > 0 || candidate.validation.warnings.length > 0;
-
-                  return (
-                    <div key={candidate.id} className="rounded-lg border border-gray-200 bg-white p-4">
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={candidate.selected}
-                          disabled={!candidate.validation.valid || isAddingParsedEvents}
-                          onChange={(event) => {
-                            const nextCandidates = [...parsedCandidates];
-                            nextCandidates[index] = {
-                              ...candidate,
-                              selected: event.target.checked,
-                            };
-                            setParsedCandidates(nextCandidates);
-                          }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="font-medium text-gray-900">{getEventDisplayName(candidate.event)}</h4>
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                              {candidate.event.type.replace('_', ' ')}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-sm text-gray-600">{formatEventDateTime(start)}</p>
-
-                          {hasIssues && (
-                            <div className="mt-3 space-y-1 text-sm">
-                              {candidate.validation.errors.map((error) => (
-                                <p key={error} className="text-red-600">Error: {error}</p>
-                              ))}
-                              {candidate.validation.warnings.map((warning) => (
-                                <p key={warning} className="text-amber-600">Warning: {warning}</p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={resetAIParseModal}
-              disabled={isParsing || isAddingParsedEvents}
-            >
-              Cancel
-            </Button>
-            {parsedCandidates.length === 0 ? (
-              <Button
-                onClick={handleAIParse}
-                disabled={!parseText.trim() || isParsing}
-              >
-                {isParsing ? 'Parsing...' : 'Parse Text'}
-              </Button>
-            ) : (
-              <Button
-                onClick={handleAddParsedCandidates}
-                disabled={
-                  isAddingParsedEvents ||
-                  !parsedCandidates.some(candidate => candidate.selected && candidate.validation.valid)
-                }
-              >
-                {isAddingParsedEvents ? 'Adding...' : 'Add Selected Events'}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Render Specific EventFormModals conditionally */}
-      {modalType === 'arrival' && (
-          <ArrivalFormModal 
-              isOpen={!!modalType} // Open if modalType is set
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any} // Cast needed, or ensure type match
-          />
-      )}
-       {modalType === 'stay' && (
-          <StayFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any} // Cast needed
-          />
-      )}
-      {modalType === 'rental_car' && (
-          <RentalCarFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any} // Cast needed
-          />
-      )}
-       {modalType === 'flight' && (
-          <FlightFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any} // Cast needed
-          />
-      )}
-      {/* TODO: Add conditional rendering for other modal types */}
-      {modalType === 'activity' && (
-          <ActivityFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any}
-          />
-      )}
-      {modalType === 'bus' && (
-          <BusFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any}
-          />
-      )}
-       {modalType === 'train' && (
-          <TrainFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any}
-          />
-      )}
-       {modalType === 'destination' && (
-          <DestinationFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any}
-          />
-      )}
-       {modalType === 'departure' && (
-          <DepartureFormModal 
-              isOpen={!!modalType}
-              onClose={handleCloseModal} 
-              onSave={handleSaveEvent} 
-              eventToEdit={editingEvent as any}
-          />
-      )}
+      <EventFormModalRouter
+        modalType={modalType}
+        editingEvent={editingEvent}
+        onClose={handleCloseModal}
+        onSave={handleSaveEvent}
+      />
 
       {success && (
         <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
@@ -2573,6 +1212,7 @@ const NewTripDetails: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 };

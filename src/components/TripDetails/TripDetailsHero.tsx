@@ -1,0 +1,149 @@
+import React from 'react';
+import { format } from 'date-fns';
+import { CalendarDays, CheckCircle2, Clock3, Users } from 'lucide-react';
+import { CollaboratorAvatars } from './CollaboratorAvatars';
+import TripActions from './TripActions';
+import { Trip } from '@/types/eventTypes';
+import { cn } from '@/lib/utils';
+
+interface TripDetailsHeroProps {
+  trip: Trip;
+  tripThumbnail: string;
+  currentUserId?: string;
+  isOwner: boolean;
+  canEdit: boolean;
+  descriptionHtml: string;
+  onExport: () => void;
+  onTripUpdate: (trip: Trip) => Promise<void>;
+}
+
+const formatDateRange = (startDate?: string, endDate?: string) => {
+  if (!startDate && !endDate) return 'Dates not set';
+
+  try {
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
+    if (start && end && !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      const sameYear = start.getFullYear() === end.getFullYear();
+      return `${format(start, sameYear ? 'MMM d' : 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`;
+    }
+    if (start && !Number.isNaN(start.getTime())) return format(start, 'MMM d, yyyy');
+    if (end && !Number.isNaN(end.getTime())) return format(end, 'MMM d, yyyy');
+  } catch {
+    // Fall through to raw dates.
+  }
+
+  return [startDate, endDate].filter(Boolean).join(' - ');
+};
+
+const TripStat = ({
+  icon,
+  label,
+  value,
+  accent = 'text-slate-600',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  accent?: string;
+}) => (
+  <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur">
+    <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100', accent)}>
+      {icon}
+    </span>
+    <div className="min-w-0">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="truncate text-sm font-semibold text-slate-900">{value}</p>
+    </div>
+  </div>
+);
+
+const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
+  trip,
+  tripThumbnail,
+  currentUserId,
+  isOwner,
+  canEdit,
+  descriptionHtml,
+  onExport,
+  onTripUpdate,
+}) => {
+  const collaborators = trip.collaborators.filter((collaborator): collaborator is { user: typeof trip.owner; role: 'viewer' | 'editor' } =>
+    typeof collaborator === 'object' && collaborator !== null && 'user' in collaborator && 'role' in collaborator
+  );
+  const confirmedCount = trip.events.filter(event => event.status !== 'exploring').length;
+  const exploringCount = trip.events.length - confirmedCount;
+  const collaboratorCount = collaborators.length + 1;
+
+  return (
+    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+      <div className="relative h-[190px] w-full overflow-hidden md:h-[240px]">
+        <img
+          src={trip.thumbnailUrl || tripThumbnail}
+          alt={trip.name}
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/45 to-slate-950/10" />
+
+        <div className="absolute right-4 top-4 z-20">
+          <TripActions
+            trip={trip}
+            isOwner={isOwner}
+            canEdit={canEdit}
+            onExport={onExport}
+            onTripUpdate={onTripUpdate}
+          />
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 z-10 p-5 text-white md:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">Trip workspace</p>
+              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg md:text-4xl">{trip.name}</h1>
+              {descriptionHtml && (
+                <p
+                  className="mt-2 max-w-3xl text-sm leading-6 text-white/90 drop-shadow-md md:text-base"
+                  dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+                />
+              )}
+            </div>
+            <CollaboratorAvatars
+              owner={trip.owner}
+              collaborators={collaborators}
+              currentUserId={currentUserId}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 bg-slate-50/80 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <TripStat
+          icon={<CalendarDays className="h-4 w-4" />}
+          label="Dates"
+          value={formatDateRange(trip.startDate, trip.endDate)}
+          accent="text-blue-600"
+        />
+        <TripStat
+          icon={<Clock3 className="h-4 w-4" />}
+          label="Itinerary"
+          value={`${trip.events.length} event${trip.events.length === 1 ? '' : 's'}`}
+          accent="text-teal-600"
+        />
+        <TripStat
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          label="Status"
+          value={`${confirmedCount} confirmed${exploringCount ? `, ${exploringCount} exploring` : ''}`}
+          accent="text-emerald-600"
+        />
+        <TripStat
+          icon={<Users className="h-4 w-4" />}
+          label="Collaborators"
+          value={`${collaboratorCount} traveler${collaboratorCount === 1 ? '' : 's'}`}
+          accent="text-violet-600"
+        />
+      </div>
+    </section>
+  );
+};
+
+export default TripDetailsHero;
