@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../Avatar';
 import LoadingAnimation from '../LoadingAnimation';
@@ -16,6 +16,7 @@ interface RegisterFormData {
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [formData, setFormData] = useState<RegisterFormData>({
     name: '',
@@ -101,8 +102,8 @@ const Register: React.FC = () => {
       // Use the login function from AuthContext
       login(data.token, data.user);
 
-      // Redirect to trips page
-      navigate('/trips');
+      const redirectTo = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+      navigate(`${redirectTo?.pathname || '/trips'}${redirectTo?.search || ''}`, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {
@@ -241,7 +242,7 @@ const Register: React.FC = () => {
             </div>
             <div className="text-sm text-center mt-4">
               <span className="text-gray-600">Already have an account? </span>
-              <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
+              <Link to="/login" state={location.state} className="font-medium text-indigo-600 hover:text-indigo-500">
                 Sign in
               </Link>
             </div>

@@ -5,6 +5,7 @@ import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripActions from './TripActions';
 import { Trip } from '@/types/eventTypes';
 import { cn } from '@/lib/utils';
+import { getTripStatusSummary } from '@/services/tripStatus';
 
 interface TripDetailsHeroProps {
   trip: Trip;
@@ -17,7 +18,7 @@ interface TripDetailsHeroProps {
   onTripUpdate: (trip: Trip) => Promise<void>;
 }
 
-const formatDateRange = (startDate?: string, endDate?: string) => {
+const formatDateRange = (startDate?: string | Date | null, endDate?: string | Date | null) => {
   if (!startDate && !endDate) return 'Dates not set';
 
   try {
@@ -74,6 +75,7 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
   const confirmedCount = trip.events.filter(event => event.status !== 'exploring').length;
   const exploringCount = trip.events.length - confirmedCount;
   const collaboratorCount = collaborators.length + 1;
+  const tripStatus = getTripStatusSummary(trip);
 
   return (
     <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
@@ -120,7 +122,7 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
         <TripStat
           icon={<CalendarDays className="h-4 w-4" />}
           label="Dates"
-          value={formatDateRange(trip.startDate, trip.endDate)}
+          value={formatDateRange(tripStatus.start, tripStatus.end)}
           accent="text-blue-600"
         />
         <TripStat

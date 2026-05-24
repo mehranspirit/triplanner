@@ -23,11 +23,16 @@ import {
   TripTodayBriefingResponse
 } from '../types/assistantBriefingTypes';
 
-type Collaborator = string | { user: User; role: 'editor' | 'viewer' };
-
-const isCollaboratorObject = (c: Collaborator): c is { user: User; role: 'editor' | 'viewer' } => {
-  return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
-};
+export interface TripInviteLink {
+  _id: string;
+  role: 'editor' | 'viewer';
+  status: 'active' | 'revoked';
+  inviteUrl: string;
+  expiresAt: string;
+  createdAt: string;
+  createdBy?: User;
+  acceptedUsers?: Array<{ user: User; acceptedAt: string }>;
+}
 
 const throwApiError = async (response: Response, fallbackMessage: string): Promise<never> => {
   let message = fallbackMessage;
@@ -72,6 +77,10 @@ interface API {
   removeCollaborator: (tripId: string, userId: string) => Promise<void>;
   updateCollaboratorRole: (tripId: string, userId: string, role: 'editor' | 'viewer') => Promise<void>;
   addCollaborator: (tripId: string, email: string, role: 'editor' | 'viewer') => Promise<void>;
+  getTripInviteLinks: (tripId: string) => Promise<TripInviteLink[]>;
+  createTripInviteLink: (tripId: string, role: 'editor' | 'viewer') => Promise<TripInviteLink>;
+  revokeTripInviteLink: (tripId: string, inviteId: string) => Promise<void>;
+  acceptTripInviteLink: (token: string) => Promise<{ trip: Trip; role: 'owner' | 'editor' | 'viewer' }>;
   deleteTrip: (tripId: string) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
   generateShareLink: (tripId: string) => Promise<{ shareableLink: string }>;
@@ -488,39 +497,16 @@ export const api: API = {
   updateCollaboratorRole: async (tripId: string, userId: string, role: 'editor' | 'viewer'): Promise<void> => {
     if (!tripId || !userId || !role) throw new Error('Trip ID, user ID, and role are required');
     console.log('Updating collaborator role:', { tripId, userId, role });
-    
-    try {
-      // We need to implement this endpoint on the server side
-      // For now, let's use a workaround by removing and re-adding the collaborator
-      
-      // First, get the current trip to find the collaborator's email
-      const trip = await api.getTrip(tripId);
-      const collaborator = trip.collaborators.find(c => isCollaboratorObject(c) && c.user._id === userId);
-      
-      if (!collaborator || !isCollaboratorObject(collaborator)) {
-        throw new Error('Collaborator not found');
-      }
-      
-      // Remove the collaborator
-      await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
-        method: 'DELETE',
-        headers: getHeaders(),
-      });
-      
-      // Add the collaborator back with the new role
-      await fetch(`${API_URL}/api/trips/${tripId}/collaborators`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ 
-          email: collaborator.user.email,
-          role 
-        }),
-      });
-      
-      console.log('Successfully updated collaborator role using remove/add approach');
-    } catch (error) {
-      console.error('Error in updateCollaboratorRole:', error);
-      throw error;
+
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ role }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to update collaborator role');
     }
   },
 
@@ -536,6 +522,53 @@ export const api: API = {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to add collaborator');
     }
+  },
+
+  getTripInviteLinks: async (tripId: string): Promise<TripInviteLink[]> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/invite-links`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to load invite links');
+    }
+    return response.json();
+  },
+
+  createTripInviteLink: async (tripId: string, role: 'editor' | 'viewer'): Promise<TripInviteLink> => {
+    if (!tripId || !role) throw new Error('Trip ID and role are required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/invite-links`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ role }),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to create invite link');
+    }
+    return response.json();
+  },
+
+  revokeTripInviteLink: async (tripId: string, inviteId: string): Promise<void> => {
+    if (!tripId || !inviteId) throw new Error('Trip ID and invite ID are required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/invite-links/${inviteId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to revoke invite link');
+    }
+  },
+
+  acceptTripInviteLink: async (token: string): Promise<{ trip: Trip; role: 'owner' | 'editor' | 'viewer' }> => {
+    if (!token) throw new Error('Invite token is required');
+    const response = await fetch(`${API_URL}/api/trips/invite-links/${token}/accept`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to accept invite link');
+    }
+    return response.json();
   },
 
   deleteTrip: async (tripId: string): Promise<void> => {

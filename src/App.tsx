@@ -22,6 +22,7 @@ import ExpensesPage from './pages/ExpensesPage';
 import { DreamTripsPage } from './pages/DreamTripsPage';
 import DreamTripDetails from './components/DreamTripDetails';
 import NewTripDetails from './components/TripDetails/NewTripDetails';
+import TripInviteAccept from './components/TripInviteAccept';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { networkAwareApi } from './services/networkAwareApi';
 
@@ -202,6 +203,16 @@ const App: React.FC = () => {
             <Route path="/auth/callback" element={<AuthCallback />} />
             
             {/* Protected routes */}
+            <Route
+              path="/trips/invite/:token"
+              element={
+                <ProtectedRoute>
+                  <AuthenticatedLayout>
+                    <TripInviteAccept />
+                  </AuthenticatedLayout>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/trips/dream/:id"
               element={

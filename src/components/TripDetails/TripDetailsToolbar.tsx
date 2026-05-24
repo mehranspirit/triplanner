@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { Bell, CalendarDays, CheckSquare, CreditCard, FileText, MapIcon, MapPin, Plus, Sparkles, Wand2 } from 'lucide-react';
+import { Bell, CalendarDays, CheckSquare, CreditCard, FileText, MapIcon, MapPin, Plus, Sparkles, Users, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -122,7 +122,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                 )}
               >
                 <Wand2 className="mr-2 h-4 w-4 text-teal-500" />
-                Trip Tools
+                Trip Menu
                 {unreadNotificationCount > 0 && (
                   <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
                     {unreadNotificationCount}
@@ -130,7 +130,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuContent align="start" className="w-72">
               <DropdownMenuLabel>Travel day</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => onOpenPanel('today')}>
                 <CalendarDays className="mr-2 h-4 w-4 text-blue-500" />
@@ -177,16 +177,20 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                 <MapIcon className="mr-2 h-4 w-4 text-blue-500" />
                 Map
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Money</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => navigate(`/trips/${tripId}/expenses`)}>
+                <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
+                Expenses and settlements
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Trip</DropdownMenuLabel>
+              <DropdownMenuItem disabled>
+                <Users className="mr-2 h-4 w-4 text-slate-500" />
+                Collaborators, export, and trip settings are in the header menu
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            variant="outline"
-            className="h-10 rounded-full border-slate-200 bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50"
-            onClick={() => navigate(`/trips/${tripId}/expenses`)}
-          >
-            <CreditCard className="mr-2 h-4 w-4 text-emerald-600" />
-            Expenses
-          </Button>
         </div>
 
         <div className="flex items-center justify-between gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 lg:justify-end">

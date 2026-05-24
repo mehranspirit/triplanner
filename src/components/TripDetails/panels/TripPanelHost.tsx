@@ -139,34 +139,35 @@ const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
   return (
     <TripSheet
       open={Boolean(activePanel)}
-      title="Trip tools"
-      description="Grouped planning, travel-day, and exploration tools."
+      title="Trip detail"
+      description="Focused details opened from the trip menu or a relevant context card."
       className={cn('md:w-[520px]', copy.className)}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
-      <div className="border-b border-slate-200 bg-slate-50/95 px-4 py-4">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-slate-200 bg-slate-50/95 px-4 py-3">
         <div className="flex items-start justify-between gap-4 pr-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Trip tools</p>
-            <h2 className="mt-1 text-lg font-bold text-slate-950">{copy.title}</h2>
-            <p className="mt-1 text-sm text-slate-500">{copy.description}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">Trip detail</p>
+            <h2 className="mt-0.5 text-base font-bold text-slate-950">{copy.title}</h2>
+            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{copy.description}</p>
           </div>
         </div>
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           {panelGroups.map((group) => (
-            <div key={group.label}>
-              <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <div key={group.label} className="flex shrink-0 items-center gap-1">
+              <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                 {group.label}
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-1">
                 {group.panels.map((panel) => (
                   <button
                     key={panel.id}
                     type="button"
                     className={cn(
-                      'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                      'whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
                       activePanel === panel.id
                         ? 'border-blue-200 bg-blue-600 text-white shadow-sm'
                         : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
@@ -181,6 +182,7 @@ const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
           ))}
         </div>
       </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
       {activePanel === 'notifications' && (
         <TripNotifications
           notifications={notifications}
@@ -240,6 +242,8 @@ const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
           <TripMap trip={trip} />
         </div>
       )}
+      </div>
+      </div>
     </TripSheet>
   );
 };

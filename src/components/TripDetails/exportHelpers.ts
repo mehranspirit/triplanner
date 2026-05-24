@@ -12,31 +12,12 @@ import {
   ActivityEvent 
 } from '@/types/eventTypes';
 import { DEFAULT_THUMBNAILS } from './thumbnailHelpers'; // Assuming default thumbnails are here
-import { FaPlane, FaTrain, FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain } from 'react-icons/fa';
+import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
 
-// Helper function to get event date
-const getEventDate = (event: Event): string | undefined => {
-  switch (event.type) {
-    case 'stay':
-      return (event as StayEvent).checkIn || event.startDate;
-    case 'arrival':
-    case 'departure':
-      return (event as ArrivalDepartureEvent).date || event.startDate;
-    case 'rental_car':
-      return (event as RentalCarEvent).date || event.startDate;
-    default:
-      return event.startDate;
-  }
-};
-
-// Helper to sort events chronologically
-const sortEvents = (events: Event[]): Event[] => {
-  return [...events].sort((a, b) => {
-    const dateA = getEventDate(a);
-    const dateB = getEventDate(b);
-    if (!dateA || !dateB) return 0;
-    return new Date(dateA).getTime() - new Date(dateB).getTime();
-  });
+const getExportDateKey = (event: Event): string => {
+  const start = getEventStart(event);
+  if (!start) return '';
+  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
 };
 
 // Main function to generate HTML content
@@ -47,6 +28,16 @@ export const generateHtmlItinerary = (
   if (!trip) return '';
 
   // Helper Functions (kept internal to this generation logic)
+  const encodeText = (text: string | undefined | null) => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
   const getEventIcon = (type: string) => {
     switch (type) {
       case 'flight':
@@ -73,64 +64,27 @@ export const generateHtmlItinerary = (
   };
 
   const getEventTitle = (event: Event): string => {
-    const encodeText = (text: string | undefined | null) => {
-      if (!text) return '';
-      return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    };
-
-    switch (event.type) {
-      case 'arrival':
-      case 'departure': {
-        const e = event as ArrivalDepartureEvent;
-        return `${event.type === 'arrival' ? 'Arrival at' : 'Departure from'} ${encodeText(e.airport || 'Airport')}`;
-      }
-      case 'stay': {
-        const e = event as StayEvent;
-        return encodeText(e.accommodationName || 'Accommodation');
-      }
-      case 'destination': {
-        const e = event as DestinationEvent;
-        return encodeText(e.placeName || 'Destination');
-      }
-      case 'flight': {
-        const e = event as FlightEvent;
-        return encodeText(`${e.airline || ''} ${e.flightNumber || 'Flight'}`.trim());
-      }
-      case 'train': {
-        const e = event as TrainEvent;
-        return encodeText(`${e.trainOperator || ''} ${e.trainNumber || 'Train'}`.trim());
-      }
-      case 'rental_car': {
-        const e = event as RentalCarEvent;
-        return encodeText(`${e.pickupLocation || ''} to ${e.dropoffLocation || ''}`);
-      }
-      case 'bus': {
-        const e = event as BusEvent;
-        return encodeText(`${e.busOperator || ''} ${e.busNumber || 'Bus'}`.trim());
-      }
-      case 'activity': {
-        const e = event as ActivityEvent;
-        return encodeText(`${e.title || 'Activity'} - ${e.activityType || ''}`.replace(/ - $/, ''));
-      }
-      default:
-        return 'Event';
-    }
+    return encodeText(getEventDisplayName(event));
   };
 
   const formatDateForExport = (dateString: string) => {
     const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
+  };
+
+  const formatTimelineDateForExport = (dateString: string) => {
+    const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return {
+      weekday: date.toLocaleDateString('en-US', { weekday: 'long' }),
+      date: date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    };
   };
 
   const processText = (text: string | undefined | null): string => {
@@ -149,6 +103,17 @@ export const generateHtmlItinerary = (
       console.warn('Failed to decode text for export:', text, e);
       return text; // Return original text if decoding fails
     }
+  };
+
+  const getTimeSummary = (event: Event) => {
+    const start = getEventStart(event);
+    if (!start) return '';
+    return start.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   };
 
   const getEventDetails = (event: Event): [string, string][] => {
@@ -293,19 +258,16 @@ export const generateHtmlItinerary = (
   };
 
   // Data Preparation
-  const confirmedEvents = trip.events.filter((event: Event) => event.status === 'confirmed');
-  const sortedEvents = sortEvents(confirmedEvents);
+  const sortedEvents = sortEventsByStart(trip.events);
   const eventsByDate: Record<string, Event[]> = {};
   sortedEvents.forEach((event: Event) => {
-    const dateString = getEventDate(event);
-    
-    // Extract date part and normalize format
-    if (dateString) {
-      const datePart = dateString.includes('T') ? dateString.split('T')[0] : dateString;
-      if (!eventsByDate[datePart]) {
-        eventsByDate[datePart] = [];
+    const dateKey = getExportDateKey(event);
+
+    if (dateKey) {
+      if (!eventsByDate[dateKey]) {
+        eventsByDate[dateKey] = [];
       }
-      eventsByDate[datePart].push(event);
+      eventsByDate[dateKey].push(event);
     } else {
       console.warn('Event has no valid date:', event);
     }
@@ -318,119 +280,255 @@ export const generateHtmlItinerary = (
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${trip.name || 'Trip'} - Itinerary</title>
+        <title>${encodeText(trip.name || 'Trip')} - Itinerary</title>
         <style>
           body {
+            background: #f1f5f9;
+            color: #0f172a;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             line-height: 1.6;
-            color: #333;
-            max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
+            max-width: 920px;
+            padding: 28px 20px;
           }
-          .date-header {
-            background-color: #EEF2FF;
-            padding: 10px 15px;
-            margin: 20px 0 10px;
-            border-radius: 6px;
-            font-weight: 500;
-            color: #3730A3;
+          .page-shell {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 28px;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.10);
+            padding: 28px;
           }
-          .event-card {
-            border: 1px solid #E5E7EB;
-            border-radius: 8px;
-            padding: 0;
-            margin-bottom: 15px;
-            background-color: white;
-            overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          .trip-kicker,
+          .timeline-label {
+            color: #1d4ed8;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            margin: 0;
+            text-transform: uppercase;
+          }
+          .trip-title {
+            color: #020617;
+            font-size: 2rem;
+            line-height: 1.15;
+            margin: 4px 0 0;
+          }
+          .trip-description {
+            color: #475569;
+            margin: 10px 0 0;
+            max-width: 680px;
+          }
+          .timeline-header {
+            align-items: center;
+            display: flex;
+            gap: 16px;
+            justify-content: space-between;
+            margin: 28px 0 20px;
+          }
+          .timeline-title {
+            color: #020617;
+            font-size: 1.5rem;
+            margin: 0;
+          }
+          .event-count {
+            background: #f1f5f9;
+            border-radius: 999px;
+            color: #475569;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            white-space: nowrap;
+          }
+          .date-group {
+            border-left: 1px solid #bfdbfe;
+            margin-left: 14px;
+            padding: 0 0 18px 24px;
             position: relative;
           }
-          .event-thumbnail {
+          .date-header {
+            align-items: center;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+            display: inline-flex;
+            gap: 12px;
+            margin: 0 0 16px -39px;
+            padding: 8px 14px;
+          }
+          .date-dot,
+          .timeline-point {
+            background: #cbd5e1;
+            border-radius: 999px;
+          }
+          .date-dot {
+            height: 12px;
+            width: 12px;
+          }
+          .date-weekday {
+            color: #0f172a;
+            font-size: 0.95rem;
+            font-weight: 800;
+            margin: 0;
+          }
+          .date-value {
+            color: #64748b;
+            font-size: 0.78rem;
+            margin: 0;
+          }
+          .event-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+            margin-bottom: 16px;
+            overflow: hidden;
+            position: relative;
+          }
+          .event-card.exploring {
+            background: #fffbeb;
+            border-color: #fde68a;
+          }
+          .timeline-point {
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 2px #f1f5f9;
+            height: 12px;
+            left: -31px;
             position: absolute;
-            top: 15px;
-            right: 15px;
-            width: 100px;
-            height: 100px;
+            top: 24px;
+            width: 12px;
+          }
+          .event-thumbnail {
+            border-radius: 16px;
+            flex: 0 0 96px;
+            height: 96px;
             object-fit: cover;
-            border-radius: 6px;
-            border: 1px solid #E5E7EB;
+            width: 96px;
           }
           .event-content {
-            padding: 15px;
-            padding-right: 130px; /* Space for thumbnail */
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+          }
+          .event-body {
+            min-width: 0;
           }
           .event-header {
-            display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 6px;
           }
           .event-icon {
-            font-size: 24px;
-            display: flex;
             align-items: center;
+            background: #f8fafc;
+            border-radius: 999px;
+            display: flex;
+            height: 34px;
+            justify-content: center;
+            width: 34px;
+          }
+          .event-type,
+          .status-badge,
+          .time-chip {
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 8px;
           }
           .event-type {
-            color: #4F46E5;
-            font-weight: 500;
+            background: #eff6ff;
+            color: #1d4ed8;
             text-transform: capitalize;
-            font-size: 0.875rem;
+          }
+          .status-badge {
+            background: #dcfce7;
+            color: #166534;
+          }
+          .status-badge.exploring {
+            background: #fef3c7;
+            color: #92400e;
+          }
+          .time-chip {
+            background: #f1f5f9;
+            color: #475569;
           }
           .event-title {
-            font-weight: 600;
-            color: #111827;
-            margin: 5px 0;
-            font-size: 1.1em;
+            color: #020617;
+            font-size: 1.1rem;
+            font-weight: 800;
+            margin: 0;
           }
           .event-details {
-            color: #6B7280;
-            font-size: 0.9em;
-            margin-top: 10px;
+            color: #64748b;
+            display: grid;
+            font-size: 0.9rem;
+            gap: 6px 14px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 12px;
           }
           .event-detail-item {
             display: flex;
-            margin-bottom: 4px;
+            gap: 6px;
+            min-width: 0;
           }
           .event-detail-label {
-            font-weight: 500;
-            min-width: 120px;
-            color: #4B5563;
+            color: #334155;
+            font-weight: 700;
+            white-space: nowrap;
           }
           .event-detail-value {
-            color: #6B7280;
-            flex: 1;
+            color: #64748b;
+            min-width: 0;
+          }
+          .event-notes,
+          .event-description {
+            border-top: 1px solid #e2e8f0;
+            color: #475569;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-top: 12px;
+            padding-top: 10px;
           }
           .event-notes {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #E5E7EB;
-            color: #6B7280;
             font-style: italic;
-            font-size: 0.85em;
-            line-height: 1.4;
-          }
-          .event-description {
-            margin-top: 8px;
-            color: #4B5563;
-            font-size: 0.9em;
-            line-height: 1.5;
           }
           a {
-            color: #4F46E5;
+            color: #1d4ed8;
             text-decoration: none;
           }
           a:hover {
             text-decoration: underline;
           }
+          @media (max-width: 640px) {
+            body {
+              padding: 12px;
+            }
+            .page-shell {
+              padding: 18px;
+            }
+            .event-content {
+              flex-direction: column;
+            }
+            .event-thumbnail {
+              height: 150px;
+              width: 100%;
+            }
+            .event-details {
+              grid-template-columns: 1fr;
+            }
+          }
           @media print {
             body {
+              background: #ffffff;
               padding: 0;
             }
-            .event-card {
-              break-inside: avoid;
-              page-break-inside: avoid;
+            .page-shell {
+              border: 0;
+              box-shadow: none;
             }
+            .event-card,
             .date-header {
               break-inside: avoid;
               page-break-inside: avoid;
@@ -439,28 +537,50 @@ export const generateHtmlItinerary = (
         </style>
       </head>
       <body>
-        <h1 style="text-align: center; color: #111827; margin-bottom: 30px;">
-          ${trip.name || 'Trip'} Itinerary
-        </h1>
+        <main class="page-shell">
+        <header>
+          <p class="trip-kicker">Trip itinerary</p>
+          <h1 class="trip-title">${encodeText(trip.name || 'Trip')}</h1>
+          ${trip.description ? `<p class="trip-description">${processText(trip.description)}</p>` : ''}
+        </header>
+        <section class="timeline-header">
+          <div>
+            <p class="timeline-label">Main itinerary</p>
+            <h2 class="timeline-title">Trip Timeline</h2>
+          </div>
+          <span class="event-count">${sortedEvents.length} event${sortedEvents.length === 1 ? '' : 's'}</span>
+        </section>
         ${Object.entries(eventsByDate)
           .map(([dateString, events]) => {
+            const dateParts = formatTimelineDateForExport(dateString);
             return `
+              <div class="date-group">
               <div class="date-header">
-                ${formatDateForExport(dateString)}
+                <span class="date-dot"></span>
+                <div>
+                  <p class="date-weekday">${dateParts.weekday}</p>
+                  <p class="date-value">${dateParts.date}</p>
+                </div>
               </div>
-              ${events.map(event => {
-                const thumbnail = event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type as EventType] || DEFAULT_THUMBNAILS.default;
+              ${sortEventsByStart(events).map(event => {
+                const thumbnail = encodeText(event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type as EventType] || DEFAULT_THUMBNAILS.default);
                 const details = getEventDetails(event);
+                const statusClass = event.status === 'exploring' ? 'status-badge exploring' : 'status-badge';
+                const eventClass = event.status === 'exploring' ? 'event-card exploring' : 'event-card';
                 
                 return `
-                  <div class="event-card">
+                  <article class="${eventClass}">
+                    <span class="timeline-point"></span>
                     <div class="event-content">
                       <img src="${thumbnail}" alt="${event.type}" class="event-thumbnail">
+                      <div class="event-body">
                       <div class="event-header">
                         <span class="event-icon">${getEventIcon(event.type)}</span>
                         <span class="event-type">${event.type.replace('_', ' ')}</span>
+                        <span class="${statusClass}">${event.status === 'exploring' ? 'Exploring' : 'Confirmed'}</span>
+                        ${getTimeSummary(event) ? `<span class="time-chip">${getTimeSummary(event)}</span>` : ''}
                       </div>
-                      <div class="event-title">${getEventTitle(event)}</div>
+                      <h3 class="event-title">${getEventTitle(event)}</h3>
                       ${event.type === 'destination' && (event as DestinationEvent).description ? 
                         `<div class="event-description">${processText((event as DestinationEvent).description)}</div>` : ''}
                       ${event.type === 'activity' && (event as ActivityEvent).description ? 
@@ -475,11 +595,14 @@ export const generateHtmlItinerary = (
                       </div>
                       ${event.notes ? `<div class="event-notes">${processText(event.notes)}</div>` : ''}
                     </div>
-                  </div>
+                    </div>
+                  </article>
                 `;
               }).join('')}
+              </div>
             `;
           }).join('')}
+        </main>
       </body>
     </html>
   `;

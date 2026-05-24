@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Trip, User } from '../types/eventTypes';
-import { api } from '../services/api';
+import { api, TripInviteLink } from '../services/api';
 import Avatar from './Avatar';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { X, Plus, User as UserIcon } from 'lucide-react';
+import { Check, Copy, Link2, Trash2, X, Plus, User as UserIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
@@ -23,19 +23,42 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'editor' | 'viewer'>('viewer');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [localTrip, setLocalTrip] = useState(trip);
+  const [inviteLinks, setInviteLinks] = useState<TripInviteLink[]>([]);
+  const [inviteLinkRole, setInviteLinkRole] = useState<'editor' | 'viewer'>('viewer');
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalTrip(trip);
   }, [trip]);
+
+  useEffect(() => {
+    if (!isOpen || !trip._id) return;
+
+    const loadInviteLinks = async () => {
+      try {
+        const links = await api.getTripInviteLinks(trip._id);
+        setInviteLinks(links);
+      } catch (err) {
+        // Viewer/collaborator permission errors should not hide current collaborator management.
+        console.warn('Failed to load invite links:', err);
+      }
+    };
+
+    loadInviteLinks();
+  }, [isOpen, trip._id]);
 
   if (!isOpen) return null;
 
   const handleAddCollaborator = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setIsLoading(true);
+    const trimmedEmail = email.trim().toLowerCase();
 
     if (!trip._id) {
       setError('Trip ID is missing');
@@ -44,23 +67,13 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
 
     try {
-      const optimisticCollaborator = {
-        user: { _id: 'temp', name: 'Adding...', email, photoUrl: null },
-        role
-      };
-      const optimisticTrip = {
-        ...localTrip,
-        collaborators: [...localTrip.collaborators, optimisticCollaborator]
-      };
-      setLocalTrip(optimisticTrip);
-      onUpdate(optimisticTrip);
-
-      await api.addCollaborator(trip._id, email, role);
+      await api.addCollaborator(trip._id, trimmedEmail, role);
       const serverTrip = await api.getTrip(trip._id);
       setLocalTrip(serverTrip);
       onUpdate(serverTrip);
       setEmail('');
       setRole('viewer');
+      setSuccess(`${trimmedEmail} was added as a ${role}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add collaborator');
       setLocalTrip(trip);
@@ -133,6 +146,74 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     }
   };
 
+  const handleCreateInviteLink = async () => {
+    setError('');
+    setSuccess('');
+    setIsCreatingLink(true);
+
+    try {
+      const inviteLink = await api.createTripInviteLink(trip._id, inviteLinkRole);
+      setInviteLinks(prev => [inviteLink, ...prev]);
+      setSuccess(`Created a ${inviteLinkRole} invite link.`);
+      await handleCopyInviteLink(inviteLink);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create invite link');
+    } finally {
+      setIsCreatingLink(false);
+    }
+  };
+
+  const copyTextToClipboard = async (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textArea);
+
+    if (!copied) {
+      throw new Error('Copy command failed');
+    }
+  };
+
+  const handleCopyInviteLink = async (inviteLink: TripInviteLink) => {
+    try {
+      await copyTextToClipboard(inviteLink.inviteUrl);
+      setCopiedInviteId(inviteLink._id);
+      setSuccess('Invite link copied.');
+      setTimeout(() => setCopiedInviteId(null), 2000);
+    } catch {
+      setError('Copying failed. Select the link field and copy it manually.');
+    }
+  };
+
+  const handleRevokeInviteLink = async (inviteLink: TripInviteLink) => {
+    setError('');
+    setSuccess('');
+    setIsLoading(true);
+
+    try {
+      await api.revokeTripInviteLink(trip._id, inviteLink._id);
+      setInviteLinks(prev => prev.filter(link => link._id !== inviteLink._id));
+      setSuccess('Invite link revoked.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke invite link');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRoleChange = async (userId: string, newRole: 'editor' | 'viewer') => {
     setIsLoading(true);
     try {
@@ -179,41 +260,108 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
             {error}
           </div>
         )}
+        {success && (
+          <div className="mt-4 flex-shrink-0 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">
+            {success}
+          </div>
+        )}
 
-        {/* Add Collaborator Form */}
-        <div className="border-t border-b py-6 flex-shrink-0">
-          <form onSubmit={handleAddCollaborator} className="flex gap-4">
-            <div className="flex-1">
+        <div className="flex-shrink-0 space-y-4 border-y py-5">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold text-slate-950">Add existing user</h3>
+              <p className="text-xs text-slate-500">Use this when the person already has an account.</p>
+            </div>
+            <form onSubmit={handleAddCollaborator} className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex-1">
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter collaborator's email"
+                placeholder="name@example.com"
                 className="w-full"
                 required
               />
+              </div>
+              <Select
+                value={role}
+                onValueChange={(value: 'editor' | 'viewer') => setRole(value)}
+              >
+                <SelectTrigger className="w-full sm:w-[150px]">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="shrink-0"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                {isLoading ? 'Adding...' : 'Add'}
+              </Button>
+            </form>
+          </section>
+
+          <section className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold text-slate-950">Create invite link</h3>
+              <p className="text-xs text-slate-600">Share this through Messages, WhatsApp, Slack, or anywhere else. The link grants the selected role after login.</p>
             </div>
-            <Select
-              value={role}
-              onValueChange={(value: 'editor' | 'viewer') => setRole(value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="viewer">Viewer</SelectItem>
-                <SelectItem value="editor">Editor</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="shrink-0"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              {isLoading ? 'Adding...' : 'Add'}
-            </Button>
-          </form>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Select
+                value={inviteLinkRole}
+                onValueChange={(value: 'editor' | 'viewer') => setInviteLinkRole(value)}
+              >
+                <SelectTrigger className="w-full sm:w-[150px] bg-white">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer link</SelectItem>
+                  <SelectItem value="editor">Editor link</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button type="button" onClick={handleCreateInviteLink} disabled={isCreatingLink}>
+                <Link2 className="mr-2 h-4 w-4" />
+                {isCreatingLink ? 'Creating...' : 'Create and copy link'}
+              </Button>
+            </div>
+            {inviteLinks.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {inviteLinks.map(inviteLink => (
+                  <div key={inviteLink._id} className="rounded-xl border border-blue-100 bg-white p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium capitalize text-slate-900">{inviteLink.role} invite link</p>
+                        <Input
+                          value={inviteLink.inviteUrl}
+                          readOnly
+                          onFocus={(event) => event.currentTarget.select()}
+                          className="mt-1 h-8 cursor-text truncate bg-slate-50 text-xs text-slate-600"
+                          aria-label={`${inviteLink.role} invite link`}
+                        />
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          Expires {new Date(inviteLink.expiresAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleCopyInviteLink(inviteLink)}>
+                          {copiedInviteId === inviteLink._id ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                          {copiedInviteId === inviteLink._id ? 'Copied' : 'Copy'}
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => handleRevokeInviteLink(inviteLink)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
 
         {/* Collaborators List */}

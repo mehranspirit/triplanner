@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => ({
             }
           },
           {
-            urlPattern: /^https?:\/\/.*\/api\/trips\/[^\/]+$/,
+            urlPattern: /^https?:\/\/.*\/api\/trips\/[^/]+$/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'trip-details-cache',
@@ -58,7 +58,7 @@ export default defineConfig(({ mode }) => ({
           },
           // Expense-related API routes
           {
-            urlPattern: /^https?:\/\/.*\/api\/trips\/[^\/]+\/expenses/,
+            urlPattern: /^https?:\/\/.*\/api\/trips\/[^/]+\/expenses/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'expenses-api-cache',
@@ -76,7 +76,7 @@ export default defineConfig(({ mode }) => ({
           },
           // Settlement-related API routes
           {
-            urlPattern: /^https?:\/\/.*\/api\/trips\/[^\/]+\/settlements/,
+            urlPattern: /^https?:\/\/.*\/api\/trips\/[^/]+\/settlements/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'settlements-api-cache',
@@ -94,7 +94,7 @@ export default defineConfig(({ mode }) => ({
           },
           // Notes API routes
           {
-            urlPattern: /^https?:\/\/.*\/api\/trips\/[^\/]+\/notes/,
+            urlPattern: /^https?:\/\/.*\/api\/trips\/[^/]+\/notes/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'notes-api-cache',
@@ -112,7 +112,7 @@ export default defineConfig(({ mode }) => ({
           },
           // Checklist API routes
           {
-            urlPattern: /^https?:\/\/.*\/api\/trips\/[^\/]+\/checklist/,
+            urlPattern: /^https?:\/\/.*\/api\/trips\/[^/]+\/checklist/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'checklist-api-cache',

@@ -132,8 +132,12 @@ const getOverlapInsights = (events: Event[]): TripInsight[] => {
   for (let i = 0; i < scheduledEvents.length - 1; i += 1) {
     const current = scheduledEvents[i];
     const next = scheduledEvents[i + 1];
+    const isStayOverlapWithTimedEvent = (
+      (current.event.type === 'stay' && next.event.type !== 'stay') ||
+      (next.event.type === 'stay' && current.event.type !== 'stay')
+    );
 
-    if (current.end > next.start) {
+    if (current.end > next.start && !isStayOverlapWithTimedEvent) {
       insights.push(createInsight({
         id: `overlap-${current.event.id}-${next.event.id}`,
         type: 'conflict',

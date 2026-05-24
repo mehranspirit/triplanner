@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LoadingAnimation from '../LoadingAnimation';
 import { createTravelCollage } from '../../utils/createCollage';
@@ -13,6 +13,7 @@ interface LoginFormData {
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
@@ -68,7 +69,8 @@ const Login: React.FC = () => {
       }
 
       login(data.token, data.user);
-      navigate('/trips');
+      const redirectTo = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+      navigate(`${redirectTo?.pathname || '/trips'}${redirectTo?.search || ''}`, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
       setLoading(false);
@@ -169,7 +171,7 @@ const Login: React.FC = () => {
             <div className="text-center">
               <p className="text-sm text-gray-600">
                 Don't have an account?{' '}
-                <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+                <Link to="/register" state={location.state} className="font-medium text-indigo-600 hover:text-indigo-500">
                   Sign up
                 </Link>
               </p>

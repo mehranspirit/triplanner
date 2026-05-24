@@ -1,10 +1,11 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { CalendarPlus, CloudSun, Info, MapPin } from 'lucide-react';
+import { Bell, CalendarPlus, CloudSun, Info, MapPin } from 'lucide-react';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import { Event } from '@/types/eventTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
+import { TripNotification } from '@/types/notificationTypes';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
 import { cn } from '@/lib/utils';
 import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
@@ -20,6 +21,7 @@ interface TripTimelineProps {
   deletingEvents: Set<string>;
   weatherSnapshots: WeatherSnapshot[];
   flightStatusSnapshots: FlightStatusSnapshot[];
+  notifications?: TripNotification[];
   onEditEvent: (event: Event) => void;
   onDeleteEvent: (eventId: string) => void;
   onStatusChange: (event: Event, status: 'confirmed' | 'exploring') => void;
@@ -61,6 +63,46 @@ const formatWeatherForecast = (forecast: WeatherDay) => {
   ].filter(Boolean);
 
   return parts.join(', ');
+};
+
+const ContextChip = ({
+  icon,
+  children,
+  className,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <span className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium', className)}>
+    {icon}
+    {children}
+  </span>
+);
+
+const getDateFromKey = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day, 12);
+};
+
+const getEventNotifications = (event: Event, notifications: TripNotification[]) => (
+  notifications.filter(notification => !notification.readAt && !notification.dismissedAt && notification.eventId === event.id)
+);
+
+const getDayNotificationCount = (dateKey: string, notifications: TripNotification[]) => (
+  notifications.filter((notification) => {
+    if (notification.readAt || notification.dismissedAt || notification.eventId || !notification.scheduledFor) return false;
+    return getTimelineDateKey({ startDate: notification.scheduledFor } as Event) === dateKey;
+  }).length
+);
+
+const getDayWeatherSummary = (dateKey: string, weatherSnapshots: WeatherSnapshot[]) => {
+  const date = getDateFromKey(dateKey);
+  const forecast = weatherSnapshots
+    .flatMap(snapshot => snapshot.daily || [])
+    .find(day => day.date && getTimelineDateKey({ startDate: day.date } as Event) === getTimelineDateKey({ startDate: date.toISOString() } as Event));
+
+  return forecast ? formatWeatherForecast(forecast) : null;
 };
 
 const EventWeatherForecast = ({
@@ -224,6 +266,7 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
   deletingEvents,
   weatherSnapshots,
   flightStatusSnapshots,
+  notifications = [],
   onEditEvent,
   onDeleteEvent,
   onStatusChange,
@@ -297,6 +340,8 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
           {Object.entries(groupedEvents).map(([dateKey, dateEvents]) => {
             const dateParts = formatTimelineDate(dateKey);
             const hasActiveEvent = dateEvents.some(event => isEventCurrentlyActive(event));
+            const dayAlertCount = getDayNotificationCount(dateKey, notifications);
+            const dayWeatherSummary = getDayWeatherSummary(dateKey, weatherSnapshots);
 
             return (
               <div key={dateKey} className="relative pl-7">
@@ -322,6 +367,20 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                       </span>
                     )}
                   </div>
+                  {(dayWeatherSummary || dayAlertCount > 0) && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {dayWeatherSummary && (
+                        <ContextChip icon={<CloudSun className="h-3 w-3" />} className="border-sky-100 bg-sky-50 text-sky-800">
+                          {dayWeatherSummary}
+                        </ContextChip>
+                      )}
+                      {dayAlertCount > 0 && (
+                        <ContextChip icon={<Bell className="h-3 w-3" />} className="border-amber-100 bg-amber-50 text-amber-800">
+                          {dayAlertCount} alert{dayAlertCount === 1 ? '' : 's'}
+                        </ContextChip>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -331,6 +390,9 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                     const EventCardComponent = registryItem.cardComponent;
                     const thumbnail = eventThumbnails[event.id] || registryItem.defaultThumbnail;
                     const isDeleting = deletingEvents.has(event.id);
+                    const eventAlerts = getEventNotifications(event, notifications);
+                    const hasLocationIssue = !event.location || event.location.quality === 'unresolved' || event.location.quality === 'inferred';
+                    const hasFlightStatus = event.type === 'flight' && flightStatusSnapshots.some(status => status.eventId === event.id);
 
                     return (
                       <div
@@ -351,6 +413,25 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                             onDelete={canEdit ? () => onDeleteEvent(event.id) : undefined}
                             onStatusChange={canEdit ? (newStatus) => onStatusChange(event, newStatus) : undefined}
                           />
+                        )}
+                        {(eventAlerts.length > 0 || hasLocationIssue || hasFlightStatus) && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {eventAlerts.length > 0 && (
+                              <ContextChip icon={<Bell className="h-3 w-3" />} className="border-amber-100 bg-amber-50 text-amber-800">
+                                {eventAlerts.length} alert{eventAlerts.length === 1 ? '' : 's'}
+                              </ContextChip>
+                            )}
+                            {hasLocationIssue && (
+                              <ContextChip icon={<MapPin className="h-3 w-3" />} className="border-teal-100 bg-teal-50 text-teal-800">
+                                Improve location
+                              </ContextChip>
+                            )}
+                            {hasFlightStatus && (
+                              <ContextChip icon={<FaPlane className="h-3 w-3" />} className="border-violet-100 bg-violet-50 text-violet-800">
+                                Flight status
+                              </ContextChip>
+                            )}
+                          </div>
                         )}
                         <FlightStatusSummary event={event} flightStatusSnapshots={flightStatusSnapshots} />
                         <EventWeatherForecast event={event} weatherSnapshots={weatherSnapshots} />

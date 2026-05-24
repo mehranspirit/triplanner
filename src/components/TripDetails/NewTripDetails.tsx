@@ -9,11 +9,13 @@ import { Sparkles, Clock } from 'lucide-react';
 import TripDetailsToolbar from '@/components/TripDetails/TripDetailsToolbar';
 import MobileTripActionsFab from '@/components/TripDetails/MobileTripActionsFab';
 import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
-import TripOverviewCard from '@/components/TripDetails/TripOverviewCard';
+import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext';
 import TripPanelHost from '@/components/TripDetails/panels/TripPanelHost';
 import { useTripPanelManager } from '@/components/TripDetails/hooks/useTripPanelManager';
 import TripTimeline from '@/components/TripDetails/timeline/TripTimeline';
 import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/imports/TravelImportDialog';
+import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
+import { ProactiveContextCard as ProactiveContextCardData } from '@/components/TripDetails/context/tripContextTypes';
 
 // Import the new specific modals
 import EventFormModalRouter from './EventFormModalRouter';
@@ -173,6 +175,17 @@ const NewTripDetails: React.FC = () => {
   const visibleTripInsights = useMemo(
     () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
     [tripInsights, dismissedInsightIds]
+  );
+  const contextSignals = useMemo(
+    () => trip ? getTripContextSignals({
+      trip,
+      notifications,
+      travelImports,
+      insights: visibleTripInsights,
+      weatherSnapshots,
+      flightStatusSnapshots,
+    }) : null,
+    [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots]
   );
   const unreadNotificationCount = notifications.filter(notification => !notification.readAt).length;
   const handledAssistantChecklistItemIds = assistantSuggestionFeedback
@@ -942,6 +955,31 @@ const NewTripDetails: React.FC = () => {
     'arrival', 'departure', 'stay', 'flight', 'train', 'bus', 'rental_car', 'activity', 'destination'
   ];
 
+  const handleProactiveCardAction = (card: ProactiveContextCardData) => {
+    switch (card.type) {
+      case 'next_up':
+        if (card.event) handleEditEventClick(card.event);
+        break;
+      case 'travel_day':
+      case 'travel_status':
+      case 'urgent_insights':
+        openPanel('today');
+        break;
+      case 'alerts':
+        openPanel('notifications');
+        fetchNotifications(false);
+        break;
+      case 'pending_imports':
+        setIsAIParseModalOpen(true);
+        break;
+      case 'location_issues':
+        handleImproveLocations();
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/70">
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
@@ -997,6 +1035,7 @@ const NewTripDetails: React.FC = () => {
             deletingEvents={deletingEvents}
             weatherSnapshots={weatherSnapshots}
             flightStatusSnapshots={flightStatusSnapshots}
+            notifications={notifications}
             onEditEvent={handleEditEventClick}
             onDeleteEvent={handleDeleteEvent}
             onStatusChange={handleStatusChange}
@@ -1005,25 +1044,11 @@ const NewTripDetails: React.FC = () => {
         </main>
 
         <div className="space-y-4">
-          <TripOverviewCard
-            trip={trip}
-            insights={visibleTripInsights}
-            canEdit={canEdit}
-            unreadNotificationCount={unreadNotificationCount}
-            pendingImportCount={travelImports.filter(travelImport => ['needs_review', 'missing_info', 'duplicate'].includes(travelImport.status)).length}
-            onOpenPanel={openPanel}
-            onOpenAIImport={() => setIsAIParseModalOpen(true)}
-            onAddEvent={() => handleAddEventClick('stay')}
-          />
-          {weatherError && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-sm">
-              Weather context is unavailable right now: {weatherError}
-            </div>
-          )}
-          {flightStatusError && (
-            <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900 shadow-sm">
-              Flight status context is unavailable right now: {flightStatusError}
-            </div>
+          {contextSignals && (
+            <ProactiveTripContext
+              signals={contextSignals}
+              onCardAction={handleProactiveCardAction}
+            />
           )}
         </div>
       </div>
