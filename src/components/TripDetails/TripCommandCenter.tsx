@@ -87,9 +87,9 @@ const getActionHandler = (
 const EventSummary: React.FC<{ label: string; event: Event | null }> = ({ label, event }) => {
   if (!event) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
-          <CalendarClock className="h-4 w-4" />
+      <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white p-3 shadow-sm ring-1 ring-gray-100">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-500">
+          <CalendarClock className="h-4 w-4 flex-shrink-0" />
           {label}
         </div>
         <p className="mt-2 text-sm text-gray-500">Nothing scheduled.</p>
@@ -101,21 +101,21 @@ const EventSummary: React.FC<{ label: string; event: Event | null }> = ({ label,
   const location = getEventLocationLabel(event);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
-        <CalendarClock className="h-4 w-4" />
+    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white p-3 shadow-sm ring-1 ring-gray-100">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-500">
+        <CalendarClock className="h-4 w-4 flex-shrink-0" />
         {label}
       </div>
-      <p className="mt-2 font-semibold text-gray-900">{getEventDisplayName(event)}</p>
-      <div className="mt-2 space-y-1 text-sm text-gray-600">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4" />
-          <span>{formatEventDateTime(start)}</span>
+      <p className="mt-2 truncate text-sm font-semibold text-gray-900">{getEventDisplayName(event)}</p>
+      <div className="mt-2 space-y-1 text-xs text-gray-600">
+        <div className="flex min-w-0 items-center gap-2">
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span className="min-w-0 truncate">{formatEventDateTime(start)}</span>
         </div>
         {location && (
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4" />
-            <span className="truncate">{location}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <MapPin className="h-4 w-4 flex-shrink-0" />
+            <span className="min-w-0 truncate">{location}</span>
           </div>
         )}
       </div>
@@ -146,19 +146,19 @@ const ExpenseStatusCard: React.FC<{
   const isOwedMoney = userBalances.some(([, balance]) => balance > 0);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
-        <DollarSign className="h-4 w-4" />
+    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white p-3 shadow-sm ring-1 ring-gray-100">
+      <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-500">
+        <DollarSign className="h-4 w-4 flex-shrink-0" />
         Expenses
       </div>
       {isLoading ? (
         <p className="mt-2 text-sm text-gray-500">Loading balances...</p>
       ) : summary ? (
         <>
-          <p className="mt-2 font-semibold text-gray-900">
+          <p className="mt-2 text-sm font-semibold text-gray-900">
             {owesMoney ? 'You owe' : isOwedMoney ? 'You are owed' : 'You are balanced'}
           </p>
-          <p className={`mt-1 text-sm ${owesMoney ? 'text-red-600' : isOwedMoney ? 'text-green-600' : 'text-gray-600'}`}>
+          <p className={`mt-1 truncate text-xs ${owesMoney ? 'text-red-600' : isOwedMoney ? 'text-green-600' : 'text-gray-600'}`}>
             {balanceLabel}
           </p>
         </>
@@ -179,7 +179,7 @@ const InsightRow: React.FC<{
   onDismiss: () => void;
 }> = ({ insight, canEdit, onAction, onDismiss }) => {
   return (
-    <div className={cn('rounded-lg border p-3', severityStyles[insight.severity])}>
+    <div className={cn('rounded-xl border p-3 shadow-sm', severityStyles[insight.severity])}>
       <div className="flex items-start gap-3">
         <AlertCircle className={cn('mt-0.5 h-4 w-4 flex-shrink-0', severityIconStyles[insight.severity])} />
         <div className="min-w-0 flex-1">
@@ -223,7 +223,7 @@ const CollapsiblePanel: React.FC<{
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white">
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm ring-1 ring-gray-100">
       <button
         type="button"
         className="flex w-full items-start justify-between gap-3 p-4 text-left"
@@ -292,7 +292,7 @@ const AssistantBriefingCard: React.FC<{
   };
 
   return (
-    <div className="rounded-lg border border-purple-100 bg-white p-4">
+    <div className="rounded-xl border border-purple-100 bg-white p-4 shadow-sm ring-1 ring-purple-50">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-purple-800">AI trip briefing</p>
@@ -393,7 +393,7 @@ const AskMyTripCard: React.FC<{
   };
 
   return (
-    <div className="rounded-lg border border-indigo-100 bg-white p-4">
+    <div className="rounded-xl border border-indigo-100 bg-white p-4 shadow-sm ring-1 ring-indigo-50">
       <div className="flex items-center gap-2 text-sm font-semibold text-indigo-800">
         <Lightbulb className="h-4 w-4" />
         Ask My Trip
@@ -517,7 +517,7 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
   }, [trip._id]);
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 md:p-5">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-purple-100 bg-white p-4 shadow-xl ring-1 ring-purple-50 md:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-purple-700">
@@ -545,7 +545,7 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
             <CalendarClock className="h-4 w-4 text-gray-500" />
             <h3 className="text-sm font-semibold text-gray-900">Planning snapshot</h3>
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid min-w-0 grid-cols-1 gap-3">
             <EventSummary label="Now" event={currentEvent} />
             <EventSummary label="Next" event={nextEvent} />
             <ExpenseStatusCard

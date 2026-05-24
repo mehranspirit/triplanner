@@ -1,7 +1,5 @@
 const { randomUUID } = require('crypto');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-const MODEL_NAME = 'gemini-2.5-flash';
+const { generateAiText, getModelName } = require('./aiProvider');
 
 const extractJsonObject = (text) => {
   const stripped = text
@@ -364,26 +362,15 @@ const toEvent = (eventData, user) => {
 };
 
 const parseEventText = async ({ text, trip, user }) => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: buildPrompt({ text, trip }) }] }],
-    generationConfig: {
-      temperature: 0.1,
-      topK: 1,
-      topP: 0.1,
-      maxOutputTokens: 4096,
-      responseMimeType: 'application/json',
-    },
+  const aiResponse = await generateAiText({
+    prompt: buildPrompt({ text, trip }),
+    temperature: 0.1,
+    topK: 1,
+    topP: 0.1,
+    maxOutputTokens: 4096,
+    responseMimeType: 'application/json',
   });
-
-  const response = await result.response;
-  const responseText = response.text();
+  const responseText = aiResponse.text;
 
   if (!responseText) {
     throw new Error('Empty response from AI');
@@ -398,12 +385,13 @@ const parseEventText = async ({ text, trip, user }) => {
     .map((eventData) => normalizeYearlessDatesToTripRange({ eventData, trip, text }))
     .map((eventData) => toEvent(eventData, user));
   return {
-    model: MODEL_NAME,
+    provider: aiResponse.provider,
+    model: aiResponse.model,
     events,
   };
 };
 
 module.exports = {
-  MODEL_NAME,
+  MODEL_NAME: getModelName(),
   parseEventText,
 };

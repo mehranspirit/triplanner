@@ -28,7 +28,6 @@ import Avatar from './Avatar';
 //import EventForm from './EventForm';
 import { AISuggestionsModal } from './AISuggestionsModal';
 import { AISuggestionsDisplay } from './AISuggestionsDisplay';
-import { generateAISuggestions, generateDestinationSuggestions, parseEventFromText } from '../services/aiService';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import { TrashIcon } from '@heroicons/react/24/solid';
 import { UserGroupIcon } from '@heroicons/react/24/solid';
@@ -2748,7 +2747,7 @@ const TripDetails: React.FC = () => {
     if (!trip || !user) return;
 
     try {
-      const suggestions = await generateAISuggestions({
+      const suggestions = await api.generateAISuggestions({
         places,
         activities,
         tripDates: {
@@ -2934,7 +2933,7 @@ const TripDetails: React.FC = () => {
       setIsGeneratingDestinations(true);
       //console.log('Total events to process:', trip.events.length);
       
-      const suggestions = await generateDestinationSuggestions(
+      const suggestions = await api.generateDestinationSuggestions(
         trip.events,
         { 
           startDate: startDate.toISOString(), 
@@ -3014,7 +3013,7 @@ const TripDetails: React.FC = () => {
 
     setIsParsingText(true);
     try {
-      const parsedEvents = await parseEventFromText({
+      const parsedEvents = await api.parseEventFromText({
         text: eventText,
         trip: {
           name: trip.name,

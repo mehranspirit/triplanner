@@ -1,9 +1,8 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const WeatherSnapshot = require('../models/WeatherSnapshot');
 const FlightStatusSnapshot = require('../models/FlightStatusSnapshot');
 const Notification = require('../models/Notification');
+const { generateAiText, hasConfiguredAiProvider } = require('./aiProvider');
 
-const MODEL_NAME = process.env.AI_MODEL_PRIMARY || 'gemini-2.5-flash';
 const SEVERITIES = new Set(['info', 'warning', 'critical']);
 const ASSISTANT_ACTION_TARGETS = new Set(['event', 'checklist', 'add_event', 'today', 'expenses', 'ai_import']);
 const TODAY_ACTION_TARGETS = new Set(['event', 'checklist', 'today']);
@@ -772,27 +771,20 @@ const parseTripAnswer = (responseText) => {
 };
 
 const generateTripAssistantBriefing = async ({ trip }) => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured');
+  if (!hasConfiguredAiProvider()) {
+    throw new Error('AI provider API key is not configured');
   }
 
   const context = await buildAssistantContext(trip);
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: buildPrompt(context) }] }],
-    generationConfig: {
-      temperature: 0.2,
-      topK: 1,
-      topP: 0.2,
-      maxOutputTokens: 2048,
-      responseMimeType: 'application/json',
-    },
+  const aiResponse = await generateAiText({
+    prompt: buildPrompt(context),
+    temperature: 0.2,
+    topK: 1,
+    topP: 0.2,
+    maxOutputTokens: 2048,
+    responseMimeType: 'application/json',
   });
-
-  const response = await result.response;
-  const responseText = response.text();
+  const responseText = aiResponse.text;
 
   let briefing;
   if (!responseText) {
@@ -809,7 +801,8 @@ const generateTripAssistantBriefing = async ({ trip }) => {
   }
 
   return {
-    model: MODEL_NAME,
+    provider: aiResponse.provider,
+    model: aiResponse.model,
     generatedAt: new Date().toISOString(),
     briefing,
   };
@@ -818,8 +811,7 @@ const generateTripAssistantBriefing = async ({ trip }) => {
 const generateTripTodayBriefing = async ({ trip }) => {
   const context = await buildAssistantContext(trip);
   const todayContext = getTodayContext(context);
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasConfiguredAiProvider()) {
     return {
       model: 'deterministic',
       generatedAt: new Date().toISOString(),
@@ -827,21 +819,15 @@ const generateTripTodayBriefing = async ({ trip }) => {
     };
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: buildTodayPrompt(todayContext) }] }],
-    generationConfig: {
-      temperature: 0.2,
-      topK: 1,
-      topP: 0.2,
-      maxOutputTokens: 1536,
-      responseMimeType: 'application/json',
-    },
+  const aiResponse = await generateAiText({
+    prompt: buildTodayPrompt(todayContext),
+    temperature: 0.2,
+    topK: 1,
+    topP: 0.2,
+    maxOutputTokens: 1536,
+    responseMimeType: 'application/json',
   });
-
-  const response = await result.response;
-  const responseText = response.text();
+  const responseText = aiResponse.text;
 
   let briefing;
   if (!responseText) {
@@ -858,7 +844,8 @@ const generateTripTodayBriefing = async ({ trip }) => {
   }
 
   return {
-    model: MODEL_NAME,
+    provider: aiResponse.provider,
+    model: aiResponse.model,
     generatedAt: new Date().toISOString(),
     briefing,
   };
@@ -867,8 +854,7 @@ const generateTripTodayBriefing = async ({ trip }) => {
 const generateTripReplanBriefing = async ({ trip }) => {
   const context = await buildAssistantContext(trip);
   const todayContext = getTodayContext(context);
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasConfiguredAiProvider()) {
     return {
       model: 'deterministic',
       generatedAt: new Date().toISOString(),
@@ -876,21 +862,15 @@ const generateTripReplanBriefing = async ({ trip }) => {
     };
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: buildReplanPrompt(todayContext) }] }],
-    generationConfig: {
-      temperature: 0.2,
-      topK: 1,
-      topP: 0.2,
-      maxOutputTokens: 1536,
-      responseMimeType: 'application/json',
-    },
+  const aiResponse = await generateAiText({
+    prompt: buildReplanPrompt(todayContext),
+    temperature: 0.2,
+    topK: 1,
+    topP: 0.2,
+    maxOutputTokens: 1536,
+    responseMimeType: 'application/json',
   });
-
-  const response = await result.response;
-  const responseText = response.text();
+  const responseText = aiResponse.text;
 
   let briefing;
   if (!responseText) {
@@ -907,7 +887,8 @@ const generateTripReplanBriefing = async ({ trip }) => {
   }
 
   return {
-    model: MODEL_NAME,
+    provider: aiResponse.provider,
+    model: aiResponse.model,
     generatedAt: new Date().toISOString(),
     briefing,
   };
@@ -920,8 +901,7 @@ const answerTripQuestion = async ({ trip, question }) => {
   }
 
   const context = await buildAssistantContext(trip);
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasConfiguredAiProvider()) {
     return {
       model: 'deterministic',
       generatedAt: new Date().toISOString(),
@@ -930,21 +910,15 @@ const answerTripQuestion = async ({ trip, question }) => {
     };
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: buildAskPrompt({ context, question: trimmedQuestion }) }] }],
-    generationConfig: {
-      temperature: 0.2,
-      topK: 1,
-      topP: 0.2,
-      maxOutputTokens: 1536,
-      responseMimeType: 'application/json',
-    },
+  const aiResponse = await generateAiText({
+    prompt: buildAskPrompt({ context, question: trimmedQuestion }),
+    temperature: 0.2,
+    topK: 1,
+    topP: 0.2,
+    maxOutputTokens: 1536,
+    responseMimeType: 'application/json',
   });
-
-  const response = await result.response;
-  const responseText = response.text();
+  const responseText = aiResponse.text;
 
   let answer;
   if (!responseText) {
@@ -961,7 +935,8 @@ const answerTripQuestion = async ({ trip, question }) => {
   }
 
   return {
-    model: MODEL_NAME,
+    provider: aiResponse.provider,
+    model: aiResponse.model,
     generatedAt: new Date().toISOString(),
     question: trimmedQuestion,
     result: answer,

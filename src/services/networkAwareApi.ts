@@ -1655,5 +1655,4 @@ class NetworkAwareApiService {
 }
 
 export const networkAwareApi = new NetworkAwareApiService(); 
-export const networkAwareApi = new NetworkAwareApiService(); 
 

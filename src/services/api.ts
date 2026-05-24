@@ -119,6 +119,14 @@ interface API {
   askTripQuestion: (tripId: string, question: string) => Promise<TripQuestionAnswerResponse>;
   getAssistantSuggestionFeedback: (tripId: string) => Promise<AssistantSuggestionFeedback[]>;
   saveAssistantSuggestionFeedback: (tripId: string, data: SaveAssistantSuggestionFeedbackRequest) => Promise<AssistantSuggestionFeedback>;
+  generateAISuggestions: (request: { places: string[]; activities: string[]; tripDates: { startDate: string; endDate: string } }) => Promise<string>;
+  generateDreamTripSuggestions: (request: { places: string[]; activities: string[]; customPrompt: string }) => Promise<string>;
+  generateDestinationSuggestions: (
+    existingEvents: Event[],
+    tripDates: { startDate: string; endDate: string },
+    user: User
+  ) => Promise<Event[]>;
+  parseEventFromText: (request: { text: string; trip: Pick<Trip, '_id' | 'name' | 'description' | 'startDate' | 'endDate' | 'events'>; user: User }) => Promise<Event | Event[]>;
 }
 
 // Add helper after imports near top
@@ -1314,6 +1322,55 @@ export const api: API = {
       throw new Error(errorData?.message || 'Failed to save assistant feedback');
     }
     return response.json();
+  },
+
+  generateAISuggestions: async (request): Promise<string> => {
+    const response = await fetch(`${API_URL}/api/ai/travel-suggestions`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) await throwApiError(response, 'Failed to generate AI suggestions');
+    const data = await response.json();
+    return data.suggestions;
+  },
+
+  generateDreamTripSuggestions: async (request): Promise<string> => {
+    const response = await fetch(`${API_URL}/api/ai/dream-trip-suggestions`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) await throwApiError(response, 'Failed to generate dream trip suggestions');
+    const data = await response.json();
+    return data.suggestions;
+  },
+
+  generateDestinationSuggestions: async (existingEvents, tripDates, user): Promise<Event[]> => {
+    const response = await fetch(`${API_URL}/api/ai/destination-suggestions`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ existingEvents, tripDates, user }),
+    });
+    if (!response.ok) await throwApiError(response, 'Failed to generate destination suggestions');
+    const data = await response.json();
+    return data.suggestions || [];
+  },
+
+  parseEventFromText: async (request): Promise<Event | Event[]> => {
+    if (!request.trip._id) {
+      throw new Error('Trip ID is required to parse event details');
+    }
+
+    const response = await fetch(`${API_URL}/api/trips/${request.trip._id}/parse-event`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ text: request.text }),
+    });
+    if (!response.ok) await throwApiError(response, 'Failed to parse event details. Please try again or enter details manually.');
+    const data = await response.json();
+    const events = data.events || [];
+    return events.length === 1 ? events[0] : events;
   },
 };
 

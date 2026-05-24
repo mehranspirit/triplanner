@@ -17,6 +17,7 @@ const expenseRoutes = require('./routes/expenses');
 const notesRoutes = require('./routes/notes');
 const importsRoutes = require('./routes/imports');
 const aiParserRoutes = require('./routes/aiParser');
+const aiGenerationRoutes = require('./routes/aiGeneration');
 const notificationRoutes = require('./routes/notifications');
 const geocodingRoutes = require('./routes/geocoding');
 const weatherRoutes = require('./routes/weather');
@@ -206,6 +207,9 @@ app.use('/api', importsRoutes);
 
 // Mount server-side AI parser routes
 app.use('/api', aiParserRoutes);
+
+// Mount server-side AI generation routes
+app.use('/api', aiGenerationRoutes);
 
 // Mount in-app notification routes
 app.use('/api', notificationRoutes);

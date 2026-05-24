@@ -49,7 +49,6 @@ import DepartureFormModal from './EventFormModals/DepartureFormModal';
 
 // Import TripActions component
 import TripActions from './TripActions';
-import { parseEventFromText, generateDestinationSuggestions } from '@/services/aiService';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TripLoading from '@/components/ui/trip-loading';
@@ -865,7 +864,7 @@ const NewTripDetails: React.FC = () => {
     setParseError(null);
     
     try {
-      const parsedEvents = await parseEventFromText({
+      const parsedEvents = await api.parseEventFromText({
         text: parseText,
         trip: {
           _id: trip._id,
@@ -1017,7 +1016,7 @@ const NewTripDetails: React.FC = () => {
       const startDate = trip.startDate || sortedEvents[0]?.startDate || new Date().toISOString();
       const endDate = trip.endDate || sortedEvents[sortedEvents.length - 1]?.endDate || startDate;
 
-      const suggestions = await generateDestinationSuggestions(
+      const suggestions = await api.generateDestinationSuggestions(
         trip.events,
         { startDate, endDate },
         {
@@ -1524,11 +1523,11 @@ const NewTripDetails: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 space-y-6 py-6">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       {/* Header with Trip Info and Actions */}
       <div className="relative">
         {/* Background Image with Overlay */}
-        <div className="w-full h-[200px] md:h-[250px] relative rounded-lg overflow-hidden">
+        <div className="relative h-[200px] w-full overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5 md:h-[250px]">
           <img
             src={trip.thumbnailUrl || tripThumbnail}
             alt={trip.name}
@@ -1581,52 +1580,8 @@ const NewTripDetails: React.FC = () => {
         </div>
       </div>
 
-      <TripCommandCenter
-        trip={trip}
-        insights={visibleTripInsights}
-        canEdit={canEdit}
-        currentUserId={user?._id}
-        onOpenAIImport={() => setIsAIParseModalOpen(true)}
-        onOpenChecklist={() => setShowChecklist(true)}
-        onOpenExpenses={() => navigate(`/trips/${trip._id}/expenses`)}
-        onAddEvent={(eventType = 'stay') => handleAddEventClick(eventType)}
-        onEditEvent={(eventId) => {
-          const event = trip.events.find(tripEvent => tripEvent.id === eventId);
-          if (event) {
-            handleEditEventClick(event);
-          }
-        }}
-        onDismissInsight={handleDismissInsight}
-        dismissedInsightCount={dismissedInsightIds.length}
-        onRestoreDismissedInsights={handleRestoreDismissedInsights}
-        assistantBriefing={assistantBriefing?.briefing}
-        assistantBriefingGeneratedAt={assistantBriefing?.generatedAt}
-        isGeneratingAssistantBriefing={isGeneratingAssistantBriefing}
-        assistantBriefingError={assistantBriefingError}
-        onGenerateAssistantBriefing={handleGenerateAssistantBriefing}
-        onAssistantAction={handleAssistantAction}
-        onAcceptAssistantChecklistItem={handleAcceptAssistantChecklistItem}
-        onDismissAssistantChecklistItem={handleDismissAssistantChecklistItem}
-        getAssistantChecklistItemId={getAssistantChecklistItemId}
-        handledAssistantChecklistItemIds={handledAssistantChecklistItemIds}
-        tripQuestionAnswer={tripQuestionAnswer}
-        isAskingTripQuestion={isAskingTripQuestion}
-        tripQuestionError={tripQuestionError}
-        onAskTripQuestion={handleAskTripQuestion}
-      />
-      {weatherError && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          Weather context is unavailable right now: {weatherError}
-        </div>
-      )}
-      {flightStatusError && (
-        <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
-          Flight status context is unavailable right now: {flightStatusError}
-        </div>
-      )}
-      
       {/* Add Event & View Options */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div className="sticky top-0 z-40 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           {canEdit && (
             <DropdownMenu>
@@ -1729,6 +1684,51 @@ const NewTripDetails: React.FC = () => {
               </span>
             )}
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowChecklist(true);
+              setShowNotifications(false);
+              setShowToday(false);
+              setShowNotes(false);
+              setShowMap(false);
+            }}
+          >
+            <CheckSquare className="mr-2 h-4 w-4 text-green-500" />
+            Checklist
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowNotes(true);
+              setShowNotifications(false);
+              setShowToday(false);
+              setShowChecklist(false);
+              setShowMap(false);
+            }}
+          >
+            <FileText className="mr-2 h-4 w-4 text-purple-500" />
+            Notes
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowMap(true);
+              setShowNotifications(false);
+              setShowToday(false);
+              setShowChecklist(false);
+              setShowNotes(false);
+            }}
+          >
+            <MapIcon className="mr-2 h-4 w-4 text-blue-500" />
+            Map
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/trips/${trip._id}/expenses`)}
+          >
+            Expenses
+          </Button>
         </div>
         <div className="flex items-center space-x-2">
           <Label htmlFor="condensed-view" className="cursor-pointer">Condensed View</Label>
@@ -1740,11 +1740,17 @@ const NewTripDetails: React.FC = () => {
         </div>
       </div>
 
-
-
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+        <main className="min-w-0 space-y-6">
       {/* Events Timeline */}
-      <div className="bg-white shadow-sm rounded-lg p-4 md:p-6">
-        <h2 className="text-xl font-semibold mb-4">Trip Timeline</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xl ring-1 ring-gray-100 md:p-6">
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-blue-700">Main itinerary</p>
+            <h2 className="text-2xl font-semibold text-gray-950">Trip Timeline</h2>
+          </div>
+          <p className="text-sm text-gray-500">{sortedEvents.length} event{sortedEvents.length === 1 ? '' : 's'}</p>
+        </div>
         {outOfRangeEvents.length > 0 && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
             <p className="font-semibold">Some events are outside this trip&apos;s dates</p>
@@ -1777,8 +1783,8 @@ const NewTripDetails: React.FC = () => {
 
                   return Object.entries(groupedEvents).map(([dateKey, events]) => (
                     <div key={dateKey} className="relative">
-                      <div className="sticky top-0 bg-white z-50 py-2 mb-4">
-                        <div className="inline-block px-4 py-2 bg-gray-100 rounded-full text-sm font-semibold text-gray-800 shadow-sm border border-gray-200">
+                      <div className="sticky top-20 z-30 mb-4 bg-white/90 py-2 backdrop-blur">
+                        <div className="inline-block rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-900 shadow-sm">
                           {(() => {
                             try {
                               // Handle both ISO and simple YYYY-MM-DD formats
@@ -1855,13 +1861,61 @@ const NewTripDetails: React.FC = () => {
           )}
         </div>
       </div>
+        </main>
+
+        <aside className="space-y-4 lg:sticky lg:top-24">
+          <TripCommandCenter
+            trip={trip}
+            insights={visibleTripInsights}
+            canEdit={canEdit}
+            currentUserId={user?._id}
+            onOpenAIImport={() => setIsAIParseModalOpen(true)}
+            onOpenChecklist={() => setShowChecklist(true)}
+            onOpenExpenses={() => navigate(`/trips/${trip._id}/expenses`)}
+            onAddEvent={(eventType = 'stay') => handleAddEventClick(eventType)}
+            onEditEvent={(eventId) => {
+              const event = trip.events.find(tripEvent => tripEvent.id === eventId);
+              if (event) {
+                handleEditEventClick(event);
+              }
+            }}
+            onDismissInsight={handleDismissInsight}
+            dismissedInsightCount={dismissedInsightIds.length}
+            onRestoreDismissedInsights={handleRestoreDismissedInsights}
+            assistantBriefing={assistantBriefing?.briefing}
+            assistantBriefingGeneratedAt={assistantBriefing?.generatedAt}
+            isGeneratingAssistantBriefing={isGeneratingAssistantBriefing}
+            assistantBriefingError={assistantBriefingError}
+            onGenerateAssistantBriefing={handleGenerateAssistantBriefing}
+            onAssistantAction={handleAssistantAction}
+            onAcceptAssistantChecklistItem={handleAcceptAssistantChecklistItem}
+            onDismissAssistantChecklistItem={handleDismissAssistantChecklistItem}
+            getAssistantChecklistItemId={getAssistantChecklistItemId}
+            handledAssistantChecklistItemIds={handledAssistantChecklistItemIds}
+            tripQuestionAnswer={tripQuestionAnswer}
+            isAskingTripQuestion={isAskingTripQuestion}
+            tripQuestionError={tripQuestionError}
+            onAskTripQuestion={handleAskTripQuestion}
+          />
+          {weatherError && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-sm">
+              Weather context is unavailable right now: {weatherError}
+            </div>
+          )}
+          {flightStatusError && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900 shadow-sm">
+              Flight status context is unavailable right now: {flightStatusError}
+            </div>
+          )}
+        </aside>
+      </div>
 
       {/* Notifications Toggle Button */}
       <Button
         variant="outline"
         size="icon"
         className={cn(
-          "fixed bottom-[318px] right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          "fixed bottom-[318px] right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
           showNotifications ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-white hover:bg-gray-50"
         )}
         onClick={() => {
@@ -1894,7 +1948,7 @@ const NewTripDetails: React.FC = () => {
         variant="outline"
         size="icon"
         className={cn(
-          "fixed bottom-[244px] right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          "fixed bottom-[244px] right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
           showToday ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
         )}
         onClick={() => {
@@ -1919,7 +1973,7 @@ const NewTripDetails: React.FC = () => {
         variant="outline"
         size="icon"
         className={cn(
-          "fixed bottom-[170px] right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          "fixed bottom-[170px] right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
           showChecklist ? "bg-green-500 text-white hover:bg-green-600" : "bg-white hover:bg-gray-50"
         )}
         onClick={() => {
@@ -1944,7 +1998,7 @@ const NewTripDetails: React.FC = () => {
         variant="outline"
         size="icon"
         className={cn(
-          "fixed bottom-24 right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          "fixed bottom-24 right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
           showNotes ? "bg-purple-500 text-white hover:bg-purple-600" : "bg-white hover:bg-gray-50"
         )}
         onClick={() => {
@@ -1969,7 +2023,7 @@ const NewTripDetails: React.FC = () => {
         variant="outline"
         size="icon"
         className={cn(
-          "fixed bottom-6 right-6 z-[150] rounded-full shadow-lg transition-all duration-200 w-14 h-14",
+          "fixed bottom-6 right-6 z-[150] h-14 w-14 rounded-full shadow-lg transition-all duration-200 lg:hidden",
           showMap ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white hover:bg-gray-50"
         )}
         onClick={() => {

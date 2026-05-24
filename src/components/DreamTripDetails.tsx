@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { User } from '../types/eventTypes';
 import { DreamTripAISuggestionsModal } from './DreamTripAISuggestionsModal';
 import { AISuggestionsDisplay } from './AISuggestionsDisplay';
-import { generateDreamTripSuggestions } from '../services/aiService';
+import { api } from '../services/api';
 import { AISuggestionHistory } from '@/types/eventTypes';
 import { SparklesIcon, PencilIcon, TrashIcon, ArrowRightOnRectangleIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 
@@ -471,7 +471,7 @@ const DreamTripDetails: React.FC = () => {
     if (!trip || !user) return;
 
     try {
-      const suggestions = await generateDreamTripSuggestions({
+      const suggestions = await api.generateDreamTripSuggestions({
         places,
         activities,
         customPrompt,

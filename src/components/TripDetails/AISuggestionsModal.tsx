@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sparkles, Plus, X, History } from 'lucide-react';
-import { generateAISuggestions } from '@/services/aiService';
 import { useTrip } from '@/context/TripContext';
 import { api } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
@@ -116,7 +115,7 @@ const AISuggestionsModal: React.FC<AISuggestionsModalProps> = ({
       };
 
       // Generate AI suggestions using only the manually entered places and activities
-      const aiSuggestions = await generateAISuggestions({
+      const aiSuggestions = await api.generateAISuggestions({
         places: additionalPlaces,
         activities: additionalActivities,
         tripDates
