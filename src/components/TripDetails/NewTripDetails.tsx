@@ -29,6 +29,7 @@ import { hashText } from '@/utils/hash';
 import { NotificationPreference, TripNotification } from '@/types/notificationTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { WeatherSnapshot } from '@/types/weatherTypes';
+import { ExpenseSummary } from '@/types/expenseTypes';
 import { TravelImport, TravelImportStatus } from '@/types/travelImportTypes';
 import {
   AssistantActionTarget,
@@ -129,6 +130,7 @@ const NewTripDetails: React.FC = () => {
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [flightStatusSnapshots, setFlightStatusSnapshots] = useState<FlightStatusSnapshot[]>([]);
   const [flightStatusError, setFlightStatusError] = useState<string | null>(null);
+  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
   const [assistantBriefing, setAssistantBriefing] = useState<TripAssistantBriefingResponse | null>(null);
   const [assistantBriefingError, setAssistantBriefingError] = useState<string | null>(null);
   const [isGeneratingAssistantBriefing, setIsGeneratingAssistantBriefing] = useState(false);
@@ -458,6 +460,34 @@ const NewTripDetails: React.FC = () => {
     if (!trip?._id || !isAIParseModalOpen) return;
     fetchTravelImports();
   }, [trip?._id, isAIParseModalOpen]);
+
+  useEffect(() => {
+    if (!trip?._id) {
+      setExpenseSummary(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchExpenseSummary = async () => {
+      try {
+        const summary = await networkAwareApi.getExpenseSummary(trip._id);
+        if (isMounted) {
+          setExpenseSummary(summary || null);
+        }
+      } catch (error) {
+        console.warn('Failed to load trip expense summary:', error);
+        if (isMounted) {
+          setExpenseSummary(null);
+        }
+      }
+    };
+
+    fetchExpenseSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [trip?._id, trip?.updatedAt]);
 
   useEffect(() => {
     if (!trip?._id) return;
@@ -990,6 +1020,7 @@ const NewTripDetails: React.FC = () => {
         isOwner={isOwner}
         canEdit={canEdit}
         descriptionHtml={processText(trip.description)}
+        expenseSummary={expenseSummary}
         onExport={handleExportHTML}
         onTripUpdate={async (updatedTrip) => {
           try {

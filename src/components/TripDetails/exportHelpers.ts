@@ -20,10 +20,559 @@ const getExportDateKey = (event: Event): string => {
   return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
 };
 
+export type ItineraryExportMode = 'detailed' | 'compact';
+
+const getExportStyles = (mode: ItineraryExportMode): string => {
+  if (mode === 'compact') {
+    return `
+          body {
+            background: #f1f5f9;
+            color: #0f172a;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.35;
+            margin: 0 auto;
+            max-width: 880px;
+            padding: 16px;
+          }
+          .page-shell {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+            padding: 18px;
+          }
+          .trip-kicker,
+          .timeline-label {
+            color: #1d4ed8;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            margin: 0;
+            text-transform: uppercase;
+          }
+          .trip-title {
+            color: #020617;
+            font-size: 1.55rem;
+            line-height: 1.15;
+            margin: 2px 0 0;
+          }
+          .trip-description {
+            color: #475569;
+            font-size: 0.86rem;
+            margin: 6px 0 0;
+            max-width: 680px;
+          }
+          .timeline-header {
+            align-items: center;
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+            margin: 16px 0 12px;
+          }
+          .timeline-title {
+            color: #020617;
+            font-size: 1.15rem;
+            margin: 0;
+          }
+          .event-count {
+            background: #f1f5f9;
+            border-radius: 999px;
+            color: #475569;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 4px 9px;
+            white-space: nowrap;
+          }
+          .date-group {
+            border-left: 1px solid #bfdbfe;
+            margin-left: 10px;
+            padding: 0 0 8px 18px;
+            position: relative;
+          }
+          .date-header {
+            align-items: center;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+            display: inline-flex;
+            gap: 8px;
+            margin: 0 0 8px -29px;
+            padding: 5px 10px;
+          }
+          .date-dot,
+          .timeline-point {
+            background: #cbd5e1;
+            border-radius: 999px;
+          }
+          .date-dot {
+            height: 9px;
+            width: 9px;
+          }
+          .date-weekday {
+            color: #0f172a;
+            font-size: 0.78rem;
+            font-weight: 800;
+            margin: 0;
+          }
+          .date-value {
+            color: #64748b;
+            font-size: 0.68rem;
+            margin: 0;
+          }
+          .event-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+            margin-bottom: 8px;
+            overflow: hidden;
+            position: relative;
+          }
+          .event-card.exploring {
+            background: #fffbeb;
+            border-color: #fde68a;
+          }
+          .timeline-point {
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 2px #f1f5f9;
+            height: 9px;
+            left: -23px;
+            position: absolute;
+            top: 18px;
+            width: 9px;
+          }
+          .event-thumbnail {
+            border-radius: 10px;
+            flex: 0 0 64px;
+            height: 64px;
+            object-fit: cover;
+            width: 64px;
+          }
+          .event-content {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+          }
+          .event-body {
+            min-width: 0;
+          }
+          .event-header {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 4px;
+          }
+          .event-icon {
+            align-items: center;
+            background: #f8fafc;
+            border-radius: 999px;
+            display: flex;
+            height: 26px;
+            justify-content: center;
+            width: 26px;
+          }
+          .event-type,
+          .status-badge,
+          .time-chip {
+            border-radius: 999px;
+            font-size: 0.66rem;
+            font-weight: 700;
+            padding: 2px 6px;
+          }
+          .event-type {
+            background: #eff6ff;
+            color: #1d4ed8;
+            text-transform: capitalize;
+          }
+          .status-badge {
+            background: #dcfce7;
+            color: #166534;
+          }
+          .status-badge.exploring {
+            background: #fef3c7;
+            color: #92400e;
+          }
+          .time-chip {
+            background: #f1f5f9;
+            color: #475569;
+          }
+          .event-title {
+            color: #020617;
+            font-size: 0.95rem;
+            font-weight: 800;
+            margin: 0;
+          }
+          .event-details {
+            color: #64748b;
+            display: grid;
+            font-size: 0.78rem;
+            gap: 3px 10px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 6px;
+          }
+          .event-detail-item {
+            display: flex;
+            gap: 4px;
+            min-width: 0;
+          }
+          .event-detail-label {
+            color: #334155;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .event-detail-value {
+            color: #64748b;
+            min-width: 0;
+          }
+          .event-notes,
+          .event-description {
+            border-top: 1px solid #e2e8f0;
+            color: #475569;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            margin-top: 7px;
+            padding-top: 6px;
+          }
+          .event-notes {
+            font-style: italic;
+          }
+          a {
+            color: #1d4ed8;
+            text-decoration: none;
+          }
+          a:hover {
+            text-decoration: underline;
+          }
+          @media (max-width: 640px) {
+            body {
+              padding: 12px;
+            }
+            .page-shell {
+              padding: 18px;
+            }
+            .event-content {
+              flex-direction: column;
+            }
+            .event-thumbnail {
+              height: 150px;
+              width: 100%;
+            }
+            .event-details {
+              grid-template-columns: 1fr;
+            }
+          }
+          @media print {
+            @page {
+              margin: 0.45in;
+            }
+            body {
+              background: #ffffff;
+              padding: 0;
+              max-width: none;
+            }
+            .page-shell {
+              border: 0;
+              border-radius: 0;
+              box-shadow: none;
+              padding: 0;
+            }
+            .trip-title {
+              font-size: 1.35rem;
+            }
+            .timeline-header {
+              margin: 12px 0 8px;
+            }
+            .date-group {
+              padding-bottom: 6px;
+            }
+            .date-header {
+              margin-bottom: 6px;
+            }
+            .event-card {
+              margin-bottom: 6px;
+            }
+            .event-content {
+              padding: 8px;
+            }
+            .event-card,
+            .date-header {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+          }
+    `;
+  }
+
+  return `
+          body {
+            background: #f1f5f9;
+            color: #0f172a;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.5;
+            margin: 0 auto;
+            max-width: 960px;
+            padding: 24px;
+          }
+          .page-shell {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            box-shadow: 0 16px 48px rgba(15, 23, 42, 0.1);
+            padding: 28px;
+          }
+          .trip-kicker,
+          .timeline-label {
+            color: #1d4ed8;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            margin: 0;
+            text-transform: uppercase;
+          }
+          .trip-title {
+            color: #020617;
+            font-size: 2rem;
+            line-height: 1.2;
+            margin: 4px 0 0;
+          }
+          .trip-description {
+            color: #475569;
+            font-size: 0.95rem;
+            margin: 10px 0 0;
+            max-width: 720px;
+          }
+          .timeline-header {
+            align-items: center;
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            margin: 24px 0 16px;
+          }
+          .timeline-title {
+            color: #020617;
+            font-size: 1.35rem;
+            margin: 0;
+          }
+          .event-count {
+            background: #f1f5f9;
+            border-radius: 999px;
+            color: #475569;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            white-space: nowrap;
+          }
+          .date-group {
+            border-left: 2px solid #bfdbfe;
+            margin-left: 12px;
+            padding: 0 0 14px 24px;
+            position: relative;
+          }
+          .date-header {
+            align-items: center;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06);
+            display: inline-flex;
+            gap: 10px;
+            margin: 0 0 12px -36px;
+            padding: 8px 14px;
+          }
+          .date-dot,
+          .timeline-point {
+            background: #cbd5e1;
+            border-radius: 999px;
+          }
+          .date-dot {
+            height: 11px;
+            width: 11px;
+          }
+          .date-weekday {
+            color: #0f172a;
+            font-size: 0.88rem;
+            font-weight: 800;
+            margin: 0;
+          }
+          .date-value {
+            color: #64748b;
+            font-size: 0.78rem;
+            margin: 0;
+          }
+          .event-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+            margin-bottom: 14px;
+            overflow: hidden;
+            position: relative;
+          }
+          .event-card.exploring {
+            background: #fffbeb;
+            border-color: #fde68a;
+          }
+          .timeline-point {
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 2px #f1f5f9;
+            height: 11px;
+            left: -30px;
+            position: absolute;
+            top: 24px;
+            width: 11px;
+          }
+          .event-thumbnail {
+            border-radius: 12px;
+            flex: 0 0 96px;
+            height: 96px;
+            object-fit: cover;
+            width: 96px;
+          }
+          .event-content {
+            display: flex;
+            gap: 14px;
+            padding: 16px;
+          }
+          .event-body {
+            min-width: 0;
+          }
+          .event-header {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 6px;
+          }
+          .event-icon {
+            align-items: center;
+            background: #f8fafc;
+            border-radius: 999px;
+            display: flex;
+            height: 32px;
+            justify-content: center;
+            width: 32px;
+          }
+          .event-type,
+          .status-badge,
+          .time-chip {
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 8px;
+          }
+          .event-type {
+            background: #eff6ff;
+            color: #1d4ed8;
+            text-transform: capitalize;
+          }
+          .status-badge {
+            background: #dcfce7;
+            color: #166534;
+          }
+          .status-badge.exploring {
+            background: #fef3c7;
+            color: #92400e;
+          }
+          .time-chip {
+            background: #f1f5f9;
+            color: #475569;
+          }
+          .event-title {
+            color: #020617;
+            font-size: 1.1rem;
+            font-weight: 800;
+            margin: 0;
+          }
+          .event-details {
+            color: #64748b;
+            display: grid;
+            font-size: 0.85rem;
+            gap: 5px 14px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 10px;
+          }
+          .event-detail-item {
+            display: flex;
+            gap: 5px;
+            min-width: 0;
+          }
+          .event-detail-label {
+            color: #334155;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .event-detail-value {
+            color: #64748b;
+            min-width: 0;
+          }
+          .event-notes,
+          .event-description {
+            border-top: 1px solid #e2e8f0;
+            color: #475569;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            margin-top: 10px;
+            padding-top: 8px;
+          }
+          .event-notes {
+            font-style: italic;
+          }
+          a {
+            color: #1d4ed8;
+            text-decoration: none;
+          }
+          a:hover {
+            text-decoration: underline;
+          }
+          @media (max-width: 640px) {
+            body {
+              padding: 16px;
+            }
+            .page-shell {
+              padding: 22px;
+            }
+            .event-content {
+              flex-direction: column;
+            }
+            .event-thumbnail {
+              height: 180px;
+              width: 100%;
+            }
+            .event-details {
+              grid-template-columns: 1fr;
+            }
+          }
+          @media print {
+            @page {
+              margin: 0.6in;
+            }
+            body {
+              background: #ffffff;
+              padding: 0;
+              max-width: none;
+            }
+            .page-shell {
+              border: 0;
+              border-radius: 0;
+              box-shadow: none;
+              padding: 0;
+            }
+            .event-card,
+            .date-header {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+          }
+  `;
+};
+
 // Main function to generate HTML content
 export const generateHtmlItinerary = (
   trip: Trip,
-  eventThumbnails: { [key: string]: string }
+  eventThumbnails: { [key: string]: string },
+  mode: ItineraryExportMode = 'detailed'
 ): string => {
   if (!trip) return '';
 
@@ -274,6 +823,7 @@ export const generateHtmlItinerary = (
   });
 
   // HTML Generation
+  const isCompact = mode === 'compact';
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -282,266 +832,15 @@ export const generateHtmlItinerary = (
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${encodeText(trip.name || 'Trip')} - Itinerary</title>
         <style>
-          body {
-            background: #f1f5f9;
-            color: #0f172a;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0 auto;
-            max-width: 920px;
-            padding: 28px 20px;
-          }
-          .page-shell {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 28px;
-            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.10);
-            padding: 28px;
-          }
-          .trip-kicker,
-          .timeline-label {
-            color: #1d4ed8;
-            font-size: 0.8rem;
-            font-weight: 700;
-            letter-spacing: 0.18em;
-            margin: 0;
-            text-transform: uppercase;
-          }
-          .trip-title {
-            color: #020617;
-            font-size: 2rem;
-            line-height: 1.15;
-            margin: 4px 0 0;
-          }
-          .trip-description {
-            color: #475569;
-            margin: 10px 0 0;
-            max-width: 680px;
-          }
-          .timeline-header {
-            align-items: center;
-            display: flex;
-            gap: 16px;
-            justify-content: space-between;
-            margin: 28px 0 20px;
-          }
-          .timeline-title {
-            color: #020617;
-            font-size: 1.5rem;
-            margin: 0;
-          }
-          .event-count {
-            background: #f1f5f9;
-            border-radius: 999px;
-            color: #475569;
-            font-size: 0.9rem;
-            font-weight: 600;
-            padding: 6px 12px;
-            white-space: nowrap;
-          }
-          .date-group {
-            border-left: 1px solid #bfdbfe;
-            margin-left: 14px;
-            padding: 0 0 18px 24px;
-            position: relative;
-          }
-          .date-header {
-            align-items: center;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 16px;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-            display: inline-flex;
-            gap: 12px;
-            margin: 0 0 16px -39px;
-            padding: 8px 14px;
-          }
-          .date-dot,
-          .timeline-point {
-            background: #cbd5e1;
-            border-radius: 999px;
-          }
-          .date-dot {
-            height: 12px;
-            width: 12px;
-          }
-          .date-weekday {
-            color: #0f172a;
-            font-size: 0.95rem;
-            font-weight: 800;
-            margin: 0;
-          }
-          .date-value {
-            color: #64748b;
-            font-size: 0.78rem;
-            margin: 0;
-          }
-          .event-card {
-            background-color: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 20px;
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-            margin-bottom: 16px;
-            overflow: hidden;
-            position: relative;
-          }
-          .event-card.exploring {
-            background: #fffbeb;
-            border-color: #fde68a;
-          }
-          .timeline-point {
-            border: 2px solid #ffffff;
-            box-shadow: 0 0 0 2px #f1f5f9;
-            height: 12px;
-            left: -31px;
-            position: absolute;
-            top: 24px;
-            width: 12px;
-          }
-          .event-thumbnail {
-            border-radius: 16px;
-            flex: 0 0 96px;
-            height: 96px;
-            object-fit: cover;
-            width: 96px;
-          }
-          .event-content {
-            display: flex;
-            gap: 16px;
-            padding: 16px;
-          }
-          .event-body {
-            min-width: 0;
-          }
-          .event-header {
-            align-items: center;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 6px;
-          }
-          .event-icon {
-            align-items: center;
-            background: #f8fafc;
-            border-radius: 999px;
-            display: flex;
-            height: 34px;
-            justify-content: center;
-            width: 34px;
-          }
-          .event-type,
-          .status-badge,
-          .time-chip {
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            padding: 3px 8px;
-          }
-          .event-type {
-            background: #eff6ff;
-            color: #1d4ed8;
-            text-transform: capitalize;
-          }
-          .status-badge {
-            background: #dcfce7;
-            color: #166534;
-          }
-          .status-badge.exploring {
-            background: #fef3c7;
-            color: #92400e;
-          }
-          .time-chip {
-            background: #f1f5f9;
-            color: #475569;
-          }
-          .event-title {
-            color: #020617;
-            font-size: 1.1rem;
-            font-weight: 800;
-            margin: 0;
-          }
-          .event-details {
-            color: #64748b;
-            display: grid;
-            font-size: 0.9rem;
-            gap: 6px 14px;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            margin-top: 12px;
-          }
-          .event-detail-item {
-            display: flex;
-            gap: 6px;
-            min-width: 0;
-          }
-          .event-detail-label {
-            color: #334155;
-            font-weight: 700;
-            white-space: nowrap;
-          }
-          .event-detail-value {
-            color: #64748b;
-            min-width: 0;
-          }
-          .event-notes,
-          .event-description {
-            border-top: 1px solid #e2e8f0;
-            color: #475569;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            margin-top: 12px;
-            padding-top: 10px;
-          }
-          .event-notes {
-            font-style: italic;
-          }
-          a {
-            color: #1d4ed8;
-            text-decoration: none;
-          }
-          a:hover {
-            text-decoration: underline;
-          }
-          @media (max-width: 640px) {
-            body {
-              padding: 12px;
-            }
-            .page-shell {
-              padding: 18px;
-            }
-            .event-content {
-              flex-direction: column;
-            }
-            .event-thumbnail {
-              height: 150px;
-              width: 100%;
-            }
-            .event-details {
-              grid-template-columns: 1fr;
-            }
-          }
-          @media print {
-            body {
-              background: #ffffff;
-              padding: 0;
-            }
-            .page-shell {
-              border: 0;
-              box-shadow: none;
-            }
-            .event-card,
-            .date-header {
-              break-inside: avoid;
-              page-break-inside: avoid;
-            }
-          }
+          ${getExportStyles(mode)}
         </style>
       </head>
       <body>
         <main class="page-shell">
         <header>
-          <p class="trip-kicker">Trip itinerary</p>
+          <p class="trip-kicker">Trip itinerary${isCompact ? ' · compact' : ''}</p>
           <h1 class="trip-title">${encodeText(trip.name || 'Trip')}</h1>
-          ${trip.description ? `<p class="trip-description">${processText(trip.description)}</p>` : ''}
+          ${!isCompact && trip.description ? `<p class="trip-description">${processText(trip.description)}</p>` : ''}
         </header>
         <section class="timeline-header">
           <div>
@@ -564,7 +863,9 @@ export const generateHtmlItinerary = (
               </div>
               ${sortEventsByStart(events).map(event => {
                 const thumbnail = encodeText(event.thumbnailUrl || eventThumbnails[event.id] || DEFAULT_THUMBNAILS[event.type as EventType] || DEFAULT_THUMBNAILS.default);
-                const details = getEventDetails(event);
+                const details = isCompact
+                  ? getEventDetails(event).filter(([label]) => label !== 'Status').slice(0, 4)
+                  : getEventDetails(event);
                 const statusClass = event.status === 'exploring' ? 'status-badge exploring' : 'status-badge';
                 const eventClass = event.status === 'exploring' ? 'event-card exploring' : 'event-card';
                 
@@ -572,7 +873,7 @@ export const generateHtmlItinerary = (
                   <article class="${eventClass}">
                     <span class="timeline-point"></span>
                     <div class="event-content">
-                      <img src="${thumbnail}" alt="${event.type}" class="event-thumbnail">
+                      ${!isCompact ? `<img src="${thumbnail}" alt="${event.type}" class="event-thumbnail">` : ''}
                       <div class="event-body">
                       <div class="event-header">
                         <span class="event-icon">${getEventIcon(event.type)}</span>
@@ -581,10 +882,11 @@ export const generateHtmlItinerary = (
                         ${getTimeSummary(event) ? `<span class="time-chip">${getTimeSummary(event)}</span>` : ''}
                       </div>
                       <h3 class="event-title">${getEventTitle(event)}</h3>
-                      ${event.type === 'destination' && (event as DestinationEvent).description ? 
+                      ${!isCompact && event.type === 'destination' && (event as DestinationEvent).description ? 
                         `<div class="event-description">${processText((event as DestinationEvent).description)}</div>` : ''}
-                      ${event.type === 'activity' && (event as ActivityEvent).description ? 
+                      ${!isCompact && event.type === 'activity' && (event as ActivityEvent).description ? 
                         `<div class="event-description">${processText((event as ActivityEvent).description)}</div>` : ''}
+                      ${details.length > 0 ? `
                       <div class="event-details">
                         ${details.map(([label, value]) => 
                           `<div class="event-detail-item">
@@ -592,8 +894,8 @@ export const generateHtmlItinerary = (
                             <span class="event-detail-value">${processText(value)}</span>
                           </div>`
                         ).join('')}
-                      </div>
-                      ${event.notes ? `<div class="event-notes">${processText(event.notes)}</div>` : ''}
+                      </div>` : ''}
+                      ${!isCompact && event.notes ? `<div class="event-notes">${processText(event.notes)}</div>` : ''}
                     </div>
                     </div>
                   </article>
@@ -611,8 +913,12 @@ export const generateHtmlItinerary = (
 };
 
 // Function to trigger the export
-export const exportHtml = (trip: Trip, eventThumbnails: { [key: string]: string }) => {
-  const htmlContent = generateHtmlItinerary(trip, eventThumbnails);
+export const exportHtml = (
+  trip: Trip,
+  eventThumbnails: { [key: string]: string },
+  mode: ItineraryExportMode = 'detailed'
+) => {
+  const htmlContent = generateHtmlItinerary(trip, eventThumbnails, mode);
   const blob = new Blob([htmlContent], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');

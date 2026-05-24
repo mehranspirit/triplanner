@@ -7,7 +7,7 @@ import { Trip, Event, EventType, User } from '@/types/eventTypes'; // Ensure thi
 import { useAuth } from '@/context/AuthContext';
 import { useTrip } from '@/context/TripContext'; // Corrected import
 import { getDefaultThumbnail, getEventThumbnail } from './thumbnailHelpers';
-import { exportHtml } from './exportHelpers'; // Assuming PDF export logic might be similar
+import { exportHtml, ItineraryExportMode } from './exportHelpers'; // Assuming PDF export logic might be similar
 import { v4 as uuidv4 } from 'uuid';
 
 // Placeholder for a default/unknown user - adjust as needed
@@ -206,9 +206,9 @@ export const useTripDetails = () => {
   }, [trip, handleTripUpdate, tripContext, fetchTrip]);
   
   // --- Export --- 
-  const handleExportHTML = useCallback(() => {
+  const handleExportHTML = useCallback((mode: ItineraryExportMode = 'detailed') => {
       if (!trip) return;
-      exportHtml(trip, eventThumbnails);
+      exportHtml(trip, eventThumbnails, mode);
   }, [trip, eventThumbnails]);
   
   // --- Permissions ---

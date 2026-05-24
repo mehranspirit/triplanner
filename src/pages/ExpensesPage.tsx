@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useAuth } from '../context/AuthContext';
 import { ExpenseDashboard } from '../components/expenses/ExpenseDashboard';
-import { User } from '../types/eventTypes';
+import { Trip, User } from '../types/eventTypes';
+import { api } from '../services/api';
 
 // Add the default thumbnail constant
 const PREDEFINED_THUMBNAILS = {
@@ -77,12 +78,56 @@ const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
 };
 
+const getExpenseParticipants = (trip: Trip) => {
+  const byId = new Map<string, User>();
+
+  if (trip.owner?._id) {
+    byId.set(trip.owner._id, trip.owner);
+  }
+
+  trip.collaborators
+    .filter(isCollaboratorObject)
+    .forEach((collaborator) => {
+      if (collaborator.user?._id) {
+        byId.set(collaborator.user._id, collaborator.user);
+      }
+    });
+
+  return Array.from(byId.values()).filter(participant => (
+    participant._id && participant.name && participant.email
+  ));
+};
+
 const ExpensesPage: React.FC = () => {
   const { tripId } = useParams<{ tripId: string }>();
   const { state } = useTrip();
   const { user, isLoading: authLoading } = useAuth();
-  const trip = state.trips.find(t => t._id === tripId);
+  const cachedTrip = state.trips.find(t => t._id === tripId);
+  const [freshTrip, setFreshTrip] = useState<Trip | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const trip = freshTrip || cachedTrip;
+
+  useEffect(() => {
+    if (!tripId) return;
+
+    let isMounted = true;
+    const loadFreshTrip = async () => {
+      try {
+        const latestTrip = await api.getTrip(tripId);
+        if (isMounted) {
+          setFreshTrip(latestTrip);
+        }
+      } catch (error) {
+        console.warn('Failed to refresh trip for expenses:', error);
+      }
+    };
+
+    loadFreshTrip();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tripId]);
 
   useEffect(() => {
     const loadThumbnail = async () => {
@@ -138,13 +183,7 @@ const ExpensesPage: React.FC = () => {
     );
   }
 
-  // Get all participants (owner + collaborators)
-  const participants = [
-    trip.owner,
-    ...trip.collaborators
-      .filter(isCollaboratorObject)
-      .map(c => c.user)
-  ];
+  const participants = getExpenseParticipants(trip);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -1,11 +1,13 @@
 import React from 'react';
 import { format } from 'date-fns';
-import { CalendarDays, CheckCircle2, Clock3, Users } from 'lucide-react';
+import { CalendarDays, Clock3, CreditCard, Users } from 'lucide-react';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripActions from './TripActions';
 import { Trip } from '@/types/eventTypes';
+import { ExpenseSummary } from '@/types/expenseTypes';
 import { cn } from '@/lib/utils';
 import { getTripStatusSummary } from '@/services/tripStatus';
+import { ItineraryExportMode } from './exportHelpers';
 
 interface TripDetailsHeroProps {
   trip: Trip;
@@ -14,7 +16,8 @@ interface TripDetailsHeroProps {
   isOwner: boolean;
   canEdit: boolean;
   descriptionHtml: string;
-  onExport: () => void;
+  expenseSummary?: ExpenseSummary | null;
+  onExport: (mode: ItineraryExportMode) => void;
   onTripUpdate: (trip: Trip) => Promise<void>;
 }
 
@@ -35,6 +38,48 @@ const formatDateRange = (startDate?: string | Date | null, endDate?: string | Da
   }
 
   return [startDate, endDate].filter(Boolean).join(' - ');
+};
+
+const formatCurrency = (amount: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: Math.abs(amount) >= 100 ? 0 : 2,
+    }).format(Math.abs(amount));
+  } catch {
+    return `${currency} ${Math.abs(amount).toFixed(2)}`;
+  }
+};
+
+const getUserCostStat = (summary: ExpenseSummary | null | undefined, currentUserId?: string) => {
+  if (!summary || !currentUserId) {
+    return 'No expenses yet';
+  }
+
+  if (summary.perCurrencyBalances && Object.keys(summary.perCurrencyBalances).length > 0) {
+    const balances = Object.entries(summary.perCurrencyBalances)
+      .map(([currency, currencyBalances]) => ({
+        currency,
+        balance: Number(currencyBalances[currentUserId]) || 0,
+      }))
+      .filter(({ balance }) => Math.abs(balance) >= 0.01);
+
+    if (balances.length === 0) return 'Settled up';
+    if (balances.length > 1) return `${balances.length} balances`;
+
+    const [{ currency, balance }] = balances;
+    return balance < 0
+      ? `You owe ${formatCurrency(balance, currency)}`
+      : `Owed ${formatCurrency(balance, currency)}`;
+  }
+
+  const balance = Number(summary.perPersonBalances?.[currentUserId]) || 0;
+  if (Math.abs(balance) < 0.01) return 'Settled up';
+
+  return balance < 0
+    ? `You owe ${formatCurrency(balance, summary.currency || 'USD')}`
+    : `Owed ${formatCurrency(balance, summary.currency || 'USD')}`;
 };
 
 const TripStat = ({
@@ -66,14 +111,13 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
   isOwner,
   canEdit,
   descriptionHtml,
+  expenseSummary,
   onExport,
   onTripUpdate,
 }) => {
   const collaborators = trip.collaborators.filter((collaborator): collaborator is { user: typeof trip.owner; role: 'viewer' | 'editor' } =>
     typeof collaborator === 'object' && collaborator !== null && 'user' in collaborator && 'role' in collaborator
   );
-  const confirmedCount = trip.events.filter(event => event.status !== 'exploring').length;
-  const exploringCount = trip.events.length - confirmedCount;
   const collaboratorCount = collaborators.length + 1;
   const tripStatus = getTripStatusSummary(trip);
 
@@ -132,9 +176,9 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
           accent="text-teal-600"
         />
         <TripStat
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Status"
-          value={`${confirmedCount} confirmed${exploringCount ? `, ${exploringCount} exploring` : ''}`}
+          icon={<CreditCard className="h-4 w-4" />}
+          label="Your cost"
+          value={getUserCostStat(expenseSummary, currentUserId)}
           accent="text-emerald-600"
         />
         <TripStat

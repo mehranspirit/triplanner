@@ -24,10 +24,17 @@ const getInitialCurrency = () => {
 };
 
 const getInitialSplitMethod = (): SplitMethod => {
-  if (typeof window === 'undefined') return 'equal';
-  const stored = window.localStorage.getItem('expense:lastSplitMethod') as SplitMethod | null;
-  return stored && ['equal', 'custom', 'percentage', 'shares'].includes(stored) ? stored : 'equal';
+  return 'equal';
 };
+
+const EXPENSE_TEMPLATES = [
+  { label: 'Meal', title: 'Meal', category: 'Food & Drinks', subcategory: 'Restaurants' },
+  { label: 'Taxi', title: 'Taxi', category: 'Transportation', subcategory: 'Taxis/Rideshares' },
+  { label: 'Hotel', title: 'Hotel', category: 'Accommodation', subcategory: 'Hotels' },
+  { label: 'Tickets', title: 'Tickets', category: 'Activities & Entertainment', subcategory: 'Attractions' },
+  { label: 'Groceries', title: 'Groceries', category: 'Food & Drinks', subcategory: 'Groceries' },
+  { label: 'Gas', title: 'Gas', category: 'Transportation', subcategory: 'Fuel' },
+];
 
 export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, currentUser, onExpenseAdded, onCancel }) => {
   const { addExpense, expenses } = useExpense();
@@ -58,6 +65,29 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
   const [formError, setFormError] = useState<string | null>(null);
   const [allowDuplicate, setAllowDuplicate] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(splitMethod !== 'equal');
+
+  React.useEffect(() => {
+    const participantIds = participants.map(participant => participant._id);
+
+    setSelectedPayer(prev => (
+      participantIds.includes(prev) ? prev : defaultPayerId
+    ));
+
+    setSelectedParticipants(prev => {
+      const retained = prev.filter(id => participantIds.includes(id));
+      const missing = participantIds.filter(id => !retained.includes(id));
+
+      if (retained.length === prev.length && missing.length === 0) {
+        return prev;
+      }
+
+      return [...retained, ...missing];
+    });
+
+    setParticipantShares(prev => Object.fromEntries(
+      Object.entries(prev).filter(([userId]) => participantIds.includes(userId))
+    ));
+  }, [defaultPayerId, participants]);
 
   // Filter events with cost
   const eventsWithCost = events.filter(e => typeof e.cost === 'number' && e.cost > 0);
@@ -113,43 +143,55 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     }
   };
 
+  const getCategoryForEvent = (event: any) => {
+    switch (event.type) {
+      case 'flight':
+      case 'train':
+      case 'bus':
+      case 'rental_car':
+        return {
+          category: 'Transportation',
+          subcategory:
+            event.type === 'flight' ? 'Flights' :
+            event.type === 'train' ? 'Trains' :
+            event.type === 'bus' ? 'Buses' :
+            event.type === 'rental_car' ? 'Car Rental' : '',
+        };
+      case 'stay':
+        return { category: 'Accommodation', subcategory: 'Hotels' };
+      case 'activity':
+        return { category: 'Activities & Entertainment', subcategory: 'Attractions' };
+      default:
+        return { category: 'Other', subcategory: 'Miscellaneous' };
+    }
+  };
+
+  const applyEventToForm = (event: any) => {
+    const { category, subcategory } = getCategoryForEvent(event);
+    setExpenseSource('event');
+    setSelectedEventId(event.id);
+    setAmount(event.cost?.toString() || '');
+    setSelectedCategory(category);
+    setSelectedSubcategory(subcategory);
+    setTitle(getEventTitle(event));
+    setDescription(getEventDescription(event));
+    setFormError(null);
+  };
+
+  const handleTemplateClick = (template: typeof EXPENSE_TEMPLATES[number]) => {
+    setTitle(template.title);
+    setSelectedCategory(template.category);
+    setSelectedSubcategory(template.subcategory);
+    setShowSuggestion(false);
+    setFormError(null);
+  };
+
   // When event is picked, auto-fill amount and suggest category
   React.useEffect(() => {
     if (expenseSource === 'event' && selectedEventId) {
       const event = eventsWithCost.find(e => e.id === selectedEventId);
       if (event) {
-        setAmount(event.cost?.toString() || '');
-        // Suggest category based on event type
-        let cat = '';
-        let subcat = '';
-        switch (event.type) {
-          case 'flight':
-          case 'train':
-          case 'bus':
-          case 'rental_car':
-            cat = 'Transportation';
-            subcat =
-              event.type === 'flight' ? 'Flights' :
-              event.type === 'train' ? 'Trains' :
-              event.type === 'bus' ? 'Buses' :
-              event.type === 'rental_car' ? 'Car Rental' : '';
-            break;
-          case 'stay':
-            cat = 'Accommodation';
-            subcat = 'Hotels';
-            break;
-          case 'activity':
-            cat = 'Activities & Entertainment';
-            subcat = 'Attractions';
-            break;
-          default:
-            cat = 'Other';
-            subcat = '';
-        }
-        setSelectedCategory(cat);
-        setSelectedSubcategory(subcat);
-        setTitle(getEventTitle(event));
-        setDescription(getEventDescription(event));
+        applyEventToForm(event);
       }
     }
     if (expenseSource === 'manual') {
@@ -310,6 +352,72 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     }
   };
 
+  const handleAddEventExpense = async (event: any) => {
+    const eventAmount = Number(event.cost) || 0;
+    const payer = participants.find(p => p._id === selectedPayer);
+    if (!payer || eventAmount <= 0 || selectedParticipants.length === 0) {
+      applyEventToForm(event);
+      setFormError('Review the suggested expense before adding it.');
+      return;
+    }
+
+    const eventTitle = getEventTitle(event);
+    const { category, subcategory } = getCategoryForEvent(event);
+    const duplicateExpense = expenses.find(exp => (
+      exp.title === eventTitle &&
+      Math.abs(exp.amount - eventAmount) < 0.01 &&
+      exp.category === (subcategory || category)
+    ));
+
+    if (duplicateExpense && !allowDuplicate) {
+      applyEventToForm(event);
+      setDuplicateWarning(`An expense for "${eventTitle}" with the same amount and category already exists. Review it before adding another one.`);
+      return;
+    }
+
+    setIsSaving(true);
+    setFormError(null);
+    setDuplicateWarning(null);
+
+    const expense: Omit<Expense, '_id'> = {
+      tripId,
+      title: eventTitle,
+      description: getEventDescription(event),
+      amount: eventAmount,
+      currency,
+      date: event.startDate ? event.startDate.substring(0, 10) : new Date().toISOString().split('T')[0],
+      paidBy: {
+        _id: payer._id,
+        name: payer.name,
+        email: payer.email,
+        photoUrl: payer.photoUrl
+      },
+      splitMethod: 'equal',
+      category: subcategory || category,
+      participants: participants
+        .filter(p => selectedParticipants.includes(p._id))
+        .map(participant => createParticipantWithSplitDetails(
+          participant,
+          'equal',
+          eventAmount,
+          selectedParticipants,
+          {}
+        )),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      window.localStorage.setItem('expense:lastCurrency', currency);
+      await addExpense(tripId, expense);
+      onExpenseAdded?.();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Failed to add suggested expense.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleShareChange = (userId: string, value: string) => {
     const newValue = parseFloat(value) || 0;
     setParticipantShares(prev => ({
@@ -395,9 +503,22 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     setFormError(null);
   };
 
+  const handleJustMe = () => {
+    setSelectedParticipants(defaultPayerId ? [defaultPayerId] : []);
+    setFormError(null);
+  };
+
   const handleJustMeAnd = () => {
     const otherParticipant = participants.find(p => p._id !== defaultPayerId);
     setSelectedParticipants([defaultPayerId, otherParticipant?._id].filter(Boolean) as string[]);
+    setFormError(null);
+  };
+
+  const handleExcludeMe = () => {
+    const withoutCurrentUser = participants
+      .filter(p => p._id !== currentUser._id)
+      .map(p => p._id);
+    setSelectedParticipants(withoutCurrentUser.length > 0 ? withoutCurrentUser : participants.map(p => p._id));
     setFormError(null);
   };
 
@@ -419,6 +540,10 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
     const suggestion = suggestCategory(newTitle, description);
     setCategorySuggestion(suggestion);
     setShowSuggestion(!!suggestion);
+    if (suggestion) {
+      setSelectedCategory(suggestion.mainCategory);
+      setSelectedSubcategory(suggestion.subCategory);
+    }
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -441,6 +566,10 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
 
   const expenseAmount = parseFloat(amount);
   const selectedPayerName = participants.find(p => p._id === selectedPayer)?.name || 'Someone';
+  const selectedParticipantRecords = participants.filter(p => selectedParticipants.includes(p._id));
+  const currentUserShare = splitMethod === 'equal' && selectedParticipants.includes(currentUser._id)
+    ? calculateEqualShare(expenseAmount, selectedParticipants.length)
+    : 0;
   const splitPreview = (() => {
     if (!Number.isFinite(expenseAmount) || expenseAmount <= 0) {
       return 'Enter an amount to preview the split.';
@@ -449,7 +578,23 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       return 'Choose who should share this expense.';
     }
     if (splitMethod === 'equal') {
-      return `${selectedPayerName} paid ${formatCurrency(expenseAmount, currency)}. ${selectedParticipants.length} ${selectedParticipants.length === 1 ? 'person splits' : 'people split'} it equally: ${formatCurrency(calculateEqualShare(expenseAmount, selectedParticipants.length), currency)} each.`;
+      const perPerson = calculateEqualShare(expenseAmount, selectedParticipants.length);
+      if (selectedParticipants.length === participants.length) {
+        return `Everyone pays ${formatCurrency(perPerson, currency)} each.`;
+      }
+      if (selectedParticipants.length === 1 && selectedParticipants[0] === currentUser._id) {
+        return `Only you are paying ${formatCurrency(expenseAmount, currency)}.`;
+      }
+      if (selectedPayer === currentUser._id) {
+        const owedToYou = expenseAmount - currentUserShare;
+        return selectedParticipants.includes(currentUser._id)
+          ? `${selectedParticipants.length - 1} ${selectedParticipants.length - 1 === 1 ? 'person owes' : 'people owe'} you ${formatCurrency(owedToYou, currency)} total.`
+          : `${selectedParticipants.length} ${selectedParticipants.length === 1 ? 'person owes' : 'people owe'} you ${formatCurrency(expenseAmount, currency)} total.`;
+      }
+      if (selectedParticipants.includes(currentUser._id)) {
+        return `You owe ${selectedPayerName} ${formatCurrency(perPerson, currency)}.`;
+      }
+      return `${selectedPayerName} paid. ${selectedParticipants.length} people split ${formatCurrency(perPerson, currency)} each.`;
     }
     return `${selectedPayerName} paid ${formatCurrency(expenseAmount, currency)}. Review the advanced split before adding.`;
   })();
@@ -462,21 +607,63 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={handlePaidByMe} className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Paid by me
-        </button>
-        <button type="button" onClick={handleEveryone} className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Everyone
-        </button>
-        <button type="button" onClick={handleJustMeAnd} className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Just me and...
-        </button>
-        {eventsWithCost.length > 0 && (
-          <button type="button" onClick={handleFromItinerary} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100">
-            From itinerary cost
-          </button>
-        )}
+      {eventsWithCost.length > 0 && (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-blue-950">Suggested from itinerary</p>
+              <p className="text-xs text-blue-700">Use event costs as a starting point.</p>
+            </div>
+            <button type="button" onClick={handleFromItinerary} className="text-xs font-semibold text-blue-700 hover:text-blue-900">
+              More
+            </button>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {eventsWithCost.slice(0, 4).map(event => (
+              <div
+                key={event.id}
+                className="min-w-[200px] rounded-xl border border-blue-100 bg-white p-3 text-left shadow-sm"
+              >
+                <p className="truncate text-sm font-semibold text-slate-950">{getEventTitle(event)}</p>
+                <p className="mt-1 text-xs text-slate-500">{formatEventDateRange(event)}</p>
+                <p className="mt-2 text-sm font-bold text-blue-700">{formatCurrency(event.cost || 0, currency)}</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyEventToForm(event)}
+                    className="rounded-full border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  >
+                    Use
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddEventExpense(event)}
+                    disabled={isSaving}
+                    className="rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    Add expense
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Quick templates</p>
+        <div className="flex flex-wrap gap-2">
+          {EXPENSE_TEMPLATES.map(template => (
+            <button
+              key={template.label}
+              type="button"
+              onClick={() => handleTemplateClick(template)}
+              className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              {template.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_180px]">
@@ -538,49 +725,63 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Paid by</label>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <label className="block text-sm font-medium text-gray-700">Paid by</label>
+          <button type="button" onClick={handlePaidByMe} className="text-xs font-semibold text-blue-700 hover:text-blue-900">
+            Paid by me
+          </button>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {participants.map((participant) => (
-            <label
+            <button
               key={participant._id}
-              className={`flex min-h-[44px] items-center space-x-2 rounded-lg border p-2 cursor-pointer hover:bg-gray-50 ${
+              type="button"
+              onClick={() => handlePayerChange(participant._id)}
+              className={`flex min-h-[44px] min-w-[140px] items-center space-x-2 rounded-full border px-3 py-2 text-left hover:bg-gray-50 ${
                 selectedPayer === participant._id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
               }`}
             >
-              <input
-                type="radio"
-                name="payer"
-                value={participant._id}
-                checked={selectedPayer === participant._id}
-                onChange={() => handlePayerChange(participant._id)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-              />
               <Avatar photoUrl={participant.photoUrl || null} name={participant.name} size="sm" className="border border-gray-200" />
               <span className="truncate text-sm text-gray-700">{participant.name}</span>
-            </label>
+            </button>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Split between</label>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Split between</label>
+            <p className="text-xs text-gray-500">{selectedParticipantRecords.length} selected</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={handleEveryone} className="rounded-full border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              Everyone
+            </button>
+            <button type="button" onClick={handleJustMe} className="rounded-full border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              Just me
+            </button>
+            <button type="button" onClick={handleJustMeAnd} className="rounded-full border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              Me + one
+            </button>
+            <button type="button" onClick={handleExcludeMe} className="rounded-full border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              Exclude me
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
           {participants.map((participant) => (
-            <label
+            <button
               key={participant._id}
-              className={`flex min-h-[44px] items-center space-x-2 rounded-lg border p-2 cursor-pointer hover:bg-gray-50 ${
+              type="button"
+              onClick={() => handleParticipantToggle(participant._id)}
+              className={`flex min-h-[44px] items-center space-x-2 rounded-full border px-3 py-2 text-left hover:bg-gray-50 ${
                 selectedParticipants.includes(participant._id) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
               }`}
             >
-              <input
-                type="checkbox"
-                checked={selectedParticipants.includes(participant._id)}
-                onChange={() => handleParticipantToggle(participant._id)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
               <Avatar photoUrl={participant.photoUrl || null} name={participant.name} size="sm" className="border border-gray-200" />
               <span className="truncate text-sm text-gray-700">{participant.name}</span>
-            </label>
+            </button>
           ))}
         </div>
       </div>
@@ -596,7 +797,7 @@ export const AddExpense: React.FC<AddExpenseProps> = ({ tripId, participants, cu
           className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-900"
           aria-expanded={showAdvanced}
         >
-          <span>Optional details and advanced split</span>
+          <span>More options</span>
           <span className="text-blue-600">{showAdvanced ? 'Hide' : 'Show'}</span>
         </button>
 

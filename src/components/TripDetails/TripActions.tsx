@@ -9,6 +9,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -19,10 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Trash2, Edit, MoreHorizontal, Sparkles, DollarSign, Download, Users } from 'lucide-react';
+import { Trash2, Edit, MoreHorizontal, Sparkles, DollarSign, Download, Users, FileText, Minimize2 } from 'lucide-react';
 import CollaboratorModal from '../CollaboratorModal';
 import TripEditModal from './TripEditModal';
 import AISuggestionsModal from './AISuggestionsModal';
+import { ItineraryExportMode } from './exportHelpers';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -63,7 +67,7 @@ interface TripActionsProps {
   trip: EventTypesTrip;
   isOwner: boolean;
   canEdit: boolean;
-  onExport: () => void;
+  onExport: (mode: ItineraryExportMode) => void;
   onTripUpdate: (trip: EventTypesTrip) => Promise<void>;
   className?: string;
 }
@@ -161,10 +165,22 @@ const TripActions: React.FC<TripActionsProps> = ({
             )}
             
             {/* Export */}
-            <DropdownMenuItem onClick={onExport}>
-              <Download className="mr-2 h-4 w-4" />
-              <span>Export Itinerary</span>
-            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Download className="mr-2 h-4 w-4" />
+                <span>Export Itinerary</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onClick={() => onExport('detailed')}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Detailed</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onExport('compact')}>
+                  <Minimize2 className="mr-2 h-4 w-4" />
+                  <span>Compact (PDF-friendly)</span>
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             
             {/* Collaborators */}
             <DropdownMenuItem onClick={() => setIsCollaboratorModalOpen(true)}>
@@ -225,14 +241,29 @@ const TripActions: React.FC<TripActionsProps> = ({
         )}
         
         {/* Export button */}
-        <Button 
-          variant="outline" 
-          size="icon" 
-          onClick={onExport}
-          title="Export Itinerary"
-        >
-          <Download className="h-5 w-5" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              title="Export Itinerary"
+            >
+              <Download className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel>Export itinerary</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onExport('detailed')}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Detailed</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onExport('compact')}>
+              <Minimize2 className="mr-2 h-4 w-4" />
+              <span>Compact (PDF-friendly)</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         
         {/* Collaborators button */}
         <Button 
