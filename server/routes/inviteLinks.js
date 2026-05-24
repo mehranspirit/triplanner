@@ -5,6 +5,7 @@ const Trip = require('../models/Trip');
 const TripInvitation = require('../models/TripInvitation');
 const { logActivity } = require('../utils/activityLogger');
 const { getFrontendUrl } = require('../utils/frontendUrl');
+const { serializeTrip } = require('../utils/tripSerializer');
 
 const router = express.Router();
 
@@ -40,40 +41,37 @@ router.post('/trips/invite-links/:token/accept', auth, async (req, res) => {
       return res.status(410).json({ message: 'This invite link has expired' });
     }
 
-    const trip = await Trip.findById(invitation.trip)
-      .populate('owner', 'name email photoUrl')
-      .populate('collaborators.user', 'name email photoUrl');
-
+    const trip = await Trip.findById(invitation.trip);
     if (!trip) {
       return res.status(404).json({ message: 'Trip not found' });
     }
 
     const currentAccess = trip.hasAccess(req.user._id);
-    const isOwner = trip.owner._id.equals(req.user._id);
-    const isCollaborator = trip.collaborators.some((collaborator) => {
-      const collaboratorUserId = collaborator.user?._id || collaborator.user;
-      return collaboratorUserId?.toString() === req.user._id.toString();
-    });
+    const userId = req.user._id;
 
-    if (!isOwner && !isCollaborator) {
-      trip.collaborators.push({
-        user: req.user._id,
-        role: invitation.role
-      });
-      await trip.save();
-    }
+    // Atomic add — prevents duplicate collaborators from concurrent accept requests.
+    await Trip.updateOne(
+      {
+        _id: invitation.trip,
+        owner: { $ne: userId },
+        'collaborators.user': { $ne: userId },
+      },
+      { $push: { collaborators: { user: userId, role: invitation.role } } }
+    );
 
-    const alreadyAccepted = invitation.acceptedUsers.some(entry => (
-      entry.user && entry.user.toString() === req.user._id.toString()
-    ));
-    if (!alreadyAccepted) {
-      invitation.acceptedUsers.push({ user: req.user._id, acceptedAt: new Date() });
-      await invitation.save();
-    }
+    await TripInvitation.updateOne(
+      {
+        _id: invitation._id,
+        'acceptedUsers.user': { $ne: userId },
+      },
+      { $push: { acceptedUsers: { user: userId, acceptedAt: new Date() } } }
+    );
 
-    const populatedTrip = await Trip.findById(trip._id)
+    const populatedTrip = await Trip.findById(invitation.trip)
       .populate('owner', 'name email photoUrl')
-      .populate('collaborators.user', 'name email photoUrl');
+      .populate('collaborators.user', 'name email photoUrl')
+      .lean()
+      .exec();
 
     await logActivity({
       userId: req.user._id,
@@ -87,7 +85,7 @@ router.post('/trips/invite-links/:token/accept', auth, async (req, res) => {
       }
     });
 
-    res.json({ trip: populatedTrip, role: currentAccess || invitation.role });
+    res.json({ trip: serializeTrip(populatedTrip), role: currentAccess || invitation.role });
   } catch (error) {
     console.error('Error accepting trip invite link:', error);
     res.status(500).json({ message: error.message || 'Failed to accept invite link' });

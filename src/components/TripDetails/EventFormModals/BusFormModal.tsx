@@ -15,7 +15,6 @@ interface BusFormModalProps {
 }
 
 const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, eventToEdit }) => {
-  console.log('BusFormModal rendering, isOpen:', isOpen, 'eventToEdit:', eventToEdit);
   
   const form = useForm<BusFormData>({
     resolver: zodResolver(busEventSchema as z.ZodType<BusFormData>),
@@ -43,7 +42,6 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
       const departureTimePart = eventToEdit.startDate?.substring(11, 16) || '';
       const arrivalDatePart = eventToEdit.endDate?.substring(0, 10) || '';
       const arrivalTimePart = eventToEdit.endDate?.substring(11, 16) || '';
-      console.log('BusFormModal: Directly parsed values for form reset:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
       form.reset({
         ...eventToEdit,
         cost: eventToEdit.cost ?? undefined,
@@ -74,19 +72,16 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
   }, [eventToEdit, form, isOpen]);
 
   const onSubmit = (data: BusFormData) => {
-    console.log("BusFormModal: Raw Bus form data being submitted:", data);
     const processedData: any = { ...data };
 
     // Construct naive ISO-like strings
     if (data.departureDate && data.departureTime) {
       processedData.startDate = `${data.departureDate}T${data.departureTime}:00`;
-      console.log("BusFormModal: Constructed naive ISO for startDate:", processedData.startDate);
     } else {
       processedData.startDate = undefined;
     }
     if (data.arrivalDate && data.arrivalTime) {
       processedData.endDate = `${data.arrivalDate}T${data.arrivalTime}:00`;
-      console.log("BusFormModal: Constructed naive ISO for endDate:", processedData.endDate);
     } else {
       processedData.endDate = undefined;
     }
@@ -97,13 +92,10 @@ const BusFormModal: React.FC<BusFormModalProps> = ({ isOpen, onClose, onSave, ev
     delete processedData.arrivalDate;
     delete processedData.arrivalTime;
 
-    console.log("BusFormModal: Final processed data before calling onSave:", processedData);
     
     try {
       onSave(processedData as Event);
-      console.log("BusFormModal: onSave completed successfully");
       onClose();
-      console.log("BusFormModal: Modal closed after save");
     } catch (error) {
       console.error("BusFormModal: Error during save:", error);
     }

@@ -349,7 +349,6 @@ export default function TripList() {
     }
 
     try {
-      console.log('Creating new trip with data:', newTrip);
       
       // Create a partial trip object without required server-generated fields
       const newTripData = {

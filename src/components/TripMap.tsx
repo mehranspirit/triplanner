@@ -224,7 +224,6 @@ const fetchWithRetry = async (url: string, retries = MAX_RETRIES, delay = RATE_L
     if (retries > 0) {
       const isRateLimited = error instanceof Error && error.message === 'RATE_LIMITED';
       const nextDelay = isRateLimited ? delay * BACKOFF_FACTOR : delay;
-      console.log(`Retrying request to ${url}, ${retries} attempts remaining, delay: ${nextDelay}ms`);
       await new Promise(resolve => setTimeout(resolve, nextDelay));
       return fetchWithRetry(url, retries - 1, nextDelay);
     }
@@ -295,15 +294,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     };
   }, []);
 
-  // Add a useEffect to handle trip updates
-  useEffect(() => {
-    console.log('TripMap: Trip data updated', {
-      tripId: trip._id,
-      eventCount: trip.events.length,
-      eventStatuses: trip.events.map(e => e.status)
-    });
-  }, [trip]);
-
   // Add a useEffect to force map update when locations change
   useEffect(() => {
     if (mapRef.current && locations.length > 0) {
@@ -318,26 +308,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
       const bounds = L.latLngBounds(routes.flatMap(route => route.coordinates));
       mapRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [routes]);
-
-  // Add a useEffect to handle location updates
-  useEffect(() => {
-    console.log('TripMap: Locations updated', {
-      locationCount: locations.length,
-      locations: locations.map(loc => ({
-        id: loc.event.id,
-        status: loc.event.status,
-        type: loc.event.type
-      }))
-    });
-  }, [locations]);
-
-  // Add a useEffect to handle route updates
-  useEffect(() => {
-    console.log('TripMap: Routes updated', {
-      routeCount: routes.length,
-      routeTypes: routes.map(r => r.type)
-    });
   }, [routes]);
 
   // Add a useEffect to force marker updates when trip changes
@@ -615,7 +585,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           for (const event of mapRelevantData.events) {
             // Check if loading should continue
             if (!loadingRef.current) {
-              console.log('Loading stopped - map module closed');
               return { results, skippedEvents };
             }
 
@@ -778,7 +747,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
           try {
                 // Check if loading should continue before making API call
                 if (!loadingRef.current) {
-                  console.log('Loading stopped before API call - map module closed');
                   return { results, skippedEvents };
                 }
 
@@ -790,7 +758,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
             
                 // Check if loading should continue after API call
                 if (!loadingRef.current) {
-                  console.log('Loading stopped after API call - map module closed');
                   return { results, skippedEvents };
             }
 
@@ -853,7 +820,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         for (let i = 0; i < confirmedLocations.length - 1; i++) {
             // Check if loading should continue
             if (!loadingRef.current) {
-              console.log('Loading stopped during route fetching - map module closed');
               break;
             }
 

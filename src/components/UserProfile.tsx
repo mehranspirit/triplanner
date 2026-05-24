@@ -59,12 +59,6 @@ const UserProfile: React.FC = () => {
       const formData = new FormData();
       formData.append('photo', file);
 
-      console.log('UserProfile - Starting photo upload:', {
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size
-      });
-
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('No authentication token found');
@@ -91,11 +85,6 @@ const UserProfile: React.FC = () => {
       }
 
       const data = await response.json();
-      console.log('UserProfile - Photo upload successful:', {
-        user: data.user,
-        photoUrl: data.user.photoUrl,
-        timestamp: new Date().toISOString()
-      });
 
       // Update both the auth context and localStorage
       updateUser(data.user);

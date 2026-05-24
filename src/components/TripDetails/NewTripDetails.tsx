@@ -667,15 +667,11 @@ const NewTripDetails: React.FC = () => {
   };
 
   const handleSaveEvent = async (eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'> | Event) => {
-    console.log('NewTripDetails handleSaveEvent called with data:', eventData);
     try {
     if ('id' in eventData && editingEvent && eventData.id === editingEvent.id) {
-        console.log('NewTripDetails: Updating existing event:', eventData.id);
         // We are editing an existing event
         const eventToUpdate = { ...editingEvent, ...eventData } as Event;
-        console.log('NewTripDetails: Combined event data for update:', eventToUpdate);
         const updatedEvent = await updateEvent(eventToUpdate);
-        console.log('NewTripDetails: Event updated successfully, result:', updatedEvent);
         
         // Update the local state immediately
         if (trip && updatedEvent) {
@@ -683,23 +679,18 @@ const NewTripDetails: React.FC = () => {
             event.id === updatedEvent.id ? updatedEvent : event
           );
           trip.events = updatedEvents;
-          console.log('NewTripDetails: Local state updated with updated event:', updatedEvent.id);
         }
     } else {
-        console.log('NewTripDetails: Adding new event of type:', eventData.type);
         // We are adding a new event
         const newEvent = await addEvent(eventData as Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>);
-        console.log('NewTripDetails: New event added successfully, result:', newEvent);
         
         // Update the local state immediately
         if (trip && newEvent) {
           trip.events = [...trip.events, newEvent];
-          console.log('NewTripDetails: Local state updated with new event:', newEvent.id);
         }
       }
       
       // Close the modal
-      console.log('NewTripDetails: Closing modal after successful save');
       handleCloseModal();
     } catch (error) {
       console.error('NewTripDetails: Error saving event:', error);

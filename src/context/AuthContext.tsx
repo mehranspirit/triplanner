@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { offlineService } from '../services/offlineService';
 
 interface User {
   _id: string;
@@ -11,8 +12,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (token: string, user: User) => void;
-  logout: () => void;
+  login: (token: string, user: User) => Promise<void>;
+  logout: () => Promise<void>;
   updateUser: (updatedUser: User) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -47,14 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
 
-        console.log('AuthProvider - Stored credentials:', { 
-          hasToken: !!storedToken, 
-          hasUser: !!storedUser,
-          storedUser: storedUser ? JSON.parse(storedUser) : null
-        });
-
         if (!storedToken || !storedUser) {
-          console.log('No stored credentials found');
           setIsLoading(false);
           return;
         }
@@ -63,6 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           parsedUser = JSON.parse(storedUser);
           setToken(storedToken);
           setUser(parsedUser);
+          if (parsedUser) {
+            await offlineService.ensureCacheForUser(parsedUser._id);
+          }
         } catch (e) {
           console.error('Failed to parse stored user:', e);
           throw new Error('Invalid stored user data');
@@ -70,7 +67,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Check offline status BEFORE making network request
         if (!navigator.onLine) {
-          console.log('⚠️ Offline: Using cached credentials without validation');
           setToken(storedToken);
           setUser(parsedUser);
           setIsLoading(false);
@@ -104,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.user) {
           localStorage.setItem('user', JSON.stringify(data.user));
           setUser(data.user);
+          await offlineService.ensureCacheForUser(data.user._id);
         }
 
       } catch (error: any) {
@@ -111,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Handle offline scenarios gracefully
         if (!navigator.onLine) {
-          console.log('⚠️ Offline: Skipping token validation, using cached auth');
           // Keep existing stored credentials when offline
           if (storedToken && parsedUser) {
             setToken(storedToken);
@@ -124,7 +120,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Only clear credentials for actual auth errors when online
         if (error instanceof Error && 
             (error.message.includes('token') || error.message.includes('auth'))) {
-          console.log('🔐 Clearing invalid credentials');
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           setToken(null);
@@ -138,22 +133,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     validateToken();
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    console.log('AuthProvider - Login:', { newUser });
+  const login = async (newToken: string, newUser: User) => {
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    await offlineService.ensureCacheForUser(newUser._id);
   };
 
-  const logout = () => {
-    console.log('AuthProvider - Logout');
+  const logout = async () => {
+    const currentToken = token;
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    await offlineService.clearCache();
     
-    const currentToken = token;
     if (currentToken) {
       fetch(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {
         method: 'POST',
@@ -168,22 +163,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUser = (updatedUser: User) => {
-    console.log('AuthProvider - Updating user:', { 
-      current: user,
-      updated: updatedUser,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Create a new user object to ensure React detects the change
     const newUser = { ...updatedUser };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
-    
-    // Verify the update
-    console.log('AuthProvider - User updated:', {
-      newState: newUser,
-      timestamp: new Date().toISOString()
-    });
   };
 
   const value = {

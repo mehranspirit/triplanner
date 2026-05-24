@@ -107,7 +107,6 @@ export const useTripDetails = () => {
 
   const addEvent = useCallback(async (newEventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>) => {
     if (!trip) return;
-    console.log("hooks.ts addEvent: Event data received:", newEventData);
     const currentUser = user || defaultUser; // Ensure we have a user object
     const newEventWithMeta: Event = {
       ...newEventData,
@@ -119,22 +118,18 @@ export const useTripDetails = () => {
       likes: [],
       dislikes: [],
     };
-    console.log("hooks.ts addEvent: Event with metadata:", newEventWithMeta);
     
     try {
       // First update local state for immediate UI update
     const updatedTrip = { ...trip, events: [...trip.events, newEventWithMeta] };
-      console.log("hooks.ts addEvent: Local trip state updated with new event");
       setTrip(updatedTrip);
       
       // Then update in backend
     await handleTripUpdate(updatedTrip);
-      console.log("hooks.ts addEvent: Backend update completed");
       
       // Update thumbnail
     const thumb = newEventWithMeta.thumbnailUrl || await getEventThumbnail(newEventWithMeta);
     setEventThumbnails(prev => ({ ...prev, [newEventWithMeta.id]: thumb }));
-      console.log("hooks.ts addEvent: Thumbnail added for new event");
       
       return newEventWithMeta;
     } catch (error) {
@@ -147,7 +142,6 @@ export const useTripDetails = () => {
 
   const updateEvent = useCallback(async (eventToUpdate: Event) => {
     if (!trip) return;
-    console.log("hooks.ts updateEvent: Updating event:", eventToUpdate);
     const currentUser = user || defaultUser; // Ensure we have a user object
     const eventWithMeta = {
       ...eventToUpdate,
@@ -161,17 +155,14 @@ export const useTripDetails = () => {
       const updatedTrip = { ...trip, events: updatedEvents };
       
       // Update local state for optimistic UI
-      console.log("hooks.ts updateEvent: Updating local state optimistically");
       setTrip(updatedTrip);
       
       // Update thumbnail
       const thumb = eventWithMeta.thumbnailUrl || await getEventThumbnail(eventWithMeta);
       setEventThumbnails(prev => ({ ...prev, [eventWithMeta.id]: thumb }));
-      console.log("hooks.ts updateEvent: Thumbnail updated");
       
       // Update the backend without triggering a refresh
       await handleTripUpdate(updatedTrip);
-      console.log("hooks.ts updateEvent: Backend update completed");
       
       return eventWithMeta;
     } catch (error) {

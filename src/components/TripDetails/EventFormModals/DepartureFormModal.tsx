@@ -15,7 +15,6 @@ interface DepartureFormModalProps {
 }
 
 const DepartureFormModal: React.FC<DepartureFormModalProps> = ({ isOpen, onClose, onSave, eventToEdit }) => {
-  console.log("DepartureFormModal rendered with eventToEdit:", JSON.stringify(eventToEdit, null, 2));
   
   const form = useForm<DepartureFormData>({
     resolver: zodResolver(departureEventSchema as z.ZodType<DepartureFormData>),
@@ -34,23 +33,12 @@ const DepartureFormModal: React.FC<DepartureFormModalProps> = ({ isOpen, onClose
 
   useEffect(() => {
     if (eventToEdit) {
-      console.log('DepartureFormModal: Setting form values:', { 
-        ...eventToEdit,
-        departureDate: eventToEdit.date || '',
-        departureTime: eventToEdit.time || '',
-      });
-      
       form.reset({
         ...eventToEdit,
         // Map database date/time to form fields
         departureDate: eventToEdit.date || '',
         departureTime: eventToEdit.time || '',
       });
-      
-      // Log the current form values to verify they were set correctly
-      setTimeout(() => {
-        console.log("Form values after reset:", form.getValues());
-      }, 0);
     } else {
       // Reset with empty strings and defaults for new event
       form.reset({
@@ -70,7 +58,6 @@ const DepartureFormModal: React.FC<DepartureFormModalProps> = ({ isOpen, onClose
   }, [eventToEdit, form, isOpen]);
 
   const onSubmit = (data: DepartureFormData) => {
-    console.log("Raw Departure form data (strings):", data);
     const processedData: any = { ...data };
 
     // Map form fields to database fields
@@ -91,7 +78,6 @@ const DepartureFormModal: React.FC<DepartureFormModalProps> = ({ isOpen, onClose
     delete processedData.departureDate;
     delete processedData.departureTime;
 
-    console.log("Processed Departure data to save:", processedData);
     onSave(processedData as Event);
     onClose();
   };

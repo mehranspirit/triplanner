@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, LogIn, Ticket, UserPlus, XCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { api } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { useTrip } from '@/context/TripContext';
-import { networkAwareApi } from '@/services/networkAwareApi';
 import {
   getInvitePath,
   savePendingInviteToken,
@@ -22,6 +21,7 @@ const TripInviteAccept: React.FC = () => {
   const [status, setStatus] = useState<InviteStatus>('loading');
   const [message, setMessage] = useState('Checking your invitation...');
   const [tripId, setTripId] = useState<string | null>(null);
+  const acceptStartedRef = useRef(false);
 
   const invitePath = token ? getInvitePath(token) : '/trips';
 
@@ -45,10 +45,16 @@ const TripInviteAccept: React.FC = () => {
     }
 
     if (!isAuthenticated) {
+      acceptStartedRef.current = false;
       setStatus('needs-auth');
       setMessage('Sign in or create an account to join this trip.');
       return;
     }
+
+    if (acceptStartedRef.current) {
+      return;
+    }
+    acceptStartedRef.current = true;
 
     let isMounted = true;
 
@@ -63,18 +69,12 @@ const TripInviteAccept: React.FC = () => {
         await addTrip(result.trip);
         clearPendingInviteToken();
 
-        try {
-          const trips = await networkAwareApi.getTrips();
-          window.dispatchEvent(new CustomEvent('tripsUpdated', { detail: { trips } }));
-        } catch (refreshError) {
-          console.warn('Failed to refresh trips after invite accept:', refreshError);
-        }
-
         setTripId(result.trip._id);
         setStatus('accepted');
         setMessage(`You're in. Opening ${result.trip.name}...`);
         window.setTimeout(() => navigate(`/trips/${result.trip._id}`, { replace: true }), 800);
       } catch (error) {
+        acceptStartedRef.current = false;
         if (!isMounted) return;
         setStatus('error');
         setMessage(error instanceof Error ? error.message : 'Failed to accept this invite link.');

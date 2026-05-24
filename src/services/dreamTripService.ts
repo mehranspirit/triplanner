@@ -175,7 +175,6 @@ export const dreamTripService = {
 
   getAISuggestions: async (tripId: string, userId: string): Promise<AISuggestionHistory[]> => {
     try {
-      console.log('Fetching AI suggestions for dream trip:', { tripId, userId });
       const response = await fetch(`${API_URL}/api/trips/dream/${tripId}/ai-suggestions/${userId}`, {
         headers: getHeaders(),
       });
@@ -191,7 +190,6 @@ export const dreamTripService = {
       }
       
       const data = await response.json();
-      console.log('Fetched AI suggestions:', data);
       
       return data.map((item: any) => ({
         _id: item._id,
@@ -210,8 +208,6 @@ export const dreamTripService = {
 
   saveAISuggestion: async (suggestion: Omit<AISuggestionHistory, '_id'>): Promise<AISuggestionHistory> => {
     try {
-      console.log('Saving AI suggestion to dream trip:', `${API_URL}/api/trips/dream/${suggestion.tripId}/ai-suggestions`);
-      console.log('Suggestion data:', suggestion);
       
       const response = await fetch(`${API_URL}/api/trips/dream/${suggestion.tripId}/ai-suggestions`, {
         method: 'POST',
@@ -230,7 +226,6 @@ export const dreamTripService = {
       }
       
       const data = await response.json();
-      console.log('Saved AI suggestion response:', data);
       
       return {
         _id: data._id,
@@ -249,7 +244,6 @@ export const dreamTripService = {
 
   deleteAISuggestion: async (suggestionId: string): Promise<void> => {
     try {
-      console.log('Deleting AI suggestion:', suggestionId);
       const response = await fetch(`${API_URL}/api/trips/dream/ai-suggestions/${suggestionId}`, {
         method: 'DELETE',
         headers: getHeaders()

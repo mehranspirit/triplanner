@@ -88,7 +88,6 @@ const CalendarMap: React.FC<CalendarMapProps> = ({ trip }) => {
           // Check cache first
           const cacheKey = getCalendarLocationCacheKey(loc.name);
           if (calendarLocationCache[cacheKey]) {
-            console.log(`Using cached location data for location: ${loc.name}`);
             
             return {
               ...calendarLocationCache[cacheKey],

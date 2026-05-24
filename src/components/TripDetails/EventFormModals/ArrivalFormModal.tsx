@@ -16,7 +16,6 @@ interface ArrivalFormModalProps {
 
 const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, onSave, eventToEdit }) => {
   // Log the received eventToEdit prop
-  console.log('ArrivalFormModal received eventToEdit:', eventToEdit);
 
   const form = useForm<ArrivalFormData>({
     resolver: zodResolver(arrivalEventSchema as z.ZodType<ArrivalFormData>),
@@ -30,7 +29,6 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
 
   useEffect(() => {
     if (isOpen && eventToEdit) {
-      console.log('ArrivalFormModal: Resetting form with event data:', eventToEdit);
       form.reset({
         ...eventToEdit,
         arrivalDate: eventToEdit.date || '',
@@ -54,7 +52,6 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
   }, [isOpen, eventToEdit?.id]); // Only reset when modal opens or eventToEdit changes
 
   const onSubmit = (data: ArrivalFormData) => {
-    console.log("ArrivalFormModal onSubmit called with data:", data);
     
     // Create a copy of the form data
     const processedData: any = { ...data };
@@ -69,10 +66,6 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
       const naiveISOString = `${data.arrivalDate}T${data.arrivalTime}:00`;
       processedData.startDate = naiveISOString;
       processedData.endDate = naiveISOString;
-      console.log("Created ISO strings:", { 
-        startDate: processedData.startDate, 
-        endDate: processedData.endDate 
-      });
     } else {
       // Provide fallback empty strings to avoid validation issues
       processedData.startDate = "";
@@ -95,13 +88,10 @@ const ArrivalFormModal: React.FC<ArrivalFormModalProps> = ({ isOpen, onClose, on
       processedData.dislikes = eventToEdit.dislikes || [];
     }
 
-    console.log("Final processed data to save:", processedData);
     
     try {
       onSave(processedData);
-      console.log("ArrivalFormModal: onSave called successfully");
     onClose();
-      console.log("ArrivalFormModal: onClose called");
     } catch (error) {
       console.error("ArrivalFormModal: Error in onSave/onClose:", error);
     }

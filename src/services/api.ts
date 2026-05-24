@@ -147,6 +147,26 @@ interface API {
 // Add helper after imports near top
 // ---------------- Legacy date normalization ----------------
 // Convert old `date` + `time` style events to new startDate / endDate ISO strings.
+// Convert old `date` + `time` style events to new startDate / endDate ISO strings.
+const buildLegacyIsoDate = (dateStr: string, timeStr: string): string | null => {
+  if (!dateStr) return null;
+
+  const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const timeParts = timeStr.split(':');
+  const normalizedTime = timeParts.length >= 3
+    ? timeStr
+    : timeParts.length === 2
+      ? `${timeStr}:00`
+      : '00:00:00';
+
+  const parsed = new Date(`${datePart}T${normalizedTime}Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+};
+
 const normalizeEventDates = (events: any[] = []) => {
   return events.map((ev) => {
     if (!ev || ev.startDate) return ev;
@@ -154,30 +174,22 @@ const normalizeEventDates = (events: any[] = []) => {
     // Arrival / departure / point events with date + time
     if (ev.date) {
       const legacyTime = ev.time || ev.departureTime || ev.arrivalTime || ev.pickupTime || ev.dropoffTime || '00:00';
-      try {
-        const iso = new Date(`${ev.date}T${legacyTime}:00Z`).toISOString();
+      const iso = buildLegacyIsoDate(ev.date, legacyTime);
+      if (iso) {
         ev.startDate = iso;
         ev.endDate = iso;
-      } catch (error) {
-        console.error(`Failed to normalize legacy time: ${legacyTime}`, error);
       }
     }
 
     // Stay events with checkIn / checkOut (date only)
     if (ev.type === 'stay') {
       if (!ev.startDate && ev.checkIn) {
-        try {
-          ev.startDate = new Date(`${ev.checkIn}T00:00:00Z`).toISOString();
-        } catch (error) { 
-          console.error(`Stay Norm: Bad checkIn date format: ${ev.checkIn}`, error); 
-        }
+        const iso = buildLegacyIsoDate(ev.checkIn, '00:00');
+        if (iso) ev.startDate = iso;
       }
       if (!ev.endDate && ev.checkOut) {
-        try {
-          ev.endDate = new Date(`${ev.checkOut}T00:00:00Z`).toISOString();
-        } catch (error) { 
-          console.error(`Stay Norm: Bad checkOut date format: ${ev.checkOut}`, error); 
-        }
+        const iso = buildLegacyIsoDate(ev.checkOut, '00:00');
+        if (iso) ev.endDate = iso;
       }
     }
 
@@ -185,20 +197,14 @@ const normalizeEventDates = (events: any[] = []) => {
     if (ev.type === 'rental_car') {
       if (!ev.startDate && ev.date) {
         const pt = ev.pickupTime || '00:00';
-        try {
-          ev.startDate = new Date(`${ev.date}T${pt}:00Z`).toISOString();
-        } catch (error) {
-          console.error(`Rental Car Norm: Bad pickup date/time format: ${ev.date}T${pt}`, error);
-        }
+        const iso = buildLegacyIsoDate(ev.date, pt);
+        if (iso) ev.startDate = iso;
       }
       if (!ev.endDate && (ev.dropoffDate || ev.date)) {
         const dd = ev.dropoffDate || ev.date;
         const dt = ev.dropoffTime || '00:00';
-        try {
-          ev.endDate = new Date(`${dd}T${dt}:00Z`).toISOString();
-        } catch (error) {
-          console.error(`Rental Car Norm: Bad dropoff date/time format: ${dd}T${dt}`, error);
-        }
+        const iso = buildLegacyIsoDate(dd, dt);
+        if (iso) ev.endDate = iso;
       }
     }
 
@@ -209,7 +215,6 @@ const normalizeEventDates = (events: any[] = []) => {
 export const api: API = {
   // Get all users
   getUsers: async (): Promise<User[]> => {
-    console.log('Fetching users from API');
     const response = await fetch(`${API_URL}/api/auth/users`, {
       headers: getHeaders(),
     });
@@ -218,7 +223,6 @@ export const api: API = {
       throw new Error(data.message || 'Failed to fetch users');
     }
     const users = await response.json();
-    console.log('Users response from API:', users);
     return users.map((user: any) => ({
       ...user,
       _id: user._id,
@@ -228,7 +232,6 @@ export const api: API = {
 
   // Change user role
   changeUserRole: async (userId: string, isAdmin: boolean): Promise<User> => {
-    console.log('Changing user role:', { userId, isAdmin });
     const response = await fetch(`${API_URL}/api/users/${userId}/role`, {
       method: 'PATCH',
       headers: getHeaders(),
@@ -241,7 +244,6 @@ export const api: API = {
     }
     
     const data = await response.json();
-    console.log('Role change response:', data);
     return data.user;
   },
 
@@ -255,7 +257,6 @@ export const api: API = {
       throw new Error(errorData?.message || 'Failed to fetch trips');
     }
     const trips = await response.json();
-    console.log('Raw trips from API:', trips);
     return trips.map((trip: any) => {
       if (!trip) {
         console.error('Invalid trip data received:', trip);
@@ -302,7 +303,6 @@ export const api: API = {
 
   getTrip: async (id: string | undefined): Promise<Trip> => {
     if (!id) throw new Error('Trip ID is required');
-    console.log('Fetching trip with ID:', id);
     const response = await fetch(`${API_URL}/api/trips/${id}`, {
       headers: getHeaders(),
     });
@@ -311,7 +311,6 @@ export const api: API = {
       throw new Error(errorData?.message || 'Failed to fetch trip');
     }
     const trip = await response.json();
-    console.log('Raw trip data:', JSON.stringify(trip, null, 2));
     
     // Transform the trip data with proper type handling
     const transformedTrip: Trip = {
@@ -363,7 +362,6 @@ export const api: API = {
 
   // Create a new trip
   createTrip: async (trip: Omit<Trip, '_id' | 'createdAt' | 'updatedAt'>): Promise<Trip> => {
-    console.log('Creating trip with data:', trip);
     
     // Transform the owner data for the server
     const serverTripData = {
@@ -371,7 +369,6 @@ export const api: API = {
       owner: trip.owner._id // Send just the owner ID to the server
     };
     
-    console.log('Sending to server:', serverTripData);
     const response = await fetch(`${API_URL}/api/trips`, {
       method: 'POST',
       headers: getHeaders(),
@@ -385,7 +382,6 @@ export const api: API = {
     }
     
     const createdTrip = await response.json();
-    console.log('Raw created trip from API:', JSON.stringify(createdTrip, null, 2));
 
     // Validate the response
     if (!createdTrip || typeof createdTrip !== 'object') {
@@ -441,7 +437,6 @@ export const api: API = {
       tags: createdTrip.tags || []
     };
     
-    console.log('Final transformed trip:', JSON.stringify(transformedTrip, null, 2));
     return transformedTrip;
   },
 
@@ -464,7 +459,6 @@ export const api: API = {
   // Leave a trip
   leaveTrip: async (tripId: string): Promise<void> => {
     if (!tripId) throw new Error('Trip ID is required');
-    console.log('Leaving trip with ID:', tripId);
     const response = await fetch(`${API_URL}/api/trips/${tripId}/leave`, {
       method: 'POST',
       headers: getHeaders(),
@@ -483,7 +477,6 @@ export const api: API = {
 
   removeCollaborator: async (tripId: string, userId: string): Promise<void> => {
     if (!tripId || !userId) throw new Error('Trip ID and user ID are required');
-    console.log('Removing collaborator from trip:', { tripId, userId });
     const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
       method: 'DELETE',
       headers: getHeaders(),
@@ -502,7 +495,6 @@ export const api: API = {
 
   updateCollaboratorRole: async (tripId: string, userId: string, role: 'editor' | 'viewer'): Promise<void> => {
     if (!tripId || !userId || !role) throw new Error('Trip ID, user ID, and role are required');
-    console.log('Updating collaborator role:', { tripId, userId, role });
 
     const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators/${userId}`, {
       method: 'PUT',
@@ -518,7 +510,6 @@ export const api: API = {
 
   addCollaborator: async (tripId: string, email: string, role: 'editor' | 'viewer'): Promise<void> => {
     if (!tripId || !email || !role) throw new Error('Trip ID, email, and role are required');
-    console.log('Adding collaborator to trip:', { tripId, email, role });
     const response = await fetch(`${API_URL}/api/trips/${tripId}/collaborators`, {
       method: 'POST',
       headers: getHeaders(),
@@ -581,7 +572,6 @@ export const api: API = {
 
   deleteTrip: async (tripId: string): Promise<void> => {
     if (!tripId) throw new Error('Trip ID is required');
-    console.log('Deleting trip with ID:', tripId);
     const response = await fetch(`${API_URL}/api/trips/${tripId}`, {
       method: 'DELETE',
       headers: getHeaders(),
@@ -594,7 +584,6 @@ export const api: API = {
 
   deleteUser: async (userId: string): Promise<void> => {
     if (!userId) throw new Error('User ID is required');
-    console.log('Deleting user with ID:', userId);
     const response = await fetch(`${API_URL}/api/users/${userId}`, {
       method: 'DELETE',
       headers: getHeaders(),
@@ -607,7 +596,6 @@ export const api: API = {
 
   generateShareLink: async (tripId: string): Promise<{ shareableLink: string }> => {
     if (!tripId) throw new Error('Trip ID is required');
-    console.log('Generating share link for trip:', tripId);
     const response = await fetch(`${API_URL}/api/trips/${tripId}/share-link`, {
       method: 'POST',
       headers: getHeaders(),
@@ -617,13 +605,11 @@ export const api: API = {
       throw new Error(errorData.message || 'Failed to generate share link');
     }
     const data = await response.json();
-    console.log('Share link generated:', data);
     return data;
   },
 
   revokeShareLink: async (tripId: string): Promise<void> => {
     if (!tripId) throw new Error('Trip ID is required');
-    console.log('Revoking share link for trip:', tripId);
     const response = await fetch(`${API_URL}/api/trips/${tripId}/share-link`, {
       method: 'DELETE',
       headers: getHeaders(),
@@ -636,7 +622,6 @@ export const api: API = {
 
   login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
     if (!email || !password) throw new Error('Email and password are required');
-    console.log('Logging in with email:', email);
     const response = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
@@ -649,13 +634,11 @@ export const api: API = {
       throw new Error(errorData.message || 'Failed to login');
     }
     const data = await response.json();
-    console.log('Login response:', data);
     return data;
   },
 
   register: async (name: string, email: string, password: string): Promise<{ token: string; user: User }> => {
     if (!name || !email || !password) throw new Error('Name, email, and password are required');
-    console.log('Registering new user:', { name, email });
     const response = await fetch(`${API_URL}/api/auth/register`, {
       method: 'POST',
       headers: {
@@ -668,17 +651,14 @@ export const api: API = {
       throw new Error(errorData.message || 'Failed to register');
     }
     const data = await response.json();
-    console.log('Registration response:', data);
     return data;
   },
 
   logout: () => {
-    console.log('Logging out');
     localStorage.removeItem('token');
   },
 
   getCurrentUser: async (): Promise<User> => {
-    console.log('Fetching current user');
     const response = await fetch(`${API_URL}/api/auth/current-user`, {
       headers: getHeaders(),
     });
@@ -687,7 +667,6 @@ export const api: API = {
       throw new Error(errorData.message || 'Failed to fetch current user');
     }
     const user = await response.json();
-    console.log('Current user response:', user);
     return user;
   },
 
@@ -799,7 +778,6 @@ export const api: API = {
 
   voteEvent: async (tripId: string, eventId: string, voteType: 'like' | 'dislike'): Promise<Trip> => {
     if (!tripId || !eventId || !voteType) throw new Error('Trip ID, event ID, and vote type are required');
-    console.log(`Voting on event: ${voteType}`, { tripId, eventId });
     
     const response = await fetch(`${API_URL}/api/trips/${tripId}/events/${eventId}/vote`, {
       method: 'POST',
@@ -817,7 +795,6 @@ export const api: API = {
   
   removeVote: async (tripId: string, eventId: string): Promise<Trip> => {
     if (!tripId || !eventId) throw new Error('Trip ID and event ID are required');
-    console.log('Removing vote from event:', { tripId, eventId });
     
     const response = await fetch(`${API_URL}/api/trips/${tripId}/events/${eventId}/vote`, {
       method: 'DELETE',
@@ -834,7 +811,6 @@ export const api: API = {
 
   getAISuggestions: async (tripId: string, userId: string): Promise<AISuggestionHistory[]> => {
     try {
-      console.log('Fetching AI suggestions for:', { tripId, userId });
       const response = await fetch(`${API_URL}/api/trips/${tripId}/ai-suggestions/${userId}`, {
         headers: getHeaders(),
       });
@@ -850,7 +826,6 @@ export const api: API = {
       }
       
       const data = await response.json();
-      console.log('Fetched AI suggestions:', data);
       
       // Transform the response to match AISuggestionHistory type
       return data.map((item: any) => ({
@@ -870,8 +845,6 @@ export const api: API = {
 
   saveAISuggestion: async (suggestion: Omit<AISuggestionHistory, '_id'>): Promise<AISuggestionHistory> => {
     try {
-      console.log('Saving AI suggestion to:', `${API_URL}/api/trips/${suggestion.tripId}/ai-suggestions`);
-      console.log('Suggestion data:', suggestion);
       
       const response = await fetch(`${API_URL}/api/trips/${suggestion.tripId}/ai-suggestions`, {
         method: 'POST',
@@ -890,7 +863,6 @@ export const api: API = {
       }
       
       const data = await response.json();
-      console.log('Saved AI suggestion response:', data);
       
       // Ensure the response matches the AISuggestionHistory type
       const transformedSuggestion: AISuggestionHistory = {
@@ -912,7 +884,6 @@ export const api: API = {
 
   deleteAISuggestion: async (suggestionId: string): Promise<void> => {
     try {
-      console.log('Deleting AI suggestion:', suggestionId);
       const response = await fetch(`${API_URL}/api/trips/ai-suggestions/${suggestionId}`, {
         method: 'DELETE',
         headers: getHeaders()
@@ -1028,7 +999,6 @@ export const api: API = {
   // Dream Trip specific methods
   getDreamTrip: async (id: string | undefined): Promise<DreamTrip> => {
     if (!id) throw new Error('Trip ID is required');
-    console.log('Fetching trip with ID:', id);
     const response = await fetch(`${API_URL}/api/trips/dream/${id}`, {
       headers: getHeaders(),
     });
@@ -1037,7 +1007,6 @@ export const api: API = {
       throw new Error(errorData?.message || 'Failed to fetch trip');
     }
     const trip = await response.json();
-    console.log('Raw trip data:', JSON.stringify(trip, null, 2));
     
     // Transform the trip data with proper type handling
     const transformedTrip: DreamTrip = {

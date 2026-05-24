@@ -64,7 +64,6 @@ const ActivityFormModal: React.FC<ActivityFormModalProps> = ({ isOpen, onClose, 
 
   const onSubmit = (data: ActivityFormData) => {
     const processedData = { ...data };
-    console.log("Processed Activity data to save:", processedData);
     onSave(processedData as unknown as Event);
     onClose();
   };

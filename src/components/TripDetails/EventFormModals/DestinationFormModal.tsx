@@ -51,7 +51,6 @@ const DestinationFormModal: React.FC<DestinationFormModalProps> = ({ isOpen, onC
 
   const onSubmit = (data: DestinationFormData) => {
     const processedData = { ...data };
-    console.log("Processed Destination data to save:", processedData);
     onSave(processedData as unknown as Event);
     onClose();
   };

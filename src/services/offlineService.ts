@@ -139,6 +139,29 @@ class OfflineService {
     });
   }
 
+  private static CACHE_USER_KEY = 'cacheUserId';
+
+  async ensureCacheForUser(userId: string): Promise<void> {
+    const cachedUserId = await this.getMetadata(OfflineService.CACHE_USER_KEY);
+    if (cachedUserId && cachedUserId !== userId) {
+      await this.clearCache();
+    }
+    await this.setMetadata(OfflineService.CACHE_USER_KEY, userId);
+  }
+
+  async syncTripsCache(trips: Trip[]): Promise<void> {
+    const cachedTrips = await this.getCachedTrips();
+    const nextTripIds = new Set(trips.map((trip) => trip._id));
+
+    for (const trip of cachedTrips) {
+      if (!nextTripIds.has(trip._id)) {
+        await this.deleteCachedTrip(trip._id);
+      }
+    }
+
+    await this.cacheTrips(trips);
+  }
+
   // Trips Methods
   async cacheTrips(trips: Trip[]): Promise<void> {
     if (!this.db) await this.init();
@@ -453,8 +476,8 @@ class OfflineService {
       tx.objectStore('syncQueue').clear()
     ]);
     await tx.done;
+    await this.setMetadata(OfflineService.CACHE_USER_KEY, null);
     
-    console.log('All offline cache cleared');
   }
 
   // Selective cache clearing for optimization
@@ -484,7 +507,6 @@ class OfflineService {
       await this.db!.delete('expenses', expense._id);
     }
     
-    console.log(`Cleared ${expiredTrips.length + expiredEvents.length + expiredExpenses.length} expired items`);
   }
 
   // Batch operations for better performance
@@ -609,7 +631,6 @@ class OfflineService {
       cleanedCount++;
     }
 
-    console.log(`Cleaned up ${cleanedCount} orphaned records`);
     return cleanedCount;
   }
 
@@ -677,7 +698,6 @@ class OfflineService {
 
   // Optimize database performance
   async optimizeDatabase(): Promise<void> {
-    console.log('Starting database optimization...');
     
     // Clean expired cache
     await this.clearExpiredCache();
@@ -691,7 +711,6 @@ class OfflineService {
       console.warn('Cache validation issues found:', validation.issues);
     }
     
-    console.log(`Database optimization complete. Cleaned ${cleanedCount} records.`);
   }
 }
 

@@ -41,7 +41,6 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
       const departureTimePart = eventToEdit.startDate?.substring(11, 16) || '';
       const arrivalDatePart = eventToEdit.endDate?.substring(0, 10) || '';
       const arrivalTimePart = eventToEdit.endDate?.substring(11, 16) || '';
-      console.log('TrainFormModal: Directly parsed values for form reset:', { departureDatePart, departureTimePart, arrivalDatePart, arrivalTimePart });
       form.reset({
         ...eventToEdit,
         cost: eventToEdit.cost ?? undefined,
@@ -73,7 +72,6 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
   }, [eventToEdit, form, isOpen]);
 
   const onSubmit = (data: TrainFormData) => {
-    console.log("Raw Train form data (strings):", data);
     const processedData: any = { ...data };
 
     // Construct naive ISO-like strings with proper time handling
@@ -82,7 +80,6 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
       const time = data.departureTime.includes(':') ? data.departureTime : `${data.departureTime}:00`;
       processedData.startDate = `${data.departureDate}T${time}`;
       processedData.departureTime = time;
-      console.log("TrainFormModal: Constructed naive ISO for startDate:", processedData.startDate);
     } else {
       processedData.startDate = undefined;
       processedData.departureTime = undefined;
@@ -93,7 +90,6 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
       const time = data.arrivalTime.includes(':') ? data.arrivalTime : `${data.arrivalTime}:00`;
       processedData.endDate = `${data.arrivalDate}T${time}`;
       processedData.arrivalTime = time;
-      console.log("TrainFormModal: Constructed naive ISO for endDate:", processedData.endDate);
     } else {
       processedData.endDate = undefined;
       processedData.arrivalTime = undefined;
@@ -103,7 +99,6 @@ const TrainFormModal: React.FC<TrainFormModalProps> = ({ isOpen, onClose, onSave
     delete processedData.departureDate;
     delete processedData.arrivalDate;
 
-    console.log("Processed Train data to save (naive ISO):", processedData);
     onSave(processedData as Event);
     onClose();
   };

@@ -37,12 +37,10 @@ const BaseEventFormModal: React.FC<BaseEventFormModalProps> = ({
 
   // Debug modal status
   useEffect(() => {
-    console.log(`BaseEventFormModal for ${eventType}: isOpen=${isOpen}, eventToEdit=`, eventToEdit);
   }, [isOpen, eventToEdit, eventType]);
 
   // Handle form submission directly
   const handleFormSubmit = form.handleSubmit((data) => {
-    console.log(`BaseEventFormModal: Form submitted for ${eventType}`, data);
     try {
       onSubmit(data);
     } catch (error) {
@@ -57,11 +55,9 @@ const BaseEventFormModal: React.FC<BaseEventFormModalProps> = ({
     <Dialog 
       open={isOpen} 
       onOpenChange={(open) => {
-        console.log(`BaseEventFormModal Dialog onOpenChange: ${open} -> ${!open}`);
         if (!open) {
           // Only handle closing through the Dialog UI (clicking outside/escape key)
           // Don't close on form submission
-          console.log('Dialog closing through UI interaction');
           form.reset(); // Reset the form when closing
           onClose();
         }
@@ -76,7 +72,6 @@ const BaseEventFormModal: React.FC<BaseEventFormModalProps> = ({
         <Form {...form}>
           <form 
             onSubmit={(e) => {
-              console.log('Form submit event triggered');
               handleFormSubmit(e);
               // Don't call e.preventDefault() - let the form's normal submission flow handle it
             }} 
@@ -89,7 +84,6 @@ const BaseEventFormModal: React.FC<BaseEventFormModalProps> = ({
             {(eventType || eventToEdit) && (
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => {
-                  console.log('BaseEventFormModal: Cancel button clicked');
                   form.reset(); // Reset the form when canceling
                   onClose();
                 }}>

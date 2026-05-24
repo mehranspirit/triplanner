@@ -43,14 +43,6 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
   // Pre-fill form when editing
   useEffect(() => {
     if (eventToEdit) {
-      console.log('StayFormModal: Setting form values:', { 
-        checkIn: eventToEdit.checkIn,
-        checkInTime: eventToEdit.checkInTime,
-        checkOut: eventToEdit.checkOut,
-        checkOutTime: eventToEdit.checkOutTime,
-        eventToEdit 
-      });
-      
       form.reset({
         ...eventToEdit,
         cost: eventToEdit.cost ?? undefined,
@@ -79,7 +71,6 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
   }, [eventToEdit, form, isOpen]);
 
   const onSubmit = (data: StayFormData) => {
-    console.log("Raw Stay form data (strings):", data);
     const processedData: any = { ...data };
 
     // Map form fields to database fields
@@ -99,7 +90,6 @@ const StayFormModal: React.FC<StayFormModalProps> = ({ isOpen, onClose, onSave, 
     delete processedData.checkInDate;
     delete processedData.checkOutDate;
 
-    console.log("Processed Stay data to save:", processedData);
     onSave(processedData as Event);
     onClose();
   };

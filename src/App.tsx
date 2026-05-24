@@ -100,7 +100,6 @@ const App: React.FC = () => {
     
     const initializeApp = async () => {
       try {
-        console.log('🚀 Initializing TripPlanner with offline support...');
         
         // Add timeout safety mechanism
         const initTimeout = setTimeout(() => {
@@ -119,7 +118,6 @@ const App: React.FC = () => {
         // Clear timeout since we completed successfully
         clearTimeout(initTimeout);
         setIsAppInitialized(true);
-        console.log('✅ App initialization complete');
       } catch (error) {
         console.error('❌ App initialization failed:', error);
         // Always allow app to continue even if initialization fails
@@ -134,7 +132,6 @@ const App: React.FC = () => {
   const registerServiceWorker = async () => {
     if ('serviceWorker' in navigator) {
       try {
-        console.log('🔧 Registering service worker...');
         
         // In development, Vite PWA generates service worker at different path
         const swPath = import.meta.env.DEV ? '/dev-dist/sw.js' : '/sw.js';
@@ -147,25 +144,21 @@ const App: React.FC = () => {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed') {
                 if (navigator.serviceWorker.controller) {
-                  console.log('🔄 New service worker available, will refresh on next visit');
                   // Optionally show user a refresh button
                   showUpdateAvailable();
                 } else {
-                  console.log('✅ Service worker cached app for offline use');
                 }
               }
             });
           }
         });
         
-        console.log('✅ Service worker registered:', registration.scope);
         return registration;
       } catch (error) {
         console.error('❌ Service worker registration failed:', error);
         throw error;
       }
     } else {
-      console.log('❌ Service workers not supported');
       throw new Error('Service workers not supported');
     }
   };

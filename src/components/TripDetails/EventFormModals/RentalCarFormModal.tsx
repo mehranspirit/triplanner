@@ -42,14 +42,6 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
       const dropoffDatePart = eventToEdit.dropoffDate || '';
       const dropoffTimePart = eventToEdit.dropoffTime || '';
       
-      console.log('RentalCarFormModal: Parsed values:', { 
-        datePart, 
-        pickupTimePart, 
-        dropoffDatePart, 
-        dropoffTimePart,
-        eventToEdit 
-      });
-      
       form.reset({
         ...eventToEdit,
         cost: eventToEdit.cost ?? undefined,
@@ -80,7 +72,6 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
   }, [eventToEdit, form, isOpen]);
 
   const onSubmit = (data: RentalCarFormData) => {
-    console.log("Raw RentalCar form data (strings):", data);
     const processedData: any = { ...data };
 
     // Map form fields to database fields
@@ -89,7 +80,6 @@ const RentalCarFormModal: React.FC<RentalCarFormModalProps> = ({ isOpen, onClose
     processedData.dropoffDate = data.dropoffDate;
     processedData.dropoffTime = data.dropoffTime;
 
-    console.log("Processed RentalCar data to save:", processedData);
     onSave(processedData as Event);
     onClose();
   };

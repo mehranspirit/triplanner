@@ -12,20 +12,8 @@ const Navigation: React.FC = () => {
 
   // Update component when user photo changes
   useEffect(() => {
-    console.log('Navigation - User photo changed:', {
-      photoUrl: user?.photoUrl,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Force a re-render
     forceUpdate();
   }, [user?.photoUrl]);
-
-  console.log('Navigation - Rendering with:', {
-    hasUser: !!user,
-    photoUrl: user?.photoUrl,
-    timestamp: new Date().toISOString()
-  });
 
   const handleLogout = useCallback(() => {
     logout();

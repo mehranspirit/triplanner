@@ -9,6 +9,11 @@ class NetworkAwareApiService {
   private pendingOperations: Set<string> = new Set();
   private syncTimeout: NodeJS.Timeout | null = null;
   private onlineStatusListeners = new Set<(isOnline: boolean) => void>();
+  private tripsRefreshPromise: Promise<void> | null = null;
+
+  private hasAuthToken(): boolean {
+    return !!localStorage.getItem('token');
+  }
 
   constructor() {
     // Initialize offline service
@@ -16,14 +21,12 @@ class NetworkAwareApiService {
     
     // Listen for network changes
     window.addEventListener('online', () => {
-      console.log('Network: Back online');
       this.isOnline = true;
       this.notifyOnlineStatusListeners();
       this.debouncedSync();
     });
 
     window.addEventListener('offline', () => {
-      console.log('Network: Gone offline');
       this.isOnline = false;
       this.notifyOnlineStatusListeners();
     });
@@ -83,10 +86,8 @@ class NetworkAwareApiService {
     if (this.isOnline) {
       this.pendingOperations.add(cacheKey);
       try {
-        console.log('Fetching trips from API...');
         const trips = await api.getTrips();
-        await offlineService.cacheTrips(trips);
-        console.log(`Cached ${trips.length} trips`);
+        await offlineService.syncTripsCache(trips);
         return trips;
       } catch (error) {
         console.error('Failed to fetch trips from API, using cache:', error);
@@ -95,7 +96,6 @@ class NetworkAwareApiService {
         this.pendingOperations.delete(cacheKey);
       }
     } else {
-      console.log('Offline: Using cached trips');
       return await offlineService.getCachedTrips();
     }
   }
@@ -110,7 +110,6 @@ class NetworkAwareApiService {
     if (this.isOnline) {
       this.pendingOperations.add(cacheKey);
       try {
-        console.log(`Fetching trip ${tripId} from API...`);
         const trip = await api.getTrip(tripId);
         await offlineService.updateCachedTrip(trip);
         
@@ -127,7 +126,6 @@ class NetworkAwareApiService {
         this.pendingOperations.delete(cacheKey);
       }
     } else {
-      console.log(`Offline: Using cached trip ${tripId}`);
       return await offlineService.getCachedTrip(tripId);
     }
   }
@@ -144,7 +142,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log('Creating trip via API...');
         const createdTrip = await api.createTrip(tripData);
         await offlineService.updateCachedTrip(createdTrip);
         return createdTrip;
@@ -160,7 +157,6 @@ class NetworkAwareApiService {
         return tempTrip;
       }
     } else {
-      console.log('Offline: Caching trip for later sync');
       await offlineService.updateCachedTrip(tempTrip);
       await offlineService.addToSyncQueue({
         type: 'CREATE_TRIP',
@@ -179,7 +175,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Updating trip ${trip._id} via API...`);
         const apiUpdatedTrip = await api.updateTrip(updatedTrip);
         await offlineService.updateCachedTrip(apiUpdatedTrip);
         return apiUpdatedTrip;
@@ -194,7 +189,6 @@ class NetworkAwareApiService {
         return updatedTrip;
       }
     } else {
-      console.log('Offline: Queuing trip update for sync');
       await offlineService.addToSyncQueue({
         type: 'UPDATE_TRIP',
         data: updatedTrip,
@@ -211,7 +205,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Deleting trip ${tripId} via API...`);
         await api.deleteTrip(tripId);
       } catch (error) {
         console.error('Failed to delete trip via API, queuing for sync:', error);
@@ -223,7 +216,6 @@ class NetworkAwareApiService {
         });
       }
     } else {
-      console.log('Offline: Queuing trip deletion for sync');
       await offlineService.addToSyncQueue({
         type: 'DELETE_TRIP',
         data: { tripId },
@@ -260,7 +252,6 @@ class NetworkAwareApiService {
     if (this.isOnline) {
       this.pendingOperations.add(cacheKey);
       try {
-        console.log(`Fetching expenses for trip ${tripId} from API...`);
         const expenses = await api.getExpenses(tripId);
         await offlineService.cacheExpenses(tripId, expenses);
         return expenses;
@@ -271,7 +262,6 @@ class NetworkAwareApiService {
         this.pendingOperations.delete(cacheKey);
       }
     } else {
-      console.log(`Offline: Using cached expenses for trip ${tripId}`);
       return await offlineService.getCachedExpenses(tripId);
     }
   }
@@ -290,7 +280,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Adding expense to trip ${tripId} via API...`);
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/expenses`, {
           method: 'POST',
           headers: {
@@ -307,7 +296,6 @@ class NetworkAwareApiService {
         const realExpense = await response.json();
         
         await offlineService.deleteCachedExpense(tempId);
-        console.log(`Removed temporary expense ${tempId} after creating real expense ${realExpense._id}`);
         
         await offlineService.updateCachedExpense(tripId, realExpense);
         return realExpense;
@@ -323,7 +311,6 @@ class NetworkAwareApiService {
         return tempExpense;
       }
     } else {
-      console.log('Offline: Queuing expense creation for sync');
       await offlineService.addToSyncQueue({
         type: 'CREATE_EXPENSE',
         data: { ...expenseData, tempId },
@@ -350,7 +337,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Updating expense ${expenseId} for trip ${tripId} via API...`);
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/expenses/${expenseId}`, {
           method: 'PUT',
           headers: {
@@ -379,7 +365,6 @@ class NetworkAwareApiService {
         return updatedExpense;
       }
     } else {
-      console.log('Offline: Queuing expense update for sync');
       await offlineService.addToSyncQueue({
         type: 'UPDATE_EXPENSE',
         data: { expenseId, updates },
@@ -397,7 +382,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Deleting expense ${expenseId} for trip ${tripId} via API...`);
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/expenses/${expenseId}`, {
           method: 'DELETE',
           headers: {
@@ -419,7 +403,6 @@ class NetworkAwareApiService {
         });
       }
     } else {
-      console.log('Offline: Queuing expense deletion for sync');
       await offlineService.addToSyncQueue({
         type: 'DELETE_EXPENSE',
         data: { expenseId },
@@ -447,7 +430,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Settling expense ${expenseId} for participant ${participantId} via API...`);
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/expenses/${expenseId}/settle`, {
           method: 'POST',
           headers: {
@@ -474,7 +456,6 @@ class NetworkAwareApiService {
         });
       }
     } else {
-      console.log('Offline: Queuing expense settlement for sync');
       await offlineService.addToSyncQueue({
         type: 'SETTLE_EXPENSE',
         data: { expenseId, participantId },
@@ -574,7 +555,6 @@ class NetworkAwareApiService {
   async getExpenseSummary(tripId: string): Promise<ExpenseSummary | undefined> {
     if (this.isOnline) {
       try {
-        console.log(`Fetching expense summary for trip ${tripId} via API...`);
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/expenses/summary`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -593,7 +573,6 @@ class NetworkAwareApiService {
         return await this.calculateExpenseSummaryLocally(tripId);
       }
     } else {
-      console.log('Offline: Calculating expense summary locally');
       return await this.calculateExpenseSummaryLocally(tripId);
     }
   }
@@ -778,7 +757,6 @@ class NetworkAwareApiService {
     if (this.isOnline) {
       this.pendingOperations.add(cacheKey);
       try {
-        console.log(`Fetching notes for trip ${tripId} from API...`);
         const notes = await api.getTripNotes(tripId);
         await offlineService.cacheNotes(tripId, notes);
         return notes;
@@ -789,7 +767,6 @@ class NetworkAwareApiService {
         this.pendingOperations.delete(cacheKey);
       }
     } else {
-      console.log(`Offline: Using cached notes for trip ${tripId}`);
       return await offlineService.getCachedNotes(tripId);
     }
   }
@@ -840,7 +817,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Updating notes for trip ${tripId} via API...`);
         const updatedNotes = await api.updateTripNotes(tripId, content);
         await offlineService.cacheNotes(tripId, updatedNotes);
         return updatedNotes;
@@ -856,7 +832,6 @@ class NetworkAwareApiService {
         return tempNotes;
       }
     } else {
-      console.log('Offline: Queuing notes update for sync');
       await offlineService.addToSyncQueue({
         type: 'UPDATE_NOTES',
         data: { content },
@@ -879,7 +854,6 @@ class NetworkAwareApiService {
     if (this.isOnline) {
       this.pendingOperations.add(cacheKey);
       try {
-        console.log(`Fetching ${type} checklist for trip ${tripId} from API...`);
         // Construct API endpoint dynamically
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/checklist/${type}`, {
           headers: {
@@ -902,7 +876,6 @@ class NetworkAwareApiService {
         this.pendingOperations.delete(cacheKey);
       }
     } else {
-      console.log(`Offline: Using cached ${type} checklist for trip ${tripId}`);
       return await offlineService.getCachedChecklist(tripId, type) || [];
     }
   }
@@ -913,7 +886,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Updating ${type} checklist for trip ${tripId} via API...`);
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/trips/${tripId}/checklist/${type}`, {
           method: 'POST',
           headers: {
@@ -941,7 +913,6 @@ class NetworkAwareApiService {
         return bins;
       }
     } else {
-      console.log('Offline: Queuing checklist update for sync');
       await offlineService.addToSyncQueue({
         type: 'UPDATE_CHECKLIST',
         data: { type, bins },
@@ -977,7 +948,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Creating event for trip ${tripId} via API...`);
         const updatedTrip = await this.updateTrip(cachedTrip ? { ...cachedTrip, events: [...cachedTrip.events, tempEvent] } : tempEvent as any);
         return tempEvent; // Return the new event
       } catch (error) {
@@ -992,7 +962,6 @@ class NetworkAwareApiService {
         return tempEvent;
       }
     } else {
-      console.log('Offline: Queuing event creation for sync');
       await offlineService.addToSyncQueue({
         type: 'CREATE_EVENT',
         data: eventData,
@@ -1015,7 +984,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Updating event ${event.id} for trip ${tripId} via API...`);
         await this.updateTrip(cachedTrip ? { ...cachedTrip, events: cachedTrip.events.map(e => e.id === event.id ? event : e) } : event as any);
         return event;
       } catch (error) {
@@ -1030,7 +998,6 @@ class NetworkAwareApiService {
         return event;
       }
     } else {
-      console.log('Offline: Queuing event update for sync');
       await offlineService.addToSyncQueue({
         type: 'UPDATE_EVENT',
         data: event,
@@ -1053,7 +1020,6 @@ class NetworkAwareApiService {
 
     if (this.isOnline) {
       try {
-        console.log(`Deleting event ${eventId} for trip ${tripId} via API...`);
         await this.updateTrip(cachedTrip ? { ...cachedTrip, events: cachedTrip.events.filter(e => e.id !== eventId) } : {} as any);
       } catch (error) {
         console.error('Failed to delete event via API, queuing for sync:', error);
@@ -1066,7 +1032,6 @@ class NetworkAwareApiService {
         });
       }
     } else {
-      console.log('Offline: Queuing event deletion for sync');
       await offlineService.addToSyncQueue({
         type: 'DELETE_EVENT',
         data: { eventId },
@@ -1082,13 +1047,11 @@ class NetworkAwareApiService {
     if (this.syncInProgress || !this.isOnline) return;
 
     this.syncInProgress = true;
-    console.log('Processing sync queue...');
 
     try {
       let syncQueue = await offlineService.getSyncQueue();
       
       if (syncQueue.length === 0) {
-        console.log('Sync queue is empty');
         return;
       }
       
@@ -1107,7 +1070,6 @@ class NetworkAwareApiService {
           
           // Remove operation from sync queue (operation.id is guaranteed to exist due to check above)
           await offlineService.removeSyncOperation(operation.id!);
-          console.log(`✓ Synced and removed operation: ${operation.type} (ID: ${operation.id})`);
         } catch (error) {
           console.error(`Failed to sync operation ${operation.type} (ID: ${operation.id}):`, error);
           
@@ -1169,12 +1131,10 @@ class NetworkAwareApiService {
       
       if (createOperation && hasDelete) {
         // If both create and delete exist, skip all operations for this temp item
-        console.log(`Skipping sync for temporary item ${tempId} (created and deleted offline)`);
         
         // Remove the temporary item from cache as well
         if (tempId.startsWith('temp-expense-')) {
           await offlineService.deleteCachedExpense(tempId);
-          console.log(`Removed temporary expense ${tempId} from cache (created and deleted offline)`);
         }
         
         // Remove these operations from the sync queue
@@ -1187,7 +1147,6 @@ class NetworkAwareApiService {
         if (!createOperation) {
           // Stale temp-only mutations cannot be replayed without the original
           // create payload. Remove them instead of retrying forever.
-          console.log(`Removing stale temporary operations for ${tempId}`);
           for (const operation of operations) {
             if (operation.id) {
               await offlineService.removeSyncOperation(operation.id);
@@ -1255,7 +1214,6 @@ class NetworkAwareApiService {
         // Remove the temporary expense from cache if tempId is available
         if (operationTempId) {
           await offlineService.deleteCachedExpense(operationTempId);
-          console.log(`Removed temporary expense ${operationTempId} after creating real expense ${createdExpense._id}`);
         } else {
           // Fallback: find by matching title and amount
           const cachedExpenses = await offlineService.getCachedExpenses(operation.tripId!);
@@ -1267,7 +1225,6 @@ class NetworkAwareApiService {
           
           if (tempExpense) {
             await offlineService.deleteCachedExpense(tempExpense._id);
-            console.log(`Removed temporary expense ${tempExpense._id} after creating real expense ${createdExpense._id}`);
           }
         }
         
@@ -1277,7 +1234,6 @@ class NetworkAwareApiService {
       case 'UPDATE_EXPENSE':
         // Skip updating expenses with temporary IDs
         if (operation.data.expenseId && operation.data.expenseId.startsWith('temp-expense-')) {
-          console.log(`Skipping update of temporary expense: ${operation.data.expenseId}`);
           break;
         }
         const updatedExpense = await api.updateExpense(
@@ -1291,7 +1247,6 @@ class NetworkAwareApiService {
       case 'DELETE_EXPENSE':
         // Skip deleting temporary expenses since they never existed on the server
         if (operation.data.expenseId.startsWith('temp-expense-')) {
-          console.log(`Skipping delete of temporary expense: ${operation.data.expenseId}`);
           break;
         }
         await api.deleteExpense(operation.tripId!, operation.data.expenseId);
@@ -1300,7 +1255,6 @@ class NetworkAwareApiService {
       case 'SETTLE_EXPENSE':
         // Skip settling expenses with temporary IDs
         if (operation.data.expenseId.startsWith('temp-expense-')) {
-          console.log(`Skipping settle of temporary expense: ${operation.data.expenseId}`);
           break;
         }
         const settledExpense = await api.settleExpense(operation.tripId!, operation.data.expenseId, operation.data.participantId);
@@ -1331,7 +1285,6 @@ class NetworkAwareApiService {
       case 'UPDATE_EVENT':
       case 'DELETE_EVENT':
         // These are handled through trip updates
-        console.log(`Event operation ${operation.type} will be handled through trip sync`);
         break;
         
       default:
@@ -1386,12 +1339,10 @@ class NetworkAwareApiService {
   // Preload critical data for better offline experience
   async preloadCriticalData(tripIds: string[] = []): Promise<void> {
     if (!this.isOnline) {
-      console.log('Cannot preload data while offline');
       return;
     }
 
     try {
-      console.log('Preloading critical data for offline access...');
       
       // Preload all trips if no specific trips provided
       if (tripIds.length === 0) {
@@ -1411,13 +1362,11 @@ class NetworkAwareApiService {
             this.getChecklist(tripId, 'shared'),
             this.getChecklist(tripId, 'personal')
           ]);
-          console.log(`Preloaded data for trip ${tripId}`);
         } catch (error) {
           console.warn(`Failed to preload data for trip ${tripId}:`, error);
         }
       }
 
-      console.log('Critical data preloading completed');
     } catch (error) {
       console.error('Failed to preload critical data:', error);
     }
@@ -1463,7 +1412,6 @@ class NetworkAwareApiService {
   async warmCache(): Promise<void> {
     if (!this.isOnline) return;
 
-    console.log('Warming cache with background data loading...');
     
     try {
       // Load trips list first
@@ -1492,12 +1440,10 @@ class NetworkAwareApiService {
   // Comprehensive preload for a specific trip
   async preloadTripData(tripId: string): Promise<void> {
     if (!this.isOnline) {
-      console.log('Cannot preload trip data while offline');
       return;
     }
 
     try {
-      console.log(`Preloading comprehensive data for trip ${tripId}...`);
       
       // Load all trip-related data in parallel
       const [trip, expenses, settlements, expenseSummary, notes, sharedChecklist, personalChecklist] = await Promise.allSettled([
@@ -1514,7 +1460,6 @@ class NetworkAwareApiService {
       const successful = [trip, expenses, settlements, expenseSummary, notes, sharedChecklist, personalChecklist]
         .filter(result => result.status === 'fulfilled').length;
       
-      console.log(`Preloaded ${successful}/7 data types for trip ${tripId}`);
       
       // Log any failures for debugging
       if (trip.status === 'rejected') console.warn('Failed to preload trip:', trip.reason);
@@ -1532,22 +1477,19 @@ class NetworkAwareApiService {
 
   // Cache-first methods for immediate offline support
   async getCacheFirstTrips(): Promise<{ data: Trip[], fromCache: boolean }> {
-    // Always return cached data immediately if available
     const cachedTrips = await offlineService.getCachedTrips();
     
     if (cachedTrips.length > 0) {
-      // Start background refresh if online (don't await)
-      if (this.isOnline) {
+      if (this.isOnline && this.hasAuthToken()) {
         this.refreshTripsInBackground().catch(console.error);
       }
       return { data: cachedTrips, fromCache: true };
     }
     
-    // If no cache and we're online, fetch from API
-    if (this.isOnline) {
+    if (this.isOnline && this.hasAuthToken()) {
       try {
         const trips = await api.getTrips();
-        await offlineService.cacheTrips(trips);
+        await offlineService.syncTripsCache(trips);
         return { data: trips, fromCache: false };
       } catch (error) {
         console.error('Failed to fetch trips:', error);
@@ -1563,15 +1505,13 @@ class NetworkAwareApiService {
     const cachedTrip = await offlineService.getCachedTrip(tripId);
     
     if (cachedTrip) {
-      // Start background refresh if online (don't await)
-      if (this.isOnline) {
+      if (this.isOnline && this.hasAuthToken()) {
         this.refreshTripInBackground(tripId).catch(console.error);
       }
       return { data: cachedTrip, fromCache: true };
     }
     
-    // If no cache and we're online, fetch from API
-    if (this.isOnline) {
+    if (this.isOnline && this.hasAuthToken()) {
       try {
         const trip = await api.getTrip(tripId);
         if (trip) {
@@ -1587,13 +1527,24 @@ class NetworkAwareApiService {
   }
 
   private async refreshTripsInBackground(): Promise<void> {
+    if (!this.hasAuthToken()) return;
+
+    if (this.tripsRefreshPromise) {
+      return this.tripsRefreshPromise;
+    }
+
+    this.tripsRefreshPromise = this.performTripsBackgroundRefresh().finally(() => {
+      this.tripsRefreshPromise = null;
+    });
+
+    return this.tripsRefreshPromise;
+  }
+
+  private async performTripsBackgroundRefresh(): Promise<void> {
     try {
-      console.log('Background refresh: Fetching trips...');
       const trips = await api.getTrips();
-      await offlineService.cacheTrips(trips);
-      console.log('Background refresh: Trips updated');
+      await offlineService.syncTripsCache(trips);
       
-      // Emit event for components to refresh
       window.dispatchEvent(new CustomEvent('tripsUpdated', { 
         detail: { trips, source: 'background' }
       }));
@@ -1603,14 +1554,13 @@ class NetworkAwareApiService {
   }
 
   private async refreshTripInBackground(tripId: string): Promise<void> {
+    if (!this.hasAuthToken()) return;
+
     try {
-      console.log(`Background refresh: Fetching trip ${tripId}...`);
       const trip = await api.getTrip(tripId);
       if (trip) {
         await offlineService.updateCachedTrip(trip);
-        console.log(`Background refresh: Trip ${tripId} updated`);
         
-        // Emit event for components to refresh
         window.dispatchEvent(new CustomEvent('tripUpdated', { 
           detail: { trip, tripId, source: 'background' }
         }));
@@ -1620,37 +1570,16 @@ class NetworkAwareApiService {
     }
   }
 
-  // Enhanced initialization for immediate cache loading
   async initializeAppWithCache(): Promise<void> {
-    console.log('🚀 Initializing app with cache-first strategy...');
-    
     try {
-      // Just do basic cache check without validation (too complex and might hang)
-      console.log('📦 Checking cache availability...');
-      
-      // Simple cache check - don't wait for full validation
-      const cachedTrips = await offlineService.getCachedTrips().catch(() => []);
-      console.log(`📦 Found ${cachedTrips.length} cached trips`);
-      
-      // Start background operations if online (don't wait for them)
-      if (this.isOnline && cachedTrips.length > 0) {
-        console.log('🔄 Starting background data refresh...');
-        // Run in background, don't wait
-        setTimeout(() => {
-          this.refreshTripsInBackground().catch(console.error);
-        }, 100);
-      }
-      
-      console.log('✅ App initialization complete');
+      await offlineService.getCachedTrips().catch(() => []);
     } catch (error) {
-      console.error('❌ App initialization failed:', error);
-      // Don't rethrow - allow app to continue
+      console.error('App initialization failed:', error);
     }
   }
 
   private async validateAndCleanCache(): Promise<void> {
     // Removed this method to avoid blocking - let it run in background later if needed
-    console.log('Cache validation skipped for faster startup');
   }
 }
 
