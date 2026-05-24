@@ -1,7 +1,19 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
+import { savePendingInviteToken } from '../../utils/tripInvite';
 
 const GoogleSignIn: React.FC = () => {
+  const location = useLocation();
+
   const handleGoogleSignIn = () => {
+    const from = (location.state as { from?: { pathname?: string } } | null)?.from;
+    if (from?.pathname?.startsWith('/trips/invite/')) {
+      const token = from.pathname.split('/').pop();
+      if (token) {
+        savePendingInviteToken(token);
+      }
+    }
+
     window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
   };
 

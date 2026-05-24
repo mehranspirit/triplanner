@@ -50,9 +50,10 @@ router.post('/trips/invite-links/:token/accept', auth, async (req, res) => {
 
     const currentAccess = trip.hasAccess(req.user._id);
     const isOwner = trip.owner._id.equals(req.user._id);
-    const isCollaborator = trip.collaborators.some(
-      c => c.user._id.toString() === req.user._id.toString()
-    );
+    const isCollaborator = trip.collaborators.some((collaborator) => {
+      const collaboratorUserId = collaborator.user?._id || collaborator.user;
+      return collaboratorUserId?.toString() === req.user._id.toString();
+    });
 
     if (!isOwner && !isCollaborator) {
       trip.collaborators.push({

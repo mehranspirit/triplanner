@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LoadingAnimation from '../LoadingAnimation';
+import { getPostAuthRedirectPath } from '../../utils/tripInvite';
 
 const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -33,8 +34,7 @@ const AuthCallback: React.FC = () => {
         const data = await response.json();
         login(token, data.user);
 
-        // Redirect to the trips page or the return URL
-        const returnUrl = location.state?.from?.pathname || '/trips';
+        const returnUrl = getPostAuthRedirectPath(location.state as { from?: { pathname?: string; search?: string } });
         navigate(returnUrl, { replace: true });
       } catch (error) {
         console.error('Authentication error:', error);

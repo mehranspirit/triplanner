@@ -5,6 +5,7 @@ import Avatar from '../Avatar';
 import LoadingAnimation from '../LoadingAnimation';
 import { createTravelCollage } from '../../utils/createCollage';
 import '../../styles/login-background.css';
+import { getPostAuthRedirectPath, savePendingInviteToken } from '../../utils/tripInvite';
 
 interface RegisterFormData {
   name: string;
@@ -29,6 +30,16 @@ const Register: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [backgroundLoaded, setBackgroundLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    const from = (location.state as { from?: { pathname?: string } } | null)?.from;
+    if (from?.pathname?.startsWith('/trips/invite/')) {
+      const token = from.pathname.split('/').pop();
+      if (token) {
+        savePendingInviteToken(token);
+      }
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const loadBackground = async () => {
@@ -102,8 +113,9 @@ const Register: React.FC = () => {
       // Use the login function from AuthContext
       login(data.token, data.user);
 
-      const redirectTo = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
-      navigate(`${redirectTo?.pathname || '/trips'}${redirectTo?.search || ''}`, { replace: true });
+      navigate(getPostAuthRedirectPath(location.state as { from?: { pathname?: string; search?: string } }), {
+        replace: true,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { savePendingInviteToken } from '../../utils/tripInvite';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -17,7 +18,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    // Redirect to login page with the return url
+    if (location.pathname.startsWith('/trips/invite/')) {
+      const token = location.pathname.split('/').pop();
+      if (token) {
+        savePendingInviteToken(token);
+      }
+    }
+
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

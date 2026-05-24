@@ -201,18 +201,9 @@ const App: React.FC = () => {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/trips/invite/:token" element={<TripInviteAccept />} />
             
             {/* Protected routes */}
-            <Route
-              path="/trips/invite/:token"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <TripInviteAccept />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
             <Route
               path="/trips/dream/:id"
               element={
