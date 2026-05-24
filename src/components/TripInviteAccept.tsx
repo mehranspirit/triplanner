@@ -13,15 +13,19 @@ import {
 
 type InviteStatus = 'loading' | 'needs-auth' | 'accepting' | 'accepted' | 'error';
 
+const acceptPromises = new Map<string, Promise<string>>();
+
 const TripInviteAccept: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { isAuthenticated, isLoading } = useAuth();
   const { addTrip } = useTrip();
+  const addTripRef = useRef(addTrip);
   const [status, setStatus] = useState<InviteStatus>('loading');
   const [message, setMessage] = useState('Checking your invitation...');
   const [tripId, setTripId] = useState<string | null>(null);
-  const acceptStartedRef = useRef(false);
+
+  addTripRef.current = addTrip;
 
   const invitePath = token ? getInvitePath(token) : '/trips';
 
@@ -45,48 +49,59 @@ const TripInviteAccept: React.FC = () => {
     }
 
     if (!isAuthenticated) {
-      acceptStartedRef.current = false;
+      acceptPromises.delete(token);
       setStatus('needs-auth');
       setMessage('Sign in or create an account to join this trip.');
       return;
     }
 
-    if (acceptStartedRef.current) {
-      return;
-    }
-    acceptStartedRef.current = true;
+    let cancelled = false;
 
-    let isMounted = true;
+    const redirectToTrip = (nextTripId: string) => {
+      setTripId(nextTripId);
+      setStatus('accepted');
+      setMessage("You're in. Opening your trip...");
+      navigate(`/trips/${nextTripId}`, { replace: true });
+    };
 
-    const acceptInvite = async () => {
+    const runAccept = async (): Promise<string> => {
       setStatus('accepting');
       setMessage('Accepting your trip invitation...');
 
-      try {
-        const result = await api.acceptTripInviteLink(token);
-        if (!isMounted) return;
+      const result = await api.acceptTripInviteLink(token);
+      await addTripRef.current(result.trip);
+      clearPendingInviteToken();
+      return result.trip._id;
+    };
 
-        await addTrip(result.trip);
-        clearPendingInviteToken();
+    const existingPromise = acceptPromises.get(token);
+    const acceptPromise = existingPromise ?? runAccept().finally(() => {
+      acceptPromises.delete(token);
+    });
 
-        setTripId(result.trip._id);
-        setStatus('accepted');
-        setMessage(`You're in. Opening ${result.trip.name}...`);
-        window.setTimeout(() => navigate(`/trips/${result.trip._id}`, { replace: true }), 800);
-      } catch (error) {
-        acceptStartedRef.current = false;
-        if (!isMounted) return;
+    if (!existingPromise) {
+      acceptPromises.set(token, acceptPromise);
+    } else {
+      setStatus('accepting');
+      setMessage('Accepting your trip invitation...');
+    }
+
+    acceptPromise
+      .then((nextTripId) => {
+        if (!cancelled) {
+          redirectToTrip(nextTripId);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
         setStatus('error');
         setMessage(error instanceof Error ? error.message : 'Failed to accept this invite link.');
-      }
-    };
-
-    acceptInvite();
+      });
 
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
-  }, [addTrip, isAuthenticated, isLoading, navigate, token]);
+  }, [isAuthenticated, isLoading, navigate, token]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
@@ -121,10 +136,15 @@ const TripInviteAccept: React.FC = () => {
               </Button>
             </>
           )}
-          {status === 'accepted' && tripId && (
+          {(status === 'accepted' || status === 'accepting') && tripId && (
             <Button onClick={() => navigate(`/trips/${tripId}`, { replace: true })}>
               <Ticket className="mr-2 h-4 w-4" />
               Open trip
+            </Button>
+          )}
+          {status === 'accepting' && !tripId && (
+            <Button variant="outline" onClick={() => navigate('/trips', { replace: true })}>
+              Go to trips
             </Button>
           )}
           {status === 'error' && (
