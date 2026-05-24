@@ -9,9 +9,7 @@ logger.debug('Loaded server environment configuration');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const crypto = require('crypto');
 const Trip = require('./models/Trip');
-const TripInvitation = require('./models/TripInvitation');
 const authRoutes = require('./routes/auth');
 const activitiesRoutes = require('./routes/activities');
 const aiSuggestionsRoutes = require('./routes/aiSuggestions');
@@ -37,6 +35,7 @@ const jwt = require('jsonwebtoken');
 const passport = require('./config/passport');
 const session = require('express-session');
 const dreamTripsRouter = require('./routes/dreamTrips');
+const inviteLinksRoutes = require('./routes/inviteLinks');
 
 // Helper function to get a human-readable event name
 const getEventName = (event) => {
@@ -189,6 +188,15 @@ app.post('/api/users/profile/photo', auth, uploadToS3.single('photo'), async (re
   }
 });
 
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    features: {
+      inviteLinks: true
+    }
+  });
+});
+
 // Mount auth routes
 app.use('/api/auth', authRoutes);
 
@@ -230,6 +238,9 @@ app.use('/api', assistantBriefingRoutes);
 
 // Mount dream trips routes
 app.use('/api/trips/dream', dreamTripsRouter);
+
+// Trip invite links (mounted with other /api trip subroutes)
+app.use('/api', inviteLinksRoutes);
 
 // Add role change endpoint directly in index.js
 app.patch('/api/users/:userId/role', auth, async (req, res) => {
@@ -1002,211 +1013,6 @@ app.put('/api/trips/:id/collaborators/:userId', auth, async (req, res) => {
   } catch (error) {
     console.error('Error updating collaborator role:', error);
     res.status(500).json({ message: error.message || 'Failed to update collaborator role' });
-  }
-});
-
-app.get('/api/trips/:id/invite-links', auth, async (req, res) => {
-  try {
-    const trip = await Trip.findById(req.params.id)
-      .populate('owner', 'name email photoUrl')
-      .populate('collaborators.user', 'name email photoUrl');
-
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    const accessRole = trip.hasAccess(req.user._id);
-    if (!accessRole || accessRole === 'viewer') {
-      return res.status(403).json({ message: 'You do not have permission to manage invite links for this trip' });
-    }
-
-    const invitations = await TripInvitation.find({ trip: trip._id, status: 'active' })
-      .sort({ createdAt: -1 })
-      .populate('createdBy', 'name email photoUrl')
-      .populate('acceptedUsers.user', 'name email photoUrl');
-
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.json(invitations.map(invitation => ({
-      _id: invitation._id,
-      role: invitation.role,
-      status: invitation.status,
-      inviteUrl: `${frontendUrl}/trips/invite/${invitation.token}`,
-      expiresAt: invitation.expiresAt,
-      createdAt: invitation.createdAt,
-      createdBy: invitation.createdBy,
-      acceptedUsers: invitation.acceptedUsers
-    })));
-  } catch (error) {
-    console.error('Error loading trip invite links:', error);
-    res.status(500).json({ message: error.message || 'Failed to load invite links' });
-  }
-});
-
-app.post('/api/trips/:id/invite-links', auth, async (req, res) => {
-  try {
-    const { role = 'viewer', expiresInDays = 30 } = req.body;
-    if (!['viewer', 'editor'].includes(role)) {
-      return res.status(400).json({ message: 'Invite role must be viewer or editor' });
-    }
-
-    const trip = await Trip.findById(req.params.id)
-      .populate('owner', 'name email photoUrl')
-      .populate('collaborators.user', 'name email photoUrl');
-
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    const accessRole = trip.hasAccess(req.user._id);
-    if (!accessRole || accessRole === 'viewer') {
-      return res.status(403).json({ message: 'Only owners and editors can create invite links' });
-    }
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const expirationDays = Math.min(Math.max(Number(expiresInDays) || 30, 1), 90);
-    const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
-
-    const invitation = await TripInvitation.create({
-      trip: trip._id,
-      token,
-      role,
-      createdBy: req.user._id,
-      expiresAt
-    });
-
-    await logActivity({
-      userId: req.user._id,
-      tripId: trip._id,
-      actionType: 'collaborator_invite_link_create',
-      description: `Created a ${role} invite link for trip "${trip.name}"`,
-      details: {
-        tripName: trip.name,
-        role,
-        invitationId: invitation._id,
-        expiresAt
-      }
-    });
-
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.status(201).json({
-      _id: invitation._id,
-      role: invitation.role,
-      status: invitation.status,
-      inviteUrl: `${frontendUrl}/trips/invite/${invitation.token}`,
-      expiresAt: invitation.expiresAt,
-      createdAt: invitation.createdAt,
-      acceptedUsers: []
-    });
-  } catch (error) {
-    console.error('Error creating trip invite link:', error);
-    res.status(500).json({ message: error.message || 'Failed to create invite link' });
-  }
-});
-
-app.delete('/api/trips/:id/invite-links/:inviteId', auth, async (req, res) => {
-  try {
-    const trip = await Trip.findById(req.params.id);
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    const accessRole = trip.hasAccess(req.user._id);
-    if (!accessRole || accessRole === 'viewer') {
-      return res.status(403).json({ message: 'Only owners and editors can revoke invite links' });
-    }
-
-    const invitation = await TripInvitation.findOne({ _id: req.params.inviteId, trip: trip._id });
-    if (!invitation) {
-      return res.status(404).json({ message: 'Invite link not found' });
-    }
-
-    invitation.status = 'revoked';
-    invitation.revokedBy = req.user._id;
-    invitation.revokedAt = new Date();
-    await invitation.save();
-
-    await logActivity({
-      userId: req.user._id,
-      tripId: trip._id,
-      actionType: 'collaborator_invite_link_revoke',
-      description: `Revoked a ${invitation.role} invite link for trip "${trip.name}"`,
-      details: {
-        tripName: trip.name,
-        role: invitation.role,
-        invitationId: invitation._id
-      }
-    });
-
-    res.json({ message: 'Invite link revoked' });
-  } catch (error) {
-    console.error('Error revoking trip invite link:', error);
-    res.status(500).json({ message: error.message || 'Failed to revoke invite link' });
-  }
-});
-
-app.post('/api/trips/invite-links/:token/accept', auth, async (req, res) => {
-  try {
-    const invitation = await TripInvitation.findOne({ token: req.params.token });
-    if (!invitation) {
-      return res.status(404).json({ message: 'Invite link not found' });
-    }
-
-    if (invitation.status !== 'active') {
-      return res.status(410).json({ message: 'This invite link has been revoked' });
-    }
-
-    if (invitation.expiresAt && invitation.expiresAt < new Date()) {
-      return res.status(410).json({ message: 'This invite link has expired' });
-    }
-
-    const trip = await Trip.findById(invitation.trip)
-      .populate('owner', 'name email photoUrl')
-      .populate('collaborators.user', 'name email photoUrl');
-
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip not found' });
-    }
-
-    const currentAccess = trip.hasAccess(req.user._id);
-    const isOwner = trip.owner._id.equals(req.user._id);
-    const isCollaborator = trip.collaborators.some(c => c.user._id.toString() === req.user._id.toString());
-
-    if (!isOwner && !isCollaborator) {
-      trip.collaborators.push({
-        user: req.user._id,
-        role: invitation.role
-      });
-      await trip.save();
-    }
-
-    const alreadyAccepted = invitation.acceptedUsers.some(entry => (
-      entry.user && entry.user.toString() === req.user._id.toString()
-    ));
-    if (!alreadyAccepted) {
-      invitation.acceptedUsers.push({ user: req.user._id, acceptedAt: new Date() });
-      await invitation.save();
-    }
-
-    const populatedTrip = await Trip.findById(trip._id)
-      .populate('owner', 'name email photoUrl')
-      .populate('collaborators.user', 'name email photoUrl');
-
-    await logActivity({
-      userId: req.user._id,
-      tripId: trip._id,
-      actionType: 'collaborator_invite_accept',
-      description: `${req.user.name} accepted a ${invitation.role} invite link for trip "${trip.name}"`,
-      details: {
-        tripName: trip.name,
-        role: invitation.role,
-        invitationId: invitation._id
-      }
-    });
-
-    res.json({ trip: populatedTrip, role: currentAccess || invitation.role });
-  } catch (error) {
-    console.error('Error accepting trip invite link:', error);
-    res.status(500).json({ message: error.message || 'Failed to accept invite link' });
   }
 });
 
