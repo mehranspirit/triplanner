@@ -1,20 +1,51 @@
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 
+export const getPublicAppOrigin = (): string => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  const configured = import.meta.env.VITE_PUBLIC_APP_URL;
+  if (typeof configured === 'string' && configured.trim()) {
+    return configured.replace(/\/$/, '');
+  }
+
+  return window.location.origin;
+};
+
 export const resolvePublicAppUrl = (url: string): string => {
-  if (typeof window === 'undefined' || !url) {
+  if (!url) {
     return url;
   }
 
+  const publicOrigin = getPublicAppOrigin();
+
   try {
     const parsed = new URL(url);
-    if (LOCAL_HOSTNAMES.has(parsed.hostname)) {
-      return `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (LOCAL_HOSTNAMES.has(parsed.hostname) && publicOrigin) {
+      return `${publicOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
     }
   } catch {
     return url;
   }
 
   return url;
+};
+
+export const copyFromInput = (input: HTMLInputElement | HTMLTextAreaElement | null): boolean => {
+  if (!input) {
+    return false;
+  }
+
+  input.focus();
+  input.select();
+  input.setSelectionRange(0, input.value.length);
+
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  }
 };
 
 export const copyTextToClipboard = async (text: string): Promise<boolean> => {
@@ -25,7 +56,7 @@ export const copyTextToClipboard = async (text: string): Promise<boolean> => {
       await navigator.clipboard.writeText(text);
       return true;
     } catch {
-      // Clipboard API can fail after async work; fall back below.
+      // Clipboard API can fail in dialogs or after async work.
     }
   }
 
@@ -49,4 +80,15 @@ export const copyTextToClipboard = async (text: string): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+export const copyInviteUrl = async (
+  inviteUrl: string,
+  input?: HTMLInputElement | HTMLTextAreaElement | null
+): Promise<boolean> => {
+  if (input && copyFromInput(input)) {
+    return true;
+  }
+
+  return copyTextToClipboard(inviteUrl);
 };

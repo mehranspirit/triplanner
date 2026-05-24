@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Trip, User } from '../types/eventTypes';
 import { api, TripInviteLink } from '../services/api';
 import Avatar from './Avatar';
@@ -7,7 +7,7 @@ import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Check, Copy, Link2, Trash2, X, Plus, User as UserIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { copyTextToClipboard } from '@/utils/publicAppUrl';
+import { copyInviteUrl } from '@/utils/publicAppUrl';
 
 const isCollaboratorObject = (c: string | { user: User; role: 'viewer' | 'editor' }): c is { user: User; role: 'viewer' | 'editor' } => {
   return typeof c === 'object' && c !== null && 'user' in c && 'role' in c;
@@ -31,6 +31,15 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   const [inviteLinks, setInviteLinks] = useState<TripInviteLink[]>([]);
   const [inviteLinkRole, setInviteLinkRole] = useState<'editor' | 'viewer'>('viewer');
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const inviteInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const focusInviteInput = (inviteId: string) => {
+    window.setTimeout(() => {
+      const input = inviteInputRefs.current[inviteId];
+      input?.focus();
+      input?.select();
+    }, 0);
+  };
 
   useEffect(() => {
     setLocalTrip(trip);
@@ -155,15 +164,7 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
     try {
       const inviteLink = await api.createTripInviteLink(trip._id, inviteLinkRole);
       setInviteLinks(prev => [inviteLink, ...prev]);
-
-      const copied = await copyTextToClipboard(inviteLink.inviteUrl);
-      if (copied) {
-        setCopiedInviteId(inviteLink._id);
-        setSuccess(`Created a ${inviteLinkRole} invite link and copied it to your clipboard.`);
-        setTimeout(() => setCopiedInviteId(null), 2000);
-      } else {
-        setSuccess(`Created a ${inviteLinkRole} invite link. Use Copy to share it.`);
-      }
+      setSuccess(`Created a ${inviteLinkRole} invite link. Use Copy to share it.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create invite link');
     } finally {
@@ -172,7 +173,10 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
   };
 
   const handleCopyInviteLink = async (inviteLink: TripInviteLink) => {
-    const copied = await copyTextToClipboard(inviteLink.inviteUrl);
+    const copied = await copyInviteUrl(
+      inviteLink.inviteUrl,
+      inviteInputRefs.current[inviteLink._id]
+    );
     if (copied) {
       setError('');
       setCopiedInviteId(inviteLink._id);
@@ -181,8 +185,9 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
       return;
     }
 
+    focusInviteInput(inviteLink._id);
     setSuccess('');
-    setError('Copying failed. Select the link field and copy it manually.');
+    setError('Automatic copy is blocked here. The link is selected — press Copy again or use keyboard copy.');
   };
 
   const handleRevokeInviteLink = async (inviteLink: TripInviteLink) => {
@@ -324,9 +329,13 @@ const CollaboratorModal: React.FC<CollaboratorModalProps> = ({ trip, isOpen, onC
                       <div className="min-w-0">
                         <p className="text-sm font-medium capitalize text-slate-900">{inviteLink.role} invite link</p>
                         <Input
+                          ref={(element) => {
+                            inviteInputRefs.current[inviteLink._id] = element;
+                          }}
                           value={inviteLink.inviteUrl}
                           readOnly
                           onFocus={(event) => event.currentTarget.select()}
+                          onClick={(event) => event.currentTarget.select()}
                           className="mt-1 h-8 cursor-text truncate bg-slate-50 text-xs text-slate-600"
                           aria-label={`${inviteLink.role} invite link`}
                         />
