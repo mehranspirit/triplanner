@@ -46,6 +46,7 @@ interface TripPanelHostProps {
   onGenerateTodayBriefing: () => void;
   onGenerateReplanBriefing: () => void;
   onEditEvent: (event: Trip['events'][number]) => void;
+  onDismissInsight?: (insightId: string) => void;
 }
 
 const panelCopy: Record<TripPanel, { title: string; description: string; className?: string }> = {
@@ -130,6 +131,7 @@ const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
     onGenerateTodayBriefing,
     onGenerateReplanBriefing,
     onEditEvent,
+    onDismissInsight,
   } = props;
 
   if (!activePanel) return null;
@@ -220,6 +222,7 @@ const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
             onClose();
             onEditEvent(event);
           }}
+          onDismissInsight={onDismissInsight}
         />
       )}
       {activePanel === 'checklist' && (

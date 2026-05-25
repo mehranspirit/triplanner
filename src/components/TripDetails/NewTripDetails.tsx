@@ -15,14 +15,9 @@ import { useTripPanelManager } from '@/components/TripDetails/hooks/useTripPanel
 import TripTimeline from '@/components/TripDetails/timeline/TripTimeline';
 import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/imports/TravelImportDialog';
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
-import { ProactiveContextCard as ProactiveContextCardData } from '@/components/TripDetails/context/tripContextTypes';
-
-// Import the new specific modals
-import EventFormModalRouter from './EventFormModalRouter';
-
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import TripLoading from '@/components/ui/trip-loading';
-import { generateTripInsights } from '@/services/tripInsights';
+import { ProactiveContextCard as ProactiveContextCardData, ProactiveContextCardType } from '@/components/TripDetails/context/tripContextTypes';
+import { generateTripInsights, getMissingLocationInsightId } from '@/services/tripInsights';
+import { eventNeedsMapLocation } from '@/utils/eventLocation';
 import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/travelImportValidation';
 import { api } from '@/services/api';
 import { hashText } from '@/utils/hash';
@@ -41,6 +36,9 @@ import {
   TripTodayBriefingResponse
 } from '@/types/assistantBriefingTypes';
 import { networkAwareApi } from '@/services/networkAwareApi';
+import EventFormModalRouter from './EventFormModalRouter';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import TripLoading from '@/components/ui/trip-loading';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -170,6 +168,7 @@ const NewTripDetails: React.FC = () => {
   const [isImprovingLocations, setIsImprovingLocations] = useState(false);
   const [addingProgress, setAddingProgress] = useState(0);
   const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
+  const [dismissedContextCardTypes, setDismissedContextCardTypes] = useState<ProactiveContextCardType[]>([]);
   const tripInsights = useMemo(
     () => trip ? generateTripInsights({ trip, events: trip.events, weatherSnapshots, flightStatusSnapshots }) : [],
     [trip, weatherSnapshots, flightStatusSnapshots]
@@ -192,8 +191,10 @@ const NewTripDetails: React.FC = () => {
       insights: visibleTripInsights,
       weatherSnapshots,
       flightStatusSnapshots,
+      dismissedInsightIds,
+      dismissedContextCardTypes,
     }) : null,
-    [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots]
+    [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots, dismissedInsightIds, dismissedContextCardTypes]
   );
   const unreadNotificationCount = notifications.filter(notification => !notification.readAt).length;
   const handledAssistantChecklistItemIds = assistantSuggestionFeedback
@@ -424,9 +425,12 @@ const NewTripDetails: React.FC = () => {
     try {
       const stored = localStorage.getItem(`dismissedTripInsights:${trip._id}`);
       setDismissedInsightIds(stored ? JSON.parse(stored) : []);
+      const storedCards = localStorage.getItem(`dismissedTripContextCards:${trip._id}`);
+      setDismissedContextCardTypes(storedCards ? JSON.parse(storedCards) : []);
     } catch (error) {
       console.warn('Failed to load dismissed trip insights:', error);
       setDismissedInsightIds([]);
+      setDismissedContextCardTypes([]);
     }
   }, [trip?._id]);
 
@@ -547,6 +551,31 @@ const NewTripDetails: React.FC = () => {
     setDismissedInsightIds(prev => {
       const next = Array.from(new Set([...prev, insightId]));
       localStorage.setItem(`dismissedTripInsights:${trip._id}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleDismissContextCard = (card: ProactiveContextCardData) => {
+    if (!trip?._id) return;
+
+    if (card.type === 'location_issues') {
+      const locationInsightIds = trip.events
+        .filter(event => eventNeedsMapLocation(event))
+        .map(event => getMissingLocationInsightId(event.id));
+
+      if (locationInsightIds.length === 0) return;
+
+      setDismissedInsightIds(prev => {
+        const next = Array.from(new Set([...prev, ...locationInsightIds]));
+        localStorage.setItem(`dismissedTripInsights:${trip._id}`, JSON.stringify(next));
+        return next;
+      });
+      return;
+    }
+
+    setDismissedContextCardTypes(prev => {
+      const next = Array.from(new Set([...prev, card.type]));
+      localStorage.setItem(`dismissedTripContextCards:${trip._id}`, JSON.stringify(next));
       return next;
     });
   };
@@ -1076,6 +1105,7 @@ const NewTripDetails: React.FC = () => {
             <ProactiveTripContext
               signals={contextSignals}
               onCardAction={handleProactiveCardAction}
+              onDismissCard={handleDismissContextCard}
             />
           )}
         </div>
@@ -1121,6 +1151,7 @@ const NewTripDetails: React.FC = () => {
         onGenerateTodayBriefing={handleGenerateTodayBriefing}
         onGenerateReplanBriefing={handleGenerateReplanBriefing}
         onEditEvent={handleEditEventClick}
+        onDismissInsight={handleDismissInsight}
       />
 
       <TravelImportDialog

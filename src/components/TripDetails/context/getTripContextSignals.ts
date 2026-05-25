@@ -1,12 +1,13 @@
 import { Trip } from '@/types/eventTypes';
 import { eventNeedsMapLocation } from '@/utils/eventLocation';
+import { getMissingLocationInsightId } from '@/services/tripInsights';
 import { TripInsight } from '@/types/insightTypes';
 import { TripNotification } from '@/types/notificationTypes';
 import { TravelImport } from '@/types/travelImportTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { WeatherSnapshot } from '@/types/weatherTypes';
 import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
-import { ProactiveContextCard, TripContextSignals, TripPhase } from './tripContextTypes';
+import { ProactiveContextCard, TripContextSignals, TripPhase, ProactiveContextCardType } from './tripContextTypes';
 
 const startOfDay = (date: Date) => {
   const next = new Date(date);
@@ -38,8 +39,11 @@ const isSameDay = (left: Date, right: Date) => (
   left.getDate() === right.getDate()
 );
 
-const getLocationIssueCount = (trip: Trip) => (
-  trip.events.filter(event => eventNeedsMapLocation(event)).length
+const getLocationIssueCount = (trip: Trip, dismissedInsightIds: string[] = []) => (
+  trip.events.filter(event => (
+    eventNeedsMapLocation(event) &&
+    !dismissedInsightIds.includes(getMissingLocationInsightId(event.id))
+  )).length
 );
 
 const getPendingImportCount = (travelImports: TravelImport[]) => (
@@ -89,6 +93,8 @@ export const getTripContextSignals = ({
   insights,
   weatherSnapshots,
   flightStatusSnapshots,
+  dismissedInsightIds = [],
+  dismissedContextCardTypes = [],
   now = new Date(),
 }: {
   trip: Trip;
@@ -97,6 +103,8 @@ export const getTripContextSignals = ({
   insights: TripInsight[];
   weatherSnapshots: WeatherSnapshot[];
   flightStatusSnapshots: FlightStatusSnapshot[];
+  dismissedInsightIds?: string[];
+  dismissedContextCardTypes?: ProactiveContextCardType[];
   now?: Date;
 }): TripContextSignals => {
   const phase = getTripPhase(trip, now);
@@ -111,7 +119,7 @@ export const getTripContextSignals = ({
   }) || null;
   const unreadNotificationCount = notifications.filter(notification => !notification.readAt && !notification.dismissedAt).length;
   const pendingImportCount = getPendingImportCount(travelImports);
-  const locationIssueCount = getLocationIssueCount(trip);
+  const locationIssueCount = getLocationIssueCount(trip, dismissedInsightIds);
   const urgentInsightCount = insights.filter(insight => insight.severity !== 'info').length;
   const travelStatusCount = getTravelStatusCount(flightStatusSnapshots, weatherSnapshots);
 
@@ -174,7 +182,7 @@ export const getTripContextSignals = ({
     });
   }
 
-  if (urgentInsightCount > 0) {
+  if (urgentInsightCount > 0 && !dismissedContextCardTypes.includes('urgent_insights')) {
     cards.push({
       type: 'urgent_insights',
       title: 'Needs attention',

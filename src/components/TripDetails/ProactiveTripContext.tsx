@@ -5,6 +5,7 @@ import { ProactiveContextCard as ProactiveContextCardData, TripContextSignals } 
 interface ProactiveTripContextProps {
   signals: TripContextSignals;
   onCardAction: (card: ProactiveContextCardData) => void;
+  onDismissCard?: (card: ProactiveContextCardData) => void;
 }
 
 const getPhaseLabel = (phase: TripContextSignals['phase']) => {
@@ -17,6 +18,7 @@ const getPhaseLabel = (phase: TripContextSignals['phase']) => {
 const ProactiveTripContext: React.FC<ProactiveTripContextProps> = ({
   signals,
   onCardAction,
+  onDismissCard,
 }) => {
   if (signals.cards.length === 0) {
     return (
@@ -49,7 +51,12 @@ const ProactiveTripContext: React.FC<ProactiveTripContextProps> = ({
         </div>
         <div className="mt-4 space-y-2">
           {signals.cards.slice(0, 5).map(card => (
-            <ProactiveContextCard key={`${card.type}-${card.event?.id || card.value || card.title}`} card={card} onAction={onCardAction} />
+            <ProactiveContextCard
+              key={`${card.type}-${card.event?.id || card.value || card.title}`}
+              card={card}
+              onAction={onCardAction}
+              onDismiss={onDismissCard}
+            />
           ))}
         </div>
       </section>

@@ -30,13 +30,15 @@ const createInsight = (insight: Omit<TripInsight, 'createdAt'>): TripInsight => 
   createdAt: new Date().toISOString(),
 });
 
+export const getMissingLocationInsightId = (eventId: string) => `missing-location-${eventId}`;
+
 const getLocationMissingInsight = (event: Event): TripInsight | null => {
   if (!eventNeedsMapLocation(event)) {
     return null;
   }
 
   return createInsight({
-    id: `missing-location-${event.id}`,
+    id: getMissingLocationInsightId(event.id),
     type: 'missing_info',
     severity: 'warning',
     title: 'Location missing',

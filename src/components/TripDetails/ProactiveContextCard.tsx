@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock3, CloudSun, MapPin, Sparkles } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock3, CloudSun, MapPin, Sparkles, X } from 'lucide-react';
 import { ProactiveContextCard as ProactiveContextCardData } from './context/tripContextTypes';
 import { cn } from '@/lib/utils';
 
@@ -23,40 +23,64 @@ const toneByType: Record<ProactiveContextCardData['type'], string> = {
   travel_status: 'border-sky-100 bg-sky-50/90 text-sky-900',
 };
 
+const DISMISSIBLE_CARD_TYPES = new Set<ProactiveContextCardData['type']>([
+  'location_issues',
+  'urgent_insights',
+]);
+
 interface ProactiveContextCardProps {
   card: ProactiveContextCardData;
   onAction: (card: ProactiveContextCardData) => void;
+  onDismiss?: (card: ProactiveContextCardData) => void;
 }
 
-const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAction }) => (
-  <button
-    type="button"
-    className={cn(
-      'w-full rounded-2xl border p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
-      toneByType[card.type]
-    )}
-    onClick={() => onAction(card)}
-  >
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm">
-        {iconByType[card.type] || <CheckCircle2 className="h-4 w-4" />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold">{card.title}</span>
-          {card.value !== undefined && (
-            <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold">
-              {card.value}
-            </span>
-          )}
+const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAction, onDismiss }) => {
+  const dismissible = DISMISSIBLE_CARD_TYPES.has(card.type) && !!onDismiss;
+
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+        toneByType[card.type]
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm">
+          {iconByType[card.type] || <CheckCircle2 className="h-4 w-4" />}
         </span>
-        <span className="mt-1 block text-sm opacity-80">{card.description}</span>
-        <span className="mt-2 block text-xs font-semibold uppercase tracking-wide opacity-70">
-          {card.actionLabel}
-        </span>
-      </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold">{card.title}</p>
+            <div className="flex shrink-0 items-center gap-1">
+              {card.value !== undefined && (
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold">
+                  {card.value}
+                </span>
+              )}
+              {dismissible && (
+                <button
+                  type="button"
+                  className="rounded-full p-1 opacity-70 transition hover:bg-white/80 hover:opacity-100"
+                  onClick={() => onDismiss?.(card)}
+                  aria-label={`Dismiss ${card.title}`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="mt-1 text-sm opacity-80">{card.description}</p>
+          <button
+            type="button"
+            className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-70 transition hover:opacity-100"
+            onClick={() => onAction(card)}
+          >
+            {card.actionLabel}
+          </button>
+        </div>
+      </div>
     </div>
-  </button>
-);
+  );
+};
 
 export default ProactiveContextCard;

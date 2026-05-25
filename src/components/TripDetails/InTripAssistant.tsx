@@ -39,6 +39,7 @@ interface InTripAssistantProps {
   onEditEvent: (event: Event) => void;
   onGenerateTodayBriefing?: () => void;
   onGenerateReplanBriefing?: () => void;
+  onDismissInsight?: (insightId: string) => void;
 }
 
 const isSameLocalDay = (a: Date, b: Date) => {
@@ -545,6 +546,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   onEditEvent,
   onGenerateTodayBriefing,
   onGenerateReplanBriefing,
+  onDismissInsight,
 }) => {
   const now = new Date();
   const currentEvent = getCurrentEvent(trip.events, now);
@@ -576,6 +578,12 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   const handleEditEventById = (eventId: string) => {
     const event = trip.events.find((tripEvent) => tripEvent.id === eventId);
     if (event) onEditEvent(event);
+  };
+
+  const handleInsightAction = (insight: TripInsight) => {
+    if (insight.actionTarget === 'event' && insight.source?.kind === 'event' && insight.source.id) {
+      handleEditEventById(insight.source.id);
+    }
   };
 
   return (
@@ -679,12 +687,33 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
                     insight.severity === 'info' && 'border-blue-200 bg-blue-50 text-blue-900'
                   )}
                 >
-                  <div className="flex gap-2">
+                  <div className="flex items-start gap-2">
                     <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="font-semibold">{insight.title}</p>
                       <p className="mt-1 opacity-90">{insight.message}</p>
+                      {canEdit && insight.actionLabel && insight.actionTarget === 'event' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 h-8"
+                          onClick={() => handleInsightAction(insight)}
+                        >
+                          {insight.actionLabel}
+                        </Button>
+                      )}
                     </div>
+                    {insight.dismissible && onDismissInsight && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 flex-shrink-0"
+                        onClick={() => onDismissInsight(insight.id)}
+                        aria-label={`Dismiss ${insight.title}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
