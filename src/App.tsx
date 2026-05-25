@@ -1,4 +1,5 @@
 import React from 'react';
+import { registerSW } from 'virtual:pwa-register';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { TripProvider, useTrip } from './context/TripContext';
@@ -107,9 +108,12 @@ const App: React.FC = () => {
           setIsAppInitialized(true);
         }, 5000); // 5 second timeout
         
-        // Register service worker (but don't wait for it to complete initialization)
-        registerServiceWorker().catch(error => {
-          console.warn('⚠️ Service worker registration failed, continuing without it:', error);
+        // Register service worker via Vite PWA (icons + offline shell)
+        registerSW({
+          immediate: true,
+          onNeedRefresh() {
+            showUpdateAvailable();
+          },
         });
         
         // Initialize network-aware API with cache (don't depend on service worker)
@@ -127,41 +131,6 @@ const App: React.FC = () => {
 
     initializeApp();
   }, []);
-
-  // Service Worker registration
-  const registerServiceWorker = async () => {
-    if ('serviceWorker' in navigator) {
-      try {
-        
-        // In development, Vite PWA generates service worker at different path
-        const swPath = import.meta.env.DEV ? '/dev-dist/sw.js' : '/sw.js';
-        
-        const registration = await navigator.serviceWorker.register(swPath);
-        
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed') {
-                if (navigator.serviceWorker.controller) {
-                  // Optionally show user a refresh button
-                  showUpdateAvailable();
-                } else {
-                }
-              }
-            });
-          }
-        });
-        
-        return registration;
-      } catch (error) {
-        console.error('❌ Service worker registration failed:', error);
-        throw error;
-      }
-    } else {
-      throw new Error('Service workers not supported');
-    }
-  };
 
   const showUpdateAvailable = () => {
     // Simple update notification - could be enhanced with a toast/notification component

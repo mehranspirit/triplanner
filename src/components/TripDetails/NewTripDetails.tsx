@@ -7,7 +7,6 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Sparkles, Clock } from 'lucide-react';
 import TripDetailsToolbar from '@/components/TripDetails/TripDetailsToolbar';
-import MobileTripActionsFab from '@/components/TripDetails/MobileTripActionsFab';
 import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
 import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext';
 import TripPanelHost from '@/components/TripDetails/panels/TripPanelHost';
@@ -1038,7 +1037,7 @@ const NewTripDetails: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-100/70">
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
+      <div className="mx-auto max-w-7xl space-y-3 px-3 py-4 lg:space-y-6 lg:px-4 lg:py-6">
       <TripDetailsHero
         trip={trip}
         tripThumbnail={tripThumbnail}
@@ -1080,8 +1079,8 @@ const NewTripDetails: React.FC = () => {
         onCondensedViewChange={setIsCondensedView}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <main className="min-w-0 space-y-6">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
+        <main className="min-w-0">
           <TripTimeline
             events={trip.events}
             tripStartDate={trip.startDate}
@@ -1100,7 +1099,7 @@ const NewTripDetails: React.FC = () => {
           />
         </main>
 
-        <div className="space-y-4">
+        <div className="hidden space-y-4 lg:block">
           {contextSignals && (
             <ProactiveTripContext
               signals={contextSignals}
@@ -1110,17 +1109,6 @@ const NewTripDetails: React.FC = () => {
           )}
         </div>
       </div>
-
-      <MobileTripActionsFab
-        activePanel={activePanel}
-        unreadNotificationCount={unreadNotificationCount}
-        onOpenPanel={openPanel}
-        onOpenNotifications={() => {
-          openPanel('notifications');
-          fetchNotifications();
-        }}
-        onClosePanel={closePanel}
-      />
 
       <TripPanelHost
         activePanel={activePanel}

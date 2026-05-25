@@ -122,8 +122,8 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
   const tripStatus = getTripStatusSummary(trip);
 
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
-      <div className="relative h-[190px] w-full overflow-hidden md:h-[240px]">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-900/10 md:rounded-[2rem] md:shadow-2xl">
+      <div className="relative h-[132px] w-full overflow-hidden sm:h-[190px] md:h-[240px]">
         <img
           src={trip.thumbnailUrl || tripThumbnail}
           alt={trip.name}
@@ -141,14 +141,14 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
           />
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 z-10 p-5 text-white md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="absolute inset-x-0 bottom-0 z-10 p-4 text-white md:p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">Trip workspace</p>
-              <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg md:text-4xl">{trip.name}</h1>
+              <p className="mb-1 hidden text-xs font-semibold uppercase tracking-[0.24em] text-blue-100 sm:block">Trip workspace</p>
+              <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-lg sm:text-3xl md:text-4xl">{trip.name}</h1>
               {descriptionHtml && (
                 <p
-                  className="mt-2 max-w-3xl text-sm leading-6 text-white/90 drop-shadow-md md:text-base"
+                  className="mt-2 hidden max-w-3xl text-sm leading-6 text-white/90 drop-shadow-md sm:block md:text-base"
                   dangerouslySetInnerHTML={{ __html: descriptionHtml }}
                 />
               )}
@@ -162,7 +162,7 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
         </div>
       </div>
 
-      <div className="grid gap-3 bg-slate-50/80 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="hidden gap-3 bg-slate-50/80 p-4 sm:grid sm:grid-cols-2 lg:grid-cols-4">
         <TripStat
           icon={<CalendarDays className="h-4 w-4" />}
           label="Dates"

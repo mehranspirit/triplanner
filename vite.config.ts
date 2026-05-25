@@ -17,6 +17,16 @@ export default defineConfig(({ mode }) => ({
     }),
     VitePWA({
       registerType: 'autoUpdate',
+      manifestFilename: 'site.webmanifest',
+      includeAssets: [
+        'favicon.svg',
+        'favicon.ico',
+        'favicon-96x96.png',
+        'apple-touch-icon.png',
+        'icon-192x192.png',
+        'icon-512x512.png',
+        'app-icon.svg',
+      ],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 5000000, // Increase to 5MB for better caching
@@ -185,30 +195,35 @@ export default defineConfig(({ mode }) => ({
         ]
       },
       manifest: {
-        name: 'TripPlanner - Plan Your Perfect Trip',
+        name: 'TripPlanner',
         short_name: 'TripPlanner',
-        description: 'Plan, organize, and manage your trips with comprehensive offline support',
-        theme_color: '#3B82F6',
+        description: 'Plan, organize, and manage your trips with ease',
+        theme_color: '#4CAF50',
         background_color: '#ffffff',
         display: 'standalone',
         scope: '/',
         start_url: '/',
         orientation: 'portrait-primary',
-        categories: ['travel', 'productivity', 'lifestyle'],
         icons: [
           {
             src: '/icon-192x192.png',
             sizes: '192x192',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any',
           },
           {
             src: '/icon-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
+            purpose: 'any',
+          },
+          {
+            src: '/apple-touch-icon.png',
+            sizes: '180x180',
+            type: 'image/png',
+            purpose: 'any',
+          },
+        ],
       },
       devOptions: {
         enabled: mode === 'development'

@@ -297,13 +297,13 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
   }, {} as Record<string, Event[]>);
 
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-900/5 ring-1 ring-slate-100 md:p-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-900/5 ring-1 ring-slate-100 md:rounded-[2rem] md:p-6 md:shadow-2xl">
+      <div className="mb-4 flex items-center justify-between gap-3 md:mb-6">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Main itinerary</p>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-950">Trip Timeline</h2>
+          <p className="hidden text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 sm:block">Main itinerary</p>
+          <h2 className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">Timeline</h2>
         </div>
-        <p className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
+        <p className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 md:px-3 md:py-1 md:text-sm">
           {sortedEvents.length} event{sortedEvents.length === 1 ? '' : 's'}
         </p>
       </div>
@@ -337,7 +337,7 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
           )}
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-6 md:space-y-8">
           {Object.entries(groupedEvents).map(([dateKey, dateEvents]) => {
             const dateParts = formatTimelineDate(dateKey);
             const hasActiveEvent = dateEvents.some(event => isEventCurrentlyActive(event));
@@ -347,7 +347,7 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
             return (
               <div key={dateKey} className="relative pl-7">
                 <div className="absolute bottom-0 left-3 top-12 w-px bg-gradient-to-b from-blue-200 via-slate-200 to-transparent" />
-                <div className="sticky top-20 z-30 mb-4 -ml-7 bg-white/90 py-2 backdrop-blur">
+                <div className="sticky top-14 z-30 mb-3 -ml-7 bg-white/90 py-1.5 backdrop-blur md:top-20 md:mb-4 md:py-2">
                   <div className={cn(
                     'inline-flex items-center gap-3 rounded-2xl border px-4 py-2 shadow-sm',
                     hasActiveEvent

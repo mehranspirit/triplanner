@@ -72,13 +72,13 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   const navigate = useNavigate();
 
   return (
-    <div className="sticky top-0 z-40 rounded-3xl border border-slate-200/80 bg-white/95 p-3 shadow-xl shadow-slate-900/5 backdrop-blur">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="sticky top-0 z-40 rounded-2xl border border-slate-200/80 bg-white/95 p-2 shadow-lg shadow-slate-900/5 backdrop-blur lg:rounded-3xl lg:p-3 lg:shadow-xl">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
+        <div className="flex items-center gap-2">
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="h-10 rounded-full bg-blue-600 px-5 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700">
+                <Button className="h-9 flex-1 rounded-full bg-blue-600 px-4 text-sm text-white shadow-md shadow-blue-600/20 hover:bg-blue-700 sm:h-10 sm:flex-none sm:px-5 lg:shadow-lg">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Event
                 </Button>
@@ -117,12 +117,12 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
               <Button
                 variant="outline"
                 className={cn(
-                  'h-10 rounded-full border-slate-200 bg-white px-4 text-slate-700 shadow-sm hover:bg-slate-50',
+                  'h-9 flex-1 rounded-full border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 sm:h-10 sm:flex-none sm:px-4',
                   activePanel && 'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-50'
                 )}
               >
-                <Wand2 className="mr-2 h-4 w-4 text-teal-500" />
-                Trip Menu
+                <Wand2 className="mr-2 h-4 w-4 shrink-0 text-teal-500" />
+                <span className="truncate">Menu</span>
                 {unreadNotificationCount > 0 && (
                   <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
                     {unreadNotificationCount}
@@ -184,6 +184,19 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                 Expenses and settlements
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuLabel className="lg:hidden">View</DropdownMenuLabel>
+              <DropdownMenuItem
+                className="flex items-center justify-between lg:hidden"
+                onSelect={(event) => event.preventDefault()}
+              >
+                <span>Condensed timeline</span>
+                <Switch
+                  checked={isCondensedView}
+                  onCheckedChange={onCondensedViewChange}
+                  aria-label="Condensed timeline"
+                />
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="lg:hidden" />
               <DropdownMenuLabel>Trip</DropdownMenuLabel>
               <DropdownMenuItem disabled>
                 <Users className="mr-2 h-4 w-4 text-slate-500" />
@@ -193,7 +206,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
           </DropdownMenu>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 lg:justify-end">
+        <div className="hidden items-center justify-between gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 lg:flex lg:justify-end">
           <Label htmlFor="condensed-view" className="cursor-pointer text-sm font-medium text-slate-700">
             Condensed
           </Label>
