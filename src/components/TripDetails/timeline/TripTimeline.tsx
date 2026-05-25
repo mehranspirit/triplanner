@@ -9,6 +9,7 @@ import { TripNotification } from '@/types/notificationTypes';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
 import { cn } from '@/lib/utils';
 import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
+import { eventHasLocationAttention } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 
 interface TripTimelineProps {
@@ -391,7 +392,7 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                     const thumbnail = eventThumbnails[event.id] || registryItem.defaultThumbnail;
                     const isDeleting = deletingEvents.has(event.id);
                     const eventAlerts = getEventNotifications(event, notifications);
-                    const hasLocationIssue = !event.location || event.location.quality === 'unresolved' || event.location.quality === 'inferred';
+                    const hasLocationIssue = eventHasLocationAttention(event);
                     const hasFlightStatus = event.type === 'flight' && flightStatusSnapshots.some(status => status.eventId === event.id);
 
                     return (

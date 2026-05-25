@@ -1,4 +1,5 @@
 import { Trip } from '@/types/eventTypes';
+import { eventNeedsMapLocation } from '@/utils/eventLocation';
 import { TripInsight } from '@/types/insightTypes';
 import { TripNotification } from '@/types/notificationTypes';
 import { TravelImport } from '@/types/travelImportTypes';
@@ -38,11 +39,7 @@ const isSameDay = (left: Date, right: Date) => (
 );
 
 const getLocationIssueCount = (trip: Trip) => (
-  trip.events.filter(event => (
-    !event.location ||
-    event.location.quality === 'unresolved' ||
-    event.location.quality === 'inferred'
-  )).length
+  trip.events.filter(event => eventNeedsMapLocation(event)).length
 );
 
 const getPendingImportCount = (travelImports: TravelImport[]) => (

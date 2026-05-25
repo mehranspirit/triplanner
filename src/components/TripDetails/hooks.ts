@@ -7,8 +7,9 @@ import { Trip, Event, EventType, User } from '@/types/eventTypes'; // Ensure thi
 import { useAuth } from '@/context/AuthContext';
 import { useTrip } from '@/context/TripContext'; // Corrected import
 import { getDefaultThumbnail, getEventThumbnail } from './thumbnailHelpers';
-import { exportHtml, ItineraryExportMode } from './exportHelpers'; // Assuming PDF export logic might be similar
+import { exportHtml, ItineraryExportMode } from './exportHelpers';
 import { v4 as uuidv4 } from 'uuid';
+import { eventNeedsMapLocation, syncEventLocationOnSave } from '@/utils/eventLocation';
 
 // Placeholder for a default/unknown user - adjust as needed
 const defaultUser: User = {
@@ -105,10 +106,21 @@ export const useTripDetails = () => {
     }
   }, [trip, tripContext, fetchTrip]);
 
+  const refreshTripLocations = useCallback(async (tripId: string) => {
+    try {
+      const result = await api.geocodeTripEvents(tripId);
+      setTrip(result.trip);
+      return result.trip;
+    } catch (error) {
+      console.error('Error refreshing event locations:', error);
+      return null;
+    }
+  }, []);
+
   const addEvent = useCallback(async (newEventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>) => {
     if (!trip) return;
-    const currentUser = user || defaultUser; // Ensure we have a user object
-    const newEventWithMeta: Event = {
+    const currentUser = user || defaultUser;
+    const newEventWithMeta: Event = syncEventLocationOnSave({
       ...newEventData,
       id: uuidv4(),
       createdBy: currentUser,
@@ -117,7 +129,7 @@ export const useTripDetails = () => {
       updatedBy: currentUser,
       likes: [],
       dislikes: [],
-    };
+    });
     
     try {
       // First update local state for immediate UI update
@@ -125,7 +137,11 @@ export const useTripDetails = () => {
       setTrip(updatedTrip);
       
       // Then update in backend
-    await handleTripUpdate(updatedTrip);
+      await handleTripUpdate(updatedTrip);
+
+      if (eventNeedsMapLocation(newEventWithMeta)) {
+        await refreshTripLocations(trip._id);
+      }
       
       // Update thumbnail
     const thumb = newEventWithMeta.thumbnailUrl || await getEventThumbnail(newEventWithMeta);
@@ -138,16 +154,17 @@ export const useTripDetails = () => {
       await fetchTrip();
       throw error;
     }
-  }, [trip, user, handleTripUpdate]);
+  }, [trip, user, handleTripUpdate, refreshTripLocations]);
 
   const updateEvent = useCallback(async (eventToUpdate: Event) => {
     if (!trip) return;
-    const currentUser = user || defaultUser; // Ensure we have a user object
-    const eventWithMeta = {
+    const currentUser = user || defaultUser;
+    const previousEvent = trip.events.find(event => event.id === eventToUpdate.id);
+    const eventWithMeta = syncEventLocationOnSave({
       ...eventToUpdate,
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser,
-    };
+    }, previousEvent);
     
     try {
       // Update the events array
@@ -163,6 +180,10 @@ export const useTripDetails = () => {
       
       // Update the backend without triggering a refresh
       await handleTripUpdate(updatedTrip);
+
+      if (eventNeedsMapLocation(eventWithMeta)) {
+        await refreshTripLocations(trip._id);
+      }
       
       return eventWithMeta;
     } catch (error) {
@@ -171,7 +192,7 @@ export const useTripDetails = () => {
       await fetchTrip();
       throw error;
     }
-  }, [trip, user, handleTripUpdate, fetchTrip]);
+  }, [trip, user, handleTripUpdate, fetchTrip, refreshTripLocations]);
 
   const deleteEvent = useCallback(async (eventId: string) => {
     if (!trip) return;

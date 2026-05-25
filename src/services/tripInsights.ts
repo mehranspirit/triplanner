@@ -6,10 +6,12 @@ import {
   getEventBookingReference,
   getEventDisplayName,
   getEventEnd,
-  getEventLocationLabel,
   getEventStart,
   sortEventsByStart,
 } from '@/utils/eventTime';
+import {
+  eventNeedsMapLocation,
+} from '@/utils/eventLocation';
 
 interface TripInsightInput {
   trip: Trip;
@@ -28,42 +30,9 @@ const createInsight = (insight: Omit<TripInsight, 'createdAt'>): TripInsight => 
   createdAt: new Date().toISOString(),
 });
 
-const hasPlaceholderLocation = (event: Event) => {
-  return (
-    event.location?.quality === 'missing' ||
-    event.location?.quality === 'unresolved' ||
-    event.location?.lat === 0 ||
-    event.location?.lng === 0
-  );
-};
-
-const hasInferredLocation = (event: Event) => event.location?.quality === 'inferred';
-
-const requiresBookingReference = (event: Event) => {
-  return ['arrival', 'departure', 'flight', 'train', 'bus', 'rental_car', 'stay'].includes(event.type);
-};
-
 const getLocationMissingInsight = (event: Event): TripInsight | null => {
-  if (['arrival', 'departure', 'flight', 'train', 'bus'].includes(event.type)) {
+  if (!eventNeedsMapLocation(event)) {
     return null;
-  }
-
-  if (getEventLocationLabel(event) && !hasPlaceholderLocation(event)) {
-    if (!hasInferredLocation(event)) {
-      return null;
-    }
-
-    return createInsight({
-      id: `inferred-location-${event.id}`,
-      type: 'missing_info',
-      severity: 'info',
-      title: 'Location inferred',
-      message: `${getEventDisplayName(event)} has an inferred map location. Review it if routing or weather accuracy matters.`,
-      actionLabel: 'Edit event',
-      actionTarget: 'event',
-      source: { kind: 'event', id: event.id },
-      dismissible: true,
-    });
   }
 
   return createInsight({
@@ -77,6 +46,10 @@ const getLocationMissingInsight = (event: Event): TripInsight | null => {
     source: { kind: 'event', id: event.id },
     dismissible: true,
   });
+};
+
+const requiresBookingReference = (event: Event) => {
+  return ['arrival', 'departure', 'flight', 'train', 'bus', 'rental_car', 'stay'].includes(event.type);
 };
 
 const getBookingReferenceInsight = (event: Event): TripInsight | null => {

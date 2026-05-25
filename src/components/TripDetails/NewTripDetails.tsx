@@ -178,6 +178,12 @@ const NewTripDetails: React.FC = () => {
     () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
     [tripInsights, dismissedInsightIds]
   );
+
+  useEffect(() => {
+    setDismissedInsightIds((current) => (
+      current.filter((insightId) => tripInsights.some((insight) => insight.id === insightId))
+    ));
+  }, [tripInsights]);
   const contextSignals = useMemo(
     () => trip ? getTripContextSignals({
       trip,
