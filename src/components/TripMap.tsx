@@ -19,7 +19,7 @@ L.Icon.Default.mergeOptions({
   shadowSize: [41, 41]
 });
 
-// Custom marker icons for different event statuses
+// Custom marker icons for different event statuses (legacy pin icons)
 const blueIcon = new L.Icon({
   iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -61,6 +61,54 @@ const getMarkerIcon = (event: Event) => {
   }
   return blueIcon; // Default fallback
 };
+
+const getLocationGroupKey = (lat: number, lon: number) => (
+  `${lat.toFixed(4)},${lon.toFixed(4)}`
+);
+
+const createNumberedMarkerIcon = (label: string, variant: 'confirmed' | 'exploring') => {
+  const colors = {
+    confirmed: { bg: '#2563eb' },
+    exploring: { bg: '#16a34a' },
+  };
+  const { bg } = colors[variant];
+  const fontSize = label.length > 5 ? '8px' : label.length > 3 ? '9px' : '12px';
+
+  return L.divIcon({
+    className: 'numbered-map-marker-icon',
+    html: `
+      <div style="
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: ${bg};
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+        color: #ffffff;
+        font-size: ${fontSize};
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        line-height: 1.1;
+        padding: 2px;
+        box-sizing: border-box;
+      ">${label}</div>
+    `,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
+  });
+};
+
+interface GroupedMapMarker {
+  lat: number;
+  lon: number;
+  timelineNumbers: number[];
+  label: string;
+  locations: Location[];
+}
 
 interface TripMapProps {
   trip: Trip;
@@ -242,6 +290,66 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   const mapRef = useRef<LeafletMap | null>(null);
   const loadingRef = useRef<boolean>(true); // Add ref to track loading state
   const routeEndpointEventTypes = new Set<EventType>(['flight', 'train', 'bus', 'rental_car']);
+
+  const eventTimelineNumbers = useMemo(() => {
+    const timelineNumbers = new Map<string, number>();
+    sortEventsByStart(trip.events).forEach((event, index) => {
+      timelineNumbers.set(event.id, index + 1);
+    });
+    return timelineNumbers;
+  }, [trip.events]);
+
+  const groupedMarkers = useMemo(() => {
+    const groups = new Map<string, GroupedMapMarker>();
+
+    locations.forEach((location) => {
+      const timelineNumber = eventTimelineNumbers.get(location.event.id);
+      if (timelineNumber === undefined) {
+        return;
+      }
+
+      const key = getLocationGroupKey(location.lat, location.lon);
+      const existing = groups.get(key);
+
+      if (existing) {
+        if (!existing.timelineNumbers.includes(timelineNumber)) {
+          existing.timelineNumbers.push(timelineNumber);
+        }
+        existing.locations.push(location);
+        return;
+      }
+
+      groups.set(key, {
+        lat: location.lat,
+        lon: location.lon,
+        timelineNumbers: [timelineNumber],
+        label: String(timelineNumber),
+        locations: [location],
+      });
+    });
+
+    return Array.from(groups.values()).map((group) => {
+      const timelineNumbers = [...group.timelineNumbers].sort((left, right) => left - right);
+      return {
+        ...group,
+        timelineNumbers,
+        label: timelineNumbers.join(', '),
+      };
+    });
+  }, [locations, eventTimelineNumbers]);
+
+  const getMarkerVariant = (markerLocations: Location[]): 'confirmed' | 'exploring' => {
+    const statuses = markerLocations.map((location) => {
+      const originalEvent = trip.events.find((event) => event.id === location.event.id);
+      return originalEvent?.status || location.event.status || 'confirmed';
+    });
+
+    if (statuses.some((status) => status === 'exploring')) {
+      return 'exploring';
+    }
+
+    return 'confirmed';
+  };
 
   const attachEventToLocation = (
     location: Location,
@@ -890,7 +998,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     );
   }
 
-  if (error || locations.length === 0) {
+  if (error || groupedMarkers.length === 0) {
     return (
       <div className="flex justify-center items-center h-full bg-gray-50 rounded-lg">
         <p className="text-gray-500">{error || 'No locations found'}</p>
@@ -1004,7 +1112,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     <div className="h-full rounded-lg overflow-hidden [&_.leaflet-pane]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-top]:!z-[2] [&_.leaflet-bottom]:!z-[2]">
       <MapContainer
         key={`map-container-${trip._id}-${Date.now()}`}
-        center={[locations[0]?.lat || 0, locations[0]?.lon || 0]}
+        center={[groupedMarkers[0]?.lat || locations[0]?.lat || 0, groupedMarkers[0]?.lon || locations[0]?.lon || 0]}
         zoom={4}
         style={{ height: '100%', width: '100%' }}
         ref={mapRef}
@@ -1039,32 +1147,58 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         ))}
 
         {/* Render markers */}
-        {locations.map((location: Location, index: number) => {
-          const eventDetails = getEventDetails(location.event);
-          const originalEvent = trip.events.find(e => e.id === location.event.id);
-          const isConfirmed = !originalEvent?.status || originalEvent.status === 'confirmed';
-          const markerKey = location.event.id === 'trip-location' 
-            ? `trip-location-${index}-${Date.now()}` 
-            : `marker-${location.event.id}-${Date.now()}`;
+        {groupedMarkers.map((marker) => {
+          const markerVariant = getMarkerVariant(marker.locations);
+          const markerEntries = marker.timelineNumbers
+            .map((timelineNumber) => {
+              const location = marker.locations.find(
+                (entry) => eventTimelineNumbers.get(entry.event.id) === timelineNumber
+              ) || marker.locations[0];
+
+              return {
+                timelineNumber,
+                location,
+                eventDetails: getEventDetails(location.event),
+                originalEvent: trip.events.find((event) => event.id === location.event.id),
+              };
+            })
+            .sort((left, right) => left.timelineNumber - right.timelineNumber);
+
           return (
-            <Marker 
-              key={markerKey}
-              position={[location.lat, location.lon]} 
-              icon={isConfirmed ? blueIcon : greenIcon}
+            <Marker
+              key={`marker-group-${marker.label}-${marker.lat}-${marker.lon}`}
+              position={[marker.lat, marker.lon]}
+              icon={createNumberedMarkerIcon(marker.label, markerVariant)}
             >
               <Popup>
-                <div className="font-semibold">{eventDetails.title}</div>
-                {eventDetails.details && (
-                  <div className="text-sm text-gray-600">{eventDetails.details}</div>
-                )}
-                <div className="text-sm text-gray-600">{eventDetails.date}</div>
-                {eventDetails.additionalInfo && (
-                  <div className="text-sm text-gray-600 mt-1">{eventDetails.additionalInfo}</div>
-                )}
-                <div className={`text-sm mt-1 font-medium ${
-                  isConfirmed ? 'text-blue-600' : 'text-green-600'
-                }`}>
-                  {isConfirmed ? 'Confirmed' : 'Exploring'}
+                <div className="space-y-3">
+                  {markerEntries.map(({ timelineNumber, eventDetails, originalEvent }) => {
+                    const isConfirmed = !originalEvent?.status || originalEvent.status === 'confirmed';
+
+                    return (
+                      <div
+                        key={`${timelineNumber}-${eventDetails.title}`}
+                        className={timelineNumber === markerEntries[markerEntries.length - 1].timelineNumber ? '' : 'border-b border-gray-200 pb-3'}
+                      >
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Stop {timelineNumber}
+                        </div>
+                        <div className="font-semibold">{eventDetails.title}</div>
+                        {eventDetails.details && (
+                          <div className="text-sm text-gray-600">{eventDetails.details}</div>
+                        )}
+                        <div className="text-sm text-gray-600">{eventDetails.date}</div>
+                        {eventDetails.additionalInfo && (
+                          <div className="mt-1 text-sm text-gray-600">{eventDetails.additionalInfo}</div>
+                        )}
+                        <div className={`mt-1 text-sm font-medium ${
+                          isConfirmed ? 'text-blue-600' : 'text-green-600'
+                        }`}>
+                          {isConfirmed ? 'Confirmed' : 'Exploring'}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </Popup>
             </Marker>
@@ -1087,6 +1221,10 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
               <div className="flex items-center gap-2">
                 <div className="w-6 h-0.5 bg-violet-600"></div>
                 <span className="text-sm">Flight Route</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">1</div>
+                <span className="text-sm">Timeline stop number</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
