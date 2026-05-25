@@ -73,6 +73,7 @@ export interface DestinationEvent extends Event {
   endDate: string;
   endTime: string;
   address?: string;
+  contactInfo?: string;
   description?: string;
   openingHours?: string;
 }
@@ -284,6 +285,7 @@ export interface ActivityEvent extends Event {
   title: string;
   activityType: string;
   address?: string;
+  contactInfo?: string;
   description?: string;
   startDate: string;  // YYYY-MM-DD format
   startTime: string;  // HH:mm format

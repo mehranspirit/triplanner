@@ -28,11 +28,10 @@ interface TripDetailsToolbarProps {
   activePanel: TripPanel | null;
   unreadNotificationCount: number;
   isCondensedView: boolean;
-  isGeneratingSuggestions: boolean;
   isImprovingLocations: boolean;
   onOpenAIImport: () => void;
   onAddEvent: (eventType: EventType) => void;
-  onGenerateSuggestions: () => void;
+  onOpenExploreSuggestions: () => void;
   onImproveLocations: () => void;
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
@@ -59,11 +58,10 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   activePanel,
   unreadNotificationCount,
   isCondensedView,
-  isGeneratingSuggestions,
   isImprovingLocations,
   onOpenAIImport,
   onAddEvent,
-  onGenerateSuggestions,
+  onOpenExploreSuggestions,
   onImproveLocations,
   onOpenPanel,
   onOpenNotifications,
@@ -163,9 +161,9 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
               <DropdownMenuLabel>Explore</DropdownMenuLabel>
               {canEdit && (
                 <>
-                  <DropdownMenuItem onClick={onGenerateSuggestions} disabled={isGeneratingSuggestions}>
+                  <DropdownMenuItem onClick={onOpenExploreSuggestions}>
                     <Sparkles className="mr-2 h-4 w-4 text-blue-500" />
-                    {isGeneratingSuggestions ? 'Generating...' : 'AI suggestions'}
+                    AI suggestions
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={onImproveLocations} disabled={isImprovingLocations}>
                     <MapPin className="mr-2 h-4 w-4 text-teal-500" />

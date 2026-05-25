@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Trip = require('../models/Trip');
+const { serializeTrip } = require('../utils/tripSerializer');
 const { geocodeTripEvents } = require('../services/geocoding');
 
 router.post('/trips/:tripId/geocode-events', auth, async (req, res) => {
@@ -17,8 +18,12 @@ router.post('/trips/:tripId/geocode-events', auth, async (req, res) => {
     }
 
     const result = await geocodeTripEvents(trip);
+    const populatedTrip = await Trip.findById(trip._id)
+      .populate('owner', 'name email photoUrl')
+      .populate('collaborators.user', 'name email photoUrl');
+
     res.json({
-      trip,
+      trip: serializeTrip(populatedTrip),
       ...result
     });
   } catch (error) {

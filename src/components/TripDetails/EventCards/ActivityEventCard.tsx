@@ -11,7 +11,8 @@ import {
   Search,
   Map,
   ExternalLink,
-  Ticket
+  Ticket,
+  Phone
 } from 'lucide-react';
 import { FaMountain } from 'react-icons/fa';
 import { cn } from '@/lib/utils';
@@ -274,6 +275,21 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
                   isExploring ? "text-gray-600" : "text-gray-900"
                 )}>
                   <span className="font-semibold">Location:</span> {event.address}
+                </span>
+              </div>
+            )}
+
+            {event.contactInfo && (
+              <div className="flex items-start text-sm space-x-2">
+                <Phone className={cn(
+                  "mt-0.5 h-4 w-4 transition-all duration-200",
+                  isExploring ? "text-gray-400" : "text-gray-500"
+                )} />
+                <span className={cn(
+                  "transition-all duration-200",
+                  isExploring ? "text-gray-600" : "text-gray-900"
+                )}>
+                  <span className="font-semibold">Contact:</span> {event.contactInfo}
                 </span>
               </div>
             )}

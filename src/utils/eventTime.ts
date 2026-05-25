@@ -1,8 +1,66 @@
 import { Event } from '@/types/eventTypes';
 
 const DEFAULT_TIME = '00:00';
+const DEFAULT_END_TIME = '17:00';
+const DEFAULT_START_TIME = '09:00';
 
 const isValidDate = (date: Date) => !Number.isNaN(date.getTime());
+
+export const extractDatePart = (value?: string | null): string | null => {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const parsed = new Date(trimmed);
+  return isValidDate(parsed) ? parsed.toISOString().slice(0, 10) : null;
+};
+
+export const normalizeTimePart = (value?: string | null, fallback = DEFAULT_TIME): string => {
+  if (!value) return fallback;
+  const match = String(value).trim().match(/^(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : fallback;
+};
+
+export const normalizeActivityDestinationSchedule = <T extends Event>(event: T): T => {
+  if (event.type !== 'activity' && event.type !== 'destination') {
+    return event;
+  }
+
+  const startDay = extractDatePart(event.startDate) || extractDatePart((event as Event & { date?: string }).date);
+  if (!startDay) {
+    return event;
+  }
+
+  let endDay = extractDatePart(event.endDate);
+  const eventTimes = event as Event & { startTime?: string; endTime?: string };
+  const startTime = normalizeTimePart(eventTimes.startTime, DEFAULT_START_TIME);
+  let endTime = normalizeTimePart(eventTimes.endTime, DEFAULT_END_TIME);
+
+  if (!endDay || endDay < startDay) {
+    endDay = startDay;
+  }
+
+  const startDayMs = new Date(`${startDay}T12:00:00`).getTime();
+  const endDayMs = new Date(`${endDay}T12:00:00`).getTime();
+  const dayDiff = Math.round((endDayMs - startDayMs) / (24 * 60 * 60 * 1000));
+  if (dayDiff === 1 && endTime <= startTime) {
+    endDay = startDay;
+  }
+
+  if (endDay === startDay && endTime <= startTime) {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    endTime = `${String(Math.min(hours + 2, 23)).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+
+  return {
+    ...event,
+    date: startDay,
+    startDate: startDay,
+    endDate: endDay,
+    startTime,
+    endTime,
+  } as T;
+};
 
 export const parseEventDateTime = (dateValue?: string, timeValue?: string): Date | null => {
   if (!dateValue) return null;
@@ -55,7 +113,7 @@ export const getEventEnd = (event: Event): Date | null => {
       return parseEventDateTime(event.endDate || eventData.arrivalDate, eventData.arrivalTime);
     case 'activity':
     case 'destination':
-      return parseEventDateTime(event.endDate, eventData.endTime);
+      return parseEventDateTime(event.endDate || event.startDate, eventData.endTime);
     default:
       return parseEventDateTime(event.endDate || event.startDate);
   }

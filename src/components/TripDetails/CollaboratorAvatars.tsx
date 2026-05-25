@@ -16,15 +16,18 @@ interface CollaboratorAvatarsProps {
   className?: string;
 }
 
+const getInitial = (name?: string | null) => (name?.trim()?.charAt(0) || '?').toUpperCase();
+
 export const CollaboratorAvatars: React.FC<CollaboratorAvatarsProps> = ({
   owner,
   collaborators,
   currentUserId,
   className
 }) => {
-  // Filter out the current user from both owner and collaborators
   const showOwner = owner._id !== currentUserId;
-  const filteredCollaborators = collaborators.filter(c => c.user._id !== currentUserId);
+  const filteredCollaborators = collaborators.filter(
+    (collaborator) => collaborator.user?._id && collaborator.user._id !== currentUserId
+  );
   
   // Calculate total number of avatars to show
   const totalAvatars = (showOwner ? 1 : 0) + filteredCollaborators.length;
@@ -41,8 +44,8 @@ export const CollaboratorAvatars: React.FC<CollaboratorAvatarsProps> = ({
             <TooltipTrigger asChild>
               <div className="relative inline-block">
                 <Avatar className="h-10 w-10 border-2 border-white hover:translate-y-[-2px] transition-transform duration-200">
-                  {owner.photoUrl && <AvatarImage src={owner.photoUrl} alt={owner.name} className="object-cover" />}
-                  <AvatarFallback className="bg-amber-100 text-amber-900 font-medium">{owner.name.charAt(0).toUpperCase()}</AvatarFallback>
+                  {owner.photoUrl && <AvatarImage src={owner.photoUrl} alt={owner.name || 'Owner'} className="object-cover" />}
+                  <AvatarFallback className="bg-amber-100 text-amber-900 font-medium">{getInitial(owner.name)}</AvatarFallback>
                 </Avatar>
               </div>
             </TooltipTrigger>
@@ -60,14 +63,14 @@ export const CollaboratorAvatars: React.FC<CollaboratorAvatarsProps> = ({
               <div className="relative inline-block">
                 <Avatar className="h-10 w-10 border-2 border-white hover:translate-y-[-2px] transition-transform duration-200">
                   {collaborator.user.photoUrl && (
-                    <AvatarImage src={collaborator.user.photoUrl} alt={collaborator.user.name} className="object-cover" />
+                    <AvatarImage src={collaborator.user.photoUrl} alt={collaborator.user.name || 'Collaborator'} className="object-cover" />
                   )}
-                  <AvatarFallback className="bg-blue-100 text-blue-900 font-medium">{collaborator.user.name.charAt(0).toUpperCase()}</AvatarFallback>
+                  <AvatarFallback className="bg-blue-100 text-blue-900 font-medium">{getInitial(collaborator.user.name)}</AvatarFallback>
                 </Avatar>
               </div>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="font-medium">{collaborator.user.name}</p>
+              <p className="font-medium">{collaborator.user.name || 'Collaborator'}</p>
               <p className="text-xs text-muted-foreground capitalize">{collaborator.role}</p>
             </TooltipContent>
           </Tooltip>

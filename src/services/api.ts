@@ -136,11 +136,12 @@ interface API {
   saveAssistantSuggestionFeedback: (tripId: string, data: SaveAssistantSuggestionFeedbackRequest) => Promise<AssistantSuggestionFeedback>;
   generateAISuggestions: (request: { places: string[]; activities: string[]; tripDates: { startDate: string; endDate: string } }) => Promise<string>;
   generateDreamTripSuggestions: (request: { places: string[]; activities: string[]; customPrompt: string }) => Promise<string>;
-  generateDestinationSuggestions: (
-    existingEvents: Event[],
-    tripDates: { startDate: string; endDate: string },
-    user: User
-  ) => Promise<Event[]>;
+  generateDestinationSuggestions: (request: {
+    existingEvents: Event[];
+    tripDates: { startDate: string; endDate: string };
+    keywords: string[];
+    user: User;
+  }) => Promise<Event[]>;
   parseEventFromText: (request: { text: string; trip: Pick<Trip, '_id' | 'name' | 'description' | 'startDate' | 'endDate' | 'events'>; user: User }) => Promise<Event | Event[]>;
 }
 
@@ -1356,11 +1357,11 @@ export const api: API = {
     return data.suggestions;
   },
 
-  generateDestinationSuggestions: async (existingEvents, tripDates, user): Promise<Event[]> => {
+  generateDestinationSuggestions: async (request): Promise<Event[]> => {
     const response = await fetch(`${API_URL}/api/ai/destination-suggestions`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ existingEvents, tripDates, user }),
+      body: JSON.stringify(request),
     });
     if (!response.ok) await throwApiError(response, 'Failed to generate destination suggestions');
     const data = await response.json();

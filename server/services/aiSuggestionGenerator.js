@@ -135,34 +135,134 @@ const formatEventForPrompt = (event) => {
   return `${event.type}: ${name} from ${eventStart} to ${eventEnd}`;
 };
 
-const generateDestinationSuggestions = async ({ existingEvents = [], tripDates, user }) => {
+const extractTripLocationHints = (events = []) => {
+  const hints = new Set();
+
+  for (const event of events) {
+    if (event.type === 'stay') {
+      if (event.accommodationName) hints.add(event.accommodationName);
+      if (event.address) hints.add(event.address);
+    }
+    if (event.type === 'destination') {
+      if (event.placeName) hints.add(event.placeName);
+      if (event.address) hints.add(event.address);
+    }
+    if (event.type === 'activity') {
+      if (event.title) hints.add(event.title);
+      if (event.address) hints.add(event.address);
+    }
+    if (event.location?.address) hints.add(event.location.address);
+    if (event.airport) hints.add(event.airport);
+    if (event.departureAirport) hints.add(event.departureAirport);
+    if (event.arrivalAirport) hints.add(event.arrivalAirport);
+  }
+
+  return [...hints];
+};
+
+const extractDatePart = (value) => {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+};
+
+const normalizeTimePart = (value, fallback = '09:00') => {
+  if (!value) return fallback;
+  const match = String(value).trim().match(/^(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : fallback;
+};
+
+const normalizeSuggestionSchedule = ({ startDate, startTime, endDate, endTime }) => {
+  const startDay = extractDatePart(startDate);
+  if (!startDay) {
+    return null;
+  }
+
+  let endDay = extractDatePart(endDate);
+  const normalizedStartTime = normalizeTimePart(startTime, '09:00');
+  let normalizedEndTime = normalizeTimePart(endTime, '17:00');
+
+  if (!endDay || endDay < startDay) {
+    endDay = startDay;
+  }
+
+  const dayDiff = Math.round(
+    (new Date(`${endDay}T12:00:00`).getTime() - new Date(`${startDay}T12:00:00`).getTime())
+    / (24 * 60 * 60 * 1000)
+  );
+  if (dayDiff === 1 && normalizedEndTime <= normalizedStartTime) {
+    endDay = startDay;
+  }
+
+  if (endDay === startDay && normalizedEndTime <= normalizedStartTime) {
+    const [hours, minutes] = normalizedStartTime.split(':').map(Number);
+    normalizedEndTime = `${String(Math.min(hours + 2, 23)).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+
+  return {
+    date: startDay,
+    startDate: startDay,
+    endDate: endDay,
+    startTime: normalizedStartTime,
+    endTime: normalizedEndTime,
+  };
+};
+
+const generateDestinationSuggestions = async ({ existingEvents = [], tripDates, keywords = [], user }) => {
+  const normalizedKeywords = keywords
+    .map(keyword => String(keyword || '').trim())
+    .filter(Boolean);
+
+  if (normalizedKeywords.length === 0) {
+    throw new Error('At least one activity or destination keyword is required');
+  }
+
   const nonAiSuggestions = existingEvents.filter(event => !event.isAISuggestion);
   const formattedEvents = nonAiSuggestions.map(formatEventForPrompt).join('\n\n');
+  const locationHints = extractTripLocationHints(nonAiSuggestions);
+  const keywordList = normalizedKeywords.join(', ');
+  const locationContext = locationHints.length > 0
+    ? locationHints.join(', ')
+    : 'Infer the destination from the existing itinerary';
 
-  const prompt = `Generate exactly 3 new event suggestions for a trip, following these rules:
-1. Generate in this order: cultural destination, outdoor activity, local experience
-2. Each suggestion must include a descriptive title/name, detailed description, start/end date and time, and address.
-3. All dates must be between ${tripDates.startDate} and ${tripDates.endDate}
-4. All dates must be in YYYY-MM-DD format
-5. All times must be in HH:mm format
-6. Do not overlap with existing events
-7. Ensure suggestions are diverse and complement each other
+  const prompt = `Generate exactly 3 concrete trip event suggestions based on the user's interests.
+
+User interests/keywords: ${keywordList}
+Trip dates: ${tripDates.startDate} to ${tripDates.endDate}
+Trip location context: ${locationContext}
+
+Rules:
+1. Each suggestion must be type "activity" or "destination" only.
+2. Prefer real venues, parks, tour operators, museums, trails, or businesses that match the keywords and trip location.
+3. Include practical details whenever possible: full street address, phone and/or website, opening hours, and booking/reservation notes.
+4. Use "unknown" only when a field truly cannot be determined.
+5. All dates must be between ${tripDates.startDate} and ${tripDates.endDate}.
+6. All dates must be YYYY-MM-DD and all times must be HH:mm (24-hour).
+7. Most activities and destinations are single-day: set endDate equal to startDate unless the event truly spans multiple days.
+8. Do not overlap with existing events.
+9. Spread suggestions across open days when possible.
 
 Existing events:
-${formattedEvents}
+${formattedEvents || 'None yet'}
 
-Format each suggestion like this:
+Format each suggestion exactly like this:
 SUGGESTION_START
-type: [ONLY either "activity" or "destination"]
-title/placeName: [name]
-description: [detailed description]
+type: [activity or destination]
+title/placeName: [real venue or activity name]
+description: [why it fits the keyword and what to expect]
 startDate: YYYY-MM-DD
 startTime: HH:mm
 endDate: YYYY-MM-DD
 endTime: HH:mm
-address: [full address]
+address: [full street address with city]
+contactInfo: [phone and/or website]
+openingHours: [hours or "unknown"]
+notes: [booking tips, price range, or reservation guidance]
 activityType: [for activities only]
-openingHours: [for destinations only]
+cost: [optional numeric estimate in local currency, or "unknown"]
 SUGGESTION_END`;
 
   const { text } = await generateAiText({
@@ -170,10 +270,16 @@ SUGGESTION_END`;
     temperature: 0.7,
     topK: 40,
     topP: 0.95,
-    maxOutputTokens: 2000,
+    maxOutputTokens: 5000,
   });
 
   if (!text) throw new Error('No response from AI');
+
+  const parseCost = (value) => {
+    if (!value || value.toLowerCase() === 'unknown') return undefined;
+    const parsed = Number(String(value).replace(/[^\d.]/g, ''));
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
 
   return text.split('SUGGESTION_START').slice(1).map((block) => {
     const suggestionContent = block.split('SUGGESTION_END')[0].trim();
@@ -183,14 +289,43 @@ SUGGESTION_END`;
       if (key && valueParts.length > 0) fields[key.trim()] = valueParts.join(':').trim();
     });
 
+    const contactInfo = fields.contactInfo && fields.contactInfo.toLowerCase() !== 'unknown'
+      ? fields.contactInfo
+      : undefined;
+    const openingHours = fields.openingHours && fields.openingHours.toLowerCase() !== 'unknown'
+      ? fields.openingHours
+      : undefined;
+    const notes = fields.notes && fields.notes.toLowerCase() !== 'unknown'
+      ? fields.notes
+      : undefined;
+    const address = fields.address && fields.address.toLowerCase() !== 'unknown'
+      ? fields.address
+      : undefined;
+    const cost = parseCost(fields.cost);
+    const schedule = normalizeSuggestionSchedule({
+      startDate: fields.startDate,
+      startTime: fields.startTime,
+      endDate: fields.endDate,
+      endTime: fields.endTime,
+    });
+
+    if (!schedule) {
+      return null;
+    }
+
     const baseEvent = {
       id: randomUUID(),
       type: fields.type,
-      startDate: fields.startDate,
-      endDate: fields.endDate,
-      startTime: fields.startTime,
-      endTime: fields.endTime,
+      date: schedule.date,
+      startDate: schedule.startDate,
+      endDate: schedule.endDate,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
       description: fields.description,
+      address,
+      contactInfo,
+      notes,
+      ...(cost !== undefined ? { cost } : {}),
       isAISuggestion: true,
       createdBy: user,
       createdAt: new Date().toISOString(),
@@ -205,18 +340,16 @@ SUGGESTION_END`;
       return {
         ...baseEvent,
         title: fields['title/placeName'],
-        activityType: fields.activityType,
-        address: fields.address,
+        activityType: fields.activityType || normalizedKeywords[0],
       };
     }
 
     return {
       ...baseEvent,
       placeName: fields['title/placeName'],
-      address: fields.address,
-      openingHours: fields.openingHours,
+      openingHours,
     };
-  }).filter(event => event.type === 'activity' || event.type === 'destination');
+  }).filter(event => event && (event.type === 'activity' || event.type === 'destination'));
 };
 
 module.exports = {

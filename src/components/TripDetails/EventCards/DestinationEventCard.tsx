@@ -461,6 +461,36 @@ const DestinationEventCard: React.FC<DestinationEventCardProps> = ({ event, thum
               </div>
             )}
 
+            {event.contactInfo && (
+              <div className="flex items-start text-sm space-x-2">
+                <Info className={cn(
+                  "mt-0.5 h-4 w-4 transition-all duration-200",
+                  isExploring ? "text-gray-400" : "text-gray-500"
+                )} />
+                <span className={cn(
+                  "transition-all duration-200",
+                  isExploring ? "text-gray-600" : "text-gray-900"
+                )}>
+                  <span className="font-semibold">Contact:</span> {event.contactInfo}
+                </span>
+              </div>
+            )}
+
+            {event.openingHours && (
+              <div className="flex items-start text-sm space-x-2">
+                <Clock className={cn(
+                  "mt-0.5 h-4 w-4 transition-all duration-200",
+                  isExploring ? "text-gray-400" : "text-gray-500"
+                )} />
+                <span className={cn(
+                  "transition-all duration-200",
+                  isExploring ? "text-gray-600" : "text-gray-900"
+                )}>
+                  <span className="font-semibold">Hours:</span> {event.openingHours}
+                </span>
+              </div>
+            )}
+
             {/* Description and Notes Section */}
             {(event.description || event.notes) && (
               <div className="mt-2 space-y-2">

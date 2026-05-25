@@ -10,6 +10,7 @@ import { getDefaultThumbnail, getEventThumbnail } from './thumbnailHelpers';
 import { exportHtml, ItineraryExportMode } from './exportHelpers';
 import { v4 as uuidv4 } from 'uuid';
 import { eventNeedsMapLocation, syncEventLocationOnSave } from '@/utils/eventLocation';
+import { normalizeActivityDestinationSchedule } from '@/utils/eventTime';
 
 // Placeholder for a default/unknown user - adjust as needed
 const defaultUser: User = {
@@ -109,7 +110,13 @@ export const useTripDetails = () => {
   const refreshTripLocations = useCallback(async (tripId: string) => {
     try {
       const result = await api.geocodeTripEvents(tripId);
-      setTrip(result.trip);
+      setTrip((currentTrip) => {
+        if (!currentTrip) return currentTrip;
+        return {
+          ...currentTrip,
+          events: result.trip?.events ?? currentTrip.events,
+        };
+      });
       return result.trip;
     } catch (error) {
       console.error('Error refreshing event locations:', error);
@@ -117,51 +124,62 @@ export const useTripDetails = () => {
     }
   }, []);
 
-  const addEvent = useCallback(async (newEventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>) => {
-    if (!trip) return;
+  const addEvents = useCallback(async (
+    newEventsData: Array<Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>>
+  ) => {
+    if (!trip || newEventsData.length === 0) return [];
+
     const currentUser = user || defaultUser;
-    const newEventWithMeta: Event = syncEventLocationOnSave({
-      ...newEventData,
-      id: uuidv4(),
-      createdBy: currentUser,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentUser,
-      likes: [],
-      dislikes: [],
+    const timestamp = new Date().toISOString();
+    const newEventsWithMeta = newEventsData.map((newEventData) => {
+      const normalizedEventData = normalizeActivityDestinationSchedule(newEventData as Event);
+      return syncEventLocationOnSave({
+        ...normalizedEventData,
+        id: uuidv4(),
+        createdBy: currentUser,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        likes: [],
+        dislikes: [],
+      });
     });
-    
+
     try {
-      // First update local state for immediate UI update
-    const updatedTrip = { ...trip, events: [...trip.events, newEventWithMeta] };
+      const updatedTrip = { ...trip, events: [...trip.events, ...newEventsWithMeta] };
       setTrip(updatedTrip);
-      
-      // Then update in backend
       await handleTripUpdate(updatedTrip);
 
-      if (eventNeedsMapLocation(newEventWithMeta)) {
+      if (newEventsWithMeta.some(eventNeedsMapLocation)) {
         await refreshTripLocations(trip._id);
       }
-      
-      // Update thumbnail
-    const thumb = newEventWithMeta.thumbnailUrl || await getEventThumbnail(newEventWithMeta);
-    setEventThumbnails(prev => ({ ...prev, [newEventWithMeta.id]: thumb }));
-      
-      return newEventWithMeta;
+
+      const thumbnailEntries: Record<string, string> = {};
+      await Promise.all(newEventsWithMeta.map(async (event) => {
+        thumbnailEntries[event.id] = event.thumbnailUrl || await getEventThumbnail(event);
+      }));
+      setEventThumbnails(prev => ({ ...prev, ...thumbnailEntries }));
+
+      return newEventsWithMeta;
     } catch (error) {
-      console.error("hooks.ts addEvent: Error during event addition:", error);
-      // Revert optimistic update on error
+      console.error('hooks.ts addEvents: Error during batch event addition:', error);
       await fetchTrip();
       throw error;
     }
-  }, [trip, user, handleTripUpdate, refreshTripLocations]);
+  }, [trip, user, handleTripUpdate, refreshTripLocations, fetchTrip]);
+
+  const addEvent = useCallback(async (newEventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>) => {
+    const results = await addEvents([newEventData]);
+    return results[0];
+  }, [addEvents]);
 
   const updateEvent = useCallback(async (eventToUpdate: Event) => {
     if (!trip) return;
     const currentUser = user || defaultUser;
     const previousEvent = trip.events.find(event => event.id === eventToUpdate.id);
+    const normalizedEventData = normalizeActivityDestinationSchedule(eventToUpdate);
     const eventWithMeta = syncEventLocationOnSave({
-      ...eventToUpdate,
+      ...normalizedEventData,
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser,
     }, previousEvent);
@@ -241,6 +259,7 @@ export const useTripDetails = () => {
     eventThumbnails,
     fetchTrip,
     addEvent,
+    addEvents,
     updateEvent,
     deleteEvent,
     handleExportHTML,
