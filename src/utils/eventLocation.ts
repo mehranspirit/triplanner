@@ -1,7 +1,80 @@
 import { Event } from '@/types/eventTypes';
-import { getEventLocationLabel } from '@/utils/eventTime';
 
 const MAP_OPTIONAL_EVENT_TYPES = new Set(['arrival', 'departure', 'flight', 'train', 'bus']);
+
+const getEventData = (event: Event): Record<string, string | undefined> => (
+  event as unknown as Record<string, string | undefined>
+);
+
+const combineLocationParts = (...parts: (string | undefined)[]): string | undefined => {
+  const combined = parts.map((part) => part?.trim()).filter(Boolean).join(' ');
+  return combined || undefined;
+};
+
+const uniqueLocationQueries = (...candidates: (string | undefined)[]): string[] => {
+  const seen = new Set<string>();
+  const queries: string[] = [];
+
+  for (const candidate of candidates) {
+    if (!candidate?.trim()) continue;
+    const trimmed = candidate.trim();
+    const normalized = trimmed.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    queries.push(trimmed);
+  }
+
+  return queries;
+};
+
+export const getEventLocationQueries = (event: Event): string[] => {
+  const data = getEventData(event);
+
+  switch (event.type) {
+    case 'stay':
+      return uniqueLocationQueries(
+        data.address,
+        event.location?.address,
+        combineLocationParts(data.accommodationName, data.address),
+        data.accommodationName,
+      );
+    case 'destination':
+      return uniqueLocationQueries(
+        data.address,
+        event.location?.address,
+        combineLocationParts(data.placeName, data.address),
+        data.placeName,
+      );
+    case 'activity':
+      return uniqueLocationQueries(
+        data.address,
+        event.location?.address,
+        combineLocationParts(data.title, data.address),
+        data.title,
+      );
+    case 'arrival':
+    case 'departure':
+      return uniqueLocationQueries(data.airport);
+    case 'flight':
+      return uniqueLocationQueries(data.departureAirport, data.arrivalAirport);
+    case 'train':
+    case 'bus':
+      return uniqueLocationQueries(data.departureStation, data.arrivalStation);
+    case 'rental_car':
+      return uniqueLocationQueries(data.pickupLocation, data.dropoffLocation);
+    default:
+      return uniqueLocationQueries(event.location?.address);
+  }
+};
+
+export const getEventLocationQuery = (event: Event): string | undefined => (
+  getEventLocationQueries(event)[0]
+);
+
+/** @deprecated Use getEventLocationQueries — kept for callers that expect a single string. */
+export const getEventLocationMapSearchQuery = (event: Event): string | undefined => (
+  getEventLocationQueries(event)[0]
+);
 
 export const eventHasMapCoordinates = (event: Event): boolean => {
   const location = event.location;
@@ -20,7 +93,7 @@ export const hasPlaceholderLocation = (event: Event): boolean => {
   }
 
   const quality = event.location?.quality;
-  return quality === 'missing' || quality === 'unresolved';
+  return quality === 'missing' || quality === 'unresolved' || quality === 'inferred';
 };
 
 export const eventNeedsMapLocation = (event: Event): boolean => {
@@ -31,29 +104,21 @@ export const eventNeedsMapLocation = (event: Event): boolean => {
   return hasPlaceholderLocation(event);
 };
 
-export const eventHasLocationAttention = (event: Event): boolean => {
-  if (MAP_OPTIONAL_EVENT_TYPES.has(event.type)) {
-    return false;
-  }
-
-  if (eventNeedsMapLocation(event)) {
-    return true;
-  }
-
-  return event.location?.quality === 'inferred';
-};
+export const eventHasLocationAttention = (event: Event): boolean => (
+  eventNeedsMapLocation(event)
+);
 
 export const syncEventLocationOnSave = <T extends Event>(
   event: T,
   previousEvent?: Event | null
 ): T => {
-  const label = getEventLocationLabel(event);
+  const label = getEventLocationQuery(event);
   if (!label) {
     return event;
   }
 
   const existing = event.location ?? { lat: 0, lng: 0 };
-  const previousLabel = previousEvent ? getEventLocationLabel(previousEvent) : undefined;
+  const previousLabel = previousEvent ? getEventLocationQuery(previousEvent) : undefined;
   const locationQueryChanged = previousEvent ? label !== previousLabel : false;
   const hasCoords = eventHasMapCoordinates(event);
 

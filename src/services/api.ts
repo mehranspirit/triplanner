@@ -125,7 +125,7 @@ interface API {
   updateTripNotification: (tripId: string, notificationId: string, data: UpdateNotificationRequest) => Promise<TripNotification>;
   getNotificationPreferences: (tripId: string) => Promise<NotificationPreference>;
   updateNotificationPreferences: (tripId: string, data: UpdateNotificationPreferenceRequest) => Promise<NotificationPreference>;
-  geocodeTripEvents: (tripId: string) => Promise<{ trip: Trip; updatedCount: number; results: unknown[] }>;
+  geocodeTripEvents: (tripId: string) => Promise<import('@/types/geocodingTypes').GeocodeTripEventsResponse>;
   getTripWeather: (tripId: string, options?: { refresh?: boolean }) => Promise<TripWeatherResponse>;
   getTripFlightStatuses: (tripId: string, options?: { refresh?: boolean }) => Promise<TripFlightStatusesResponse>;
   generateTripAssistantBriefing: (tripId: string) => Promise<TripAssistantBriefingResponse>;
@@ -1219,7 +1219,7 @@ export const api: API = {
     return response.json();
   },
 
-  geocodeTripEvents: async (tripId: string): Promise<{ trip: Trip; updatedCount: number; results: unknown[] }> => {
+  geocodeTripEvents: async (tripId: string) => {
     const response = await fetch(`${API_URL}/api/trips/${tripId}/geocode-events`, {
       method: 'POST',
       headers: getHeaders(),

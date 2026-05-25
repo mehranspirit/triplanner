@@ -1,5 +1,5 @@
 import { Trip } from '@/types/eventTypes';
-import { eventNeedsMapLocation } from '@/utils/eventLocation';
+import { eventHasLocationAttention } from '@/utils/eventLocation';
 import { getMissingLocationInsightId } from '@/services/tripInsights';
 import { TripInsight } from '@/types/insightTypes';
 import { TripNotification } from '@/types/notificationTypes';
@@ -41,7 +41,7 @@ const isSameDay = (left: Date, right: Date) => (
 
 const getLocationIssueCount = (trip: Trip, dismissedInsightIds: string[] = []) => (
   trip.events.filter(event => (
-    eventNeedsMapLocation(event) &&
+    eventHasLocationAttention(event) &&
     !dismissedInsightIds.includes(getMissingLocationInsightId(event.id))
   )).length
 );

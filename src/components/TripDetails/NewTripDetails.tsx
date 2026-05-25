@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
 import { Event, EventType } from '@/types/eventTypes'; // Import EventType
 import { cn } from '@/lib/utils';
 import ExploreSuggestionsModal from '@/components/TripDetails/ExploreSuggestionsModal';
+import ImproveLocationsResultsDialog from '@/components/TripDetails/ImproveLocationsResultsDialog';
 import TripDetailsToolbar from '@/components/TripDetails/TripDetailsToolbar';
 import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
 import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext';
@@ -24,6 +25,7 @@ import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { WeatherSnapshot } from '@/types/weatherTypes';
 import { ExpenseSummary } from '@/types/expenseTypes';
 import { TravelImport, TravelImportStatus } from '@/types/travelImportTypes';
+import { GeocodeTripEventsResponse } from '@/types/geocodingTypes';
 import {
   AssistantActionTarget,
   AssistantChecklistItem,
@@ -159,6 +161,8 @@ const NewTripDetails: React.FC = () => {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [deletingEvents, setDeletingEvents] = useState<Set<string>>(new Set());
   const [isImprovingLocations, setIsImprovingLocations] = useState(false);
+  const [improveLocationsReport, setImproveLocationsReport] = useState<GeocodeTripEventsResponse | null>(null);
+  const [isImproveLocationsDialogOpen, setIsImproveLocationsDialogOpen] = useState(false);
   const [isExploreSuggestionsOpen, setIsExploreSuggestionsOpen] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
@@ -645,11 +649,8 @@ const NewTripDetails: React.FC = () => {
       setIsImprovingLocations(true);
       const result = await api.geocodeTripEvents(trip._id);
       await handleTripUpdate(result.trip);
-      setSuccess(
-        result.updatedCount > 0
-          ? `Improved ${result.updatedCount} event location${result.updatedCount === 1 ? '' : 's'}.`
-          : 'No event locations needed updates.'
-      );
+      setImproveLocationsReport(result);
+      setIsImproveLocationsDialogOpen(true);
     } catch (error) {
       console.error('Error improving locations:', error);
       setSuccess(error instanceof Error ? error.message : 'Failed to improve event locations');
@@ -1141,6 +1142,16 @@ const NewTripDetails: React.FC = () => {
           onClose={() => setIsExploreSuggestionsOpen(false)}
           trip={trip}
           onAddSuggestions={handleAddExploreSuggestions}
+        />
+      )}
+
+      {improveLocationsReport && (
+        <ImproveLocationsResultsDialog
+          open={isImproveLocationsDialogOpen}
+          onOpenChange={setIsImproveLocationsDialogOpen}
+          updatedCount={improveLocationsReport.updatedCount}
+          results={improveLocationsReport.results}
+          events={improveLocationsReport.trip.events}
         />
       )}
       </div>

@@ -146,20 +146,7 @@ export const getEventDisplayName = (event: Event): string => {
   }
 };
 
-export const getEventLocationLabel = (event: Event): string | undefined => {
-  const eventData = event as any;
-
-  return (
-    event.location?.address ||
-    eventData.address ||
-    eventData.airport ||
-    eventData.accommodationName ||
-    eventData.placeName ||
-    eventData.pickupLocation ||
-    eventData.departureAirport ||
-    eventData.departureStation
-  );
-};
+export { getEventLocationQuery as getEventLocationLabel } from '@/utils/eventLocation';
 
 export const getEventBookingReference = (event: Event): string | undefined => {
   const eventData = event as any;

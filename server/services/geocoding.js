@@ -17,26 +17,66 @@ const setLocationQuality = (event, quality, extra = {}) => {
   };
 };
 
+const combineLocationParts = (...parts) => {
+  const combined = parts.map((part) => (part ? String(part).trim() : '')).filter(Boolean).join(' ');
+  return combined || undefined;
+};
+
+const uniqueLocationQueries = (...candidates) => {
+  const seen = new Set();
+  const queries = [];
+
+  for (const candidate of candidates) {
+    if (!candidate || !String(candidate).trim()) continue;
+    const trimmed = String(candidate).trim();
+    const normalized = trimmed.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    queries.push(trimmed);
+  }
+
+  return queries;
+};
+
 const getEventLocationQuery = (event) => {
+  return getEventLocationQueries(event)[0];
+};
+
+const getEventLocationQueries = (event) => {
   switch (event.type) {
     case 'stay':
-      return event.address || event.location?.address || event.accommodationName;
+      return uniqueLocationQueries(
+        event.address,
+        event.location?.address,
+        combineLocationParts(event.accommodationName, event.address),
+        event.accommodationName
+      );
     case 'destination':
-      return event.address || event.location?.address || event.placeName;
+      return uniqueLocationQueries(
+        event.address,
+        event.location?.address,
+        combineLocationParts(event.placeName, event.address),
+        event.placeName
+      );
     case 'activity':
-      return event.address || event.location?.address || event.title;
+      return uniqueLocationQueries(
+        event.address,
+        event.location?.address,
+        combineLocationParts(event.title, event.address),
+        event.title
+      );
     case 'arrival':
     case 'departure':
-      return event.airport;
+      return uniqueLocationQueries(event.airport);
     case 'flight':
-      return event.departureAirport || event.arrivalAirport;
+      return uniqueLocationQueries(event.departureAirport, event.arrivalAirport);
     case 'train':
     case 'bus':
-      return event.departureStation || event.arrivalStation;
+      return uniqueLocationQueries(event.departureStation, event.arrivalStation);
     case 'rental_car':
-      return event.pickupLocation || event.dropoffLocation;
+      return uniqueLocationQueries(event.pickupLocation, event.dropoffLocation);
     default:
-      return event.location?.address;
+      return uniqueLocationQueries(event.location?.address);
   }
 };
 
@@ -104,9 +144,10 @@ const geocodeTripEvents = async (trip) => {
   let updatedCount = 0;
 
   for (const event of trip.events || []) {
-    const query = getEventLocationQuery(event);
+    const queries = getEventLocationQueries(event);
+    const primaryQuery = queries[0];
 
-    if (hasUsableLocation(event) || !query) {
+    if (hasUsableLocation(event) || queries.length === 0) {
       if (hasUsableLocation(event) && !event.location.quality) {
         setLocationQuality(event, 'exact', {
           source: event.location.source || 'manual'
@@ -114,7 +155,7 @@ const geocodeTripEvents = async (trip) => {
         updatedCount += 1;
       }
 
-      if (!query && !hasUsableLocation(event)) {
+      if (queries.length === 0 && !hasUsableLocation(event)) {
         setLocationQuality(event, 'missing', {
           source: 'unknown'
         });
@@ -129,30 +170,39 @@ const geocodeTripEvents = async (trip) => {
       continue;
     }
 
-    const geocoded = await geocodeLocation(query);
+    let geocoded = null;
+    let usedQuery = null;
+    for (const query of queries) {
+      geocoded = await geocodeLocation(query);
+      if (geocoded) {
+        usedQuery = query;
+        break;
+      }
+    }
+
     if (!geocoded) {
       setLocationQuality(event, 'unresolved', {
         source: 'geocoded',
-        query
+        query: primaryQuery
       });
       updatedCount += 1;
-      results.push({ eventId: event.id, query, success: false });
+      results.push({ eventId: event.id, query: primaryQuery, success: false });
       continue;
     }
 
     event.location = {
       lat: geocoded.lat,
       lng: geocoded.lng,
-      address: geocoded.displayName || query,
+      address: geocoded.displayName || usedQuery,
       quality: geocoded.confidence >= 0.8 ? 'exact' : 'inferred',
       source: 'geocoded',
-      query,
+      query: usedQuery,
       confidence: geocoded.confidence
     };
     updatedCount += 1;
     results.push({
       eventId: event.id,
-      query,
+      query: usedQuery,
       success: true,
       location: event.location
     });
@@ -173,4 +223,5 @@ module.exports = {
   geocodeLocation,
   geocodeTripEvents,
   getEventLocationQuery,
+  getEventLocationQueries,
 };

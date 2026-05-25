@@ -5,6 +5,7 @@ import L from 'leaflet';
 import type { Map as LeafletMap } from 'leaflet';
 import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '@/types/eventTypes';
 import { sortEventsByStart } from '@/utils/eventTime';
+import { getEventLocationQueries } from '@/utils/eventLocation';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -176,6 +177,7 @@ const extractMapRelevantData = (trip: Trip) => {
       accommodationName: 'accommodationName' in event ? event.accommodationName : undefined,
       address: 'address' in event ? event.address : undefined,
       placeName: 'placeName' in event ? event.placeName : undefined,
+      title: 'title' in event ? event.title : undefined,
       checkIn: 'checkIn' in event ? event.checkIn : undefined,
       checkOut: 'checkOut' in event ? event.checkOut : undefined,
       airline: 'airline' in event ? event.airline : undefined,
@@ -276,6 +278,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
         eventData.airport,
         eventData.accommodationName,
         eventData.placeName,
+        eventData.title,
         eventData.departureAirport,
         eventData.arrivalAirport,
         eventData.departureStation,
@@ -589,7 +592,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
             }
 
             try {
-          let searchQuery = '';
+          let searchQueries: string[] = [];
           let departureLocation = null;
           let arrivalLocation = null;
           
@@ -604,6 +607,9 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                 break;
               case 'destination':
                 displayName = ((event as unknown) as DestinationEvent).placeName || 'Destination';
+                break;
+              case 'activity':
+                displayName = ((event as unknown) as ActivityEvent).title || event.location.address || 'Activity';
                 break;
               default:
                 displayName = event.location.address || 'Location';
@@ -625,17 +631,14 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                 continue;
           }
 
-          // Build search query based on event type
+          // Build search queries based on event type
           switch (event.type) {
             case 'arrival':
             case 'departure':
-              searchQuery = ((event as unknown) as ArrivalDepartureEvent).airport || '';
-              break;
             case 'stay':
-              searchQuery = `${((event as unknown) as StayEvent).accommodationName || ''} ${((event as unknown) as StayEvent).address || ''}`.trim();
-              break;
             case 'destination':
-              searchQuery = `${((event as unknown) as DestinationEvent).placeName || ''} ${((event as unknown) as DestinationEvent).address || ''}`.trim();
+            case 'activity':
+              searchQueries = getEventLocationQueries(event as unknown as Event);
               break;
             case 'flight': {
               const flightEvent = (event as unknown) as FlightEvent;
@@ -719,7 +722,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
             }
           }
 
-              if (!searchQuery) {
+              if (searchQueries.length === 0) {
                 skippedEvents.push({
                   eventId: event.id,
                   label: getEventMapLabel(event),
@@ -727,55 +730,17 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                 });
                 continue;
               }
-          
-          // Check cache first
-          const cacheKey = getLocationCacheKey(searchQuery);
-              if (locationCache[cacheKey] && isCacheValid(locationCache[cacheKey].timestamp, LOCATION_CACHE_DURATION)) {
-                results.push({
-              ...locationCache[cacheKey],
-              event: {
-                ...event,
-                createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              } as Event
-                });
-                continue;
-          }
 
-          try {
-                // Check if loading should continue before making API call
-                if (!loadingRef.current) {
-                  return { results, skippedEvents };
-                }
+          let mappedLocation: Location | null = null;
+          let lastAttemptedQuery = searchQueries[searchQueries.length - 1];
 
-                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-            
-                const response = await fetchWithRetry(
-              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`
-            );
-            
-                // Check if loading should continue after API call
-                if (!loadingRef.current) {
-                  return { results, skippedEvents };
-            }
+          for (const query of searchQueries) {
+            lastAttemptedQuery = query;
 
-            const data = await response.json();
-            
-            if (data && data.length > 0) {
-              const locationData = {
-                lat: parseFloat(data[0].lat),
-                lon: parseFloat(data[0].lon),
-                    displayName: data[0].display_name,
-                    timestamp: Date.now()
-              };
-              
-              locationCache[cacheKey] = locationData;
-              saveLocationCache();
-              
-                  results.push({
-                ...locationData,
+            const cacheKey = getLocationCacheKey(query);
+            if (locationCache[cacheKey] && isCacheValid(locationCache[cacheKey].timestamp, LOCATION_CACHE_DURATION)) {
+              mappedLocation = {
+                ...locationCache[cacheKey],
                 event: {
                   ...event,
                   createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -783,17 +748,64 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 } as Event
-                  });
-            } else {
-              skippedEvents.push({
-                eventId: event.id,
-                label: getEventMapLabel(event),
-                reason: `No map result for "${searchQuery}"`
-              });
+              };
+              break;
             }
-          } catch (err) {
-            console.warn(`Error fetching location for ${searchQuery}:`, err);
+
+            try {
+              if (!loadingRef.current) {
+                return { results, skippedEvents };
               }
+
+              await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+
+              const response = await fetchWithRetry(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`
+              );
+
+              if (!loadingRef.current) {
+                return { results, skippedEvents };
+              }
+
+              const data = await response.json();
+
+              if (data && data.length > 0) {
+                const locationData = {
+                  lat: parseFloat(data[0].lat),
+                  lon: parseFloat(data[0].lon),
+                  displayName: data[0].display_name,
+                  timestamp: Date.now()
+                };
+
+                locationCache[cacheKey] = locationData;
+                saveLocationCache();
+
+                mappedLocation = {
+                  ...locationData,
+                  event: {
+                    ...event,
+                    createdBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                    updatedBy: { _id: '', email: '', name: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  } as Event
+                };
+                break;
+              }
+            } catch (err) {
+              console.warn(`Error fetching location for ${query}:`, err);
+            }
+          }
+
+          if (mappedLocation) {
+            results.push(mappedLocation);
+          } else {
+            skippedEvents.push({
+              eventId: event.id,
+              label: getEventMapLabel(event),
+              reason: `No map result for "${lastAttemptedQuery}"`
+            });
+          }
             } catch (err) {
               console.warn(`Error processing event:`, err);
             }

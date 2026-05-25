@@ -10,7 +10,7 @@ import {
   sortEventsByStart,
 } from '@/utils/eventTime';
 import {
-  eventNeedsMapLocation,
+  eventHasLocationAttention,
 } from '@/utils/eventLocation';
 
 interface TripInsightInput {
@@ -33,16 +33,20 @@ const createInsight = (insight: Omit<TripInsight, 'createdAt'>): TripInsight => 
 export const getMissingLocationInsightId = (eventId: string) => `missing-location-${eventId}`;
 
 const getLocationMissingInsight = (event: Event): TripInsight | null => {
-  if (!eventNeedsMapLocation(event)) {
+  if (!eventHasLocationAttention(event)) {
     return null;
   }
+
+  const isInferred = event.location?.quality === 'inferred';
 
   return createInsight({
     id: getMissingLocationInsightId(event.id),
     type: 'missing_info',
     severity: 'warning',
-    title: 'Location missing',
-    message: `${getEventDisplayName(event)} does not have a usable address or map location yet.`,
+    title: isInferred ? 'Approximate location' : 'Location missing',
+    message: isInferred
+      ? `${getEventDisplayName(event)} has an approximate map location. Add a clearer address for better accuracy.`
+      : `${getEventDisplayName(event)} does not have a usable address or map location yet.`,
     actionLabel: 'Edit event',
     actionTarget: 'event',
     source: { kind: 'event', id: event.id },
