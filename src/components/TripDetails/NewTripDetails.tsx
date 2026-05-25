@@ -6,6 +6,7 @@ import { Event, EventType } from '@/types/eventTypes'; // Import EventType
 import { cn } from '@/lib/utils';
 import ExploreSuggestionsModal from '@/components/TripDetails/ExploreSuggestionsModal';
 import ImproveLocationsResultsDialog from '@/components/TripDetails/ImproveLocationsResultsDialog';
+import ImproveLocationsProgressDialog from '@/components/TripDetails/ImproveLocationsProgressDialog';
 import TripDetailsToolbar from '@/components/TripDetails/TripDetailsToolbar';
 import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
 import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext';
@@ -16,7 +17,8 @@ import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
 import { ProactiveContextCard as ProactiveContextCardData, ProactiveContextCardType } from '@/components/TripDetails/context/tripContextTypes';
 import { generateTripInsights, getMissingLocationInsightId } from '@/services/tripInsights';
-import { eventNeedsMapLocation } from '@/utils/eventLocation';
+import { eventNeedsMapLocation, eventNeedsGeocodeRetry } from '@/utils/eventLocation';
+import { getEventDisplayName } from '@/utils/eventTime';
 import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/travelImportValidation';
 import { api } from '@/services/api';
 import { hashText } from '@/utils/hash';
@@ -25,7 +27,7 @@ import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { WeatherSnapshot } from '@/types/weatherTypes';
 import { ExpenseSummary } from '@/types/expenseTypes';
 import { TravelImport, TravelImportStatus } from '@/types/travelImportTypes';
-import { GeocodeTripEventsResponse } from '@/types/geocodingTypes';
+import { GeocodeTripEventsResponse, GeocodeEventResult } from '@/types/geocodingTypes';
 import {
   AssistantActionTarget,
   AssistantChecklistItem,
@@ -163,6 +165,11 @@ const NewTripDetails: React.FC = () => {
   const [isImprovingLocations, setIsImprovingLocations] = useState(false);
   const [improveLocationsReport, setImproveLocationsReport] = useState<GeocodeTripEventsResponse | null>(null);
   const [isImproveLocationsDialogOpen, setIsImproveLocationsDialogOpen] = useState(false);
+  const [improveLocationsProgress, setImproveLocationsProgress] = useState<{
+    current: number;
+    total: number;
+    eventLabel?: string;
+  } | null>(null);
   const [isExploreSuggestionsOpen, setIsExploreSuggestionsOpen] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
@@ -645,17 +652,63 @@ const NewTripDetails: React.FC = () => {
   const handleImproveLocations = async () => {
     if (!trip?._id) return;
 
+    const eventsNeedingRetry = trip.events.filter(eventNeedsGeocodeRetry);
+    const skippedEventResults: GeocodeEventResult[] = trip.events
+      .filter((event) => !eventNeedsGeocodeRetry(event))
+      .map((event) => ({
+        eventId: event.id,
+        skipped: true,
+        reason: 'already_geocoded' as const,
+        location: event.location,
+      }));
+
     try {
       setIsImprovingLocations(true);
-      const result = await api.geocodeTripEvents(trip._id);
-      await handleTripUpdate(result.trip);
-      setImproveLocationsReport(result);
-      setIsImproveLocationsDialogOpen(true);
+      setImproveLocationsProgress({
+        current: 0,
+        total: Math.max(eventsNeedingRetry.length, 1),
+      });
+
+      let latestTrip = trip;
+      let updatedCount = 0;
+      const results: GeocodeEventResult[] = [...skippedEventResults];
+
+      if (eventsNeedingRetry.length === 0) {
+        setImproveLocationsReport({
+          trip,
+          updatedCount: 0,
+          results: skippedEventResults,
+        });
+        setIsImproveLocationsDialogOpen(true);
+      } else {
+        for (let index = 0; index < eventsNeedingRetry.length; index += 1) {
+          const event = eventsNeedingRetry[index];
+          setImproveLocationsProgress({
+            current: index + 1,
+            total: eventsNeedingRetry.length,
+            eventLabel: getEventDisplayName(event),
+          });
+
+          const result = await api.geocodeTripEvents(trip._id, { eventIds: [event.id] });
+          latestTrip = result.trip;
+          updatedCount += result.updatedCount;
+          results.push(...result.results);
+        }
+
+        await handleTripUpdate(latestTrip);
+        setImproveLocationsReport({
+          trip: latestTrip,
+          updatedCount,
+          results,
+        });
+        setIsImproveLocationsDialogOpen(true);
+      }
     } catch (error) {
       console.error('Error improving locations:', error);
       setSuccess(error instanceof Error ? error.message : 'Failed to improve event locations');
     } finally {
       setIsImprovingLocations(false);
+      setImproveLocationsProgress(null);
     }
   };
 
@@ -1012,6 +1065,11 @@ const NewTripDetails: React.FC = () => {
         unreadNotificationCount={unreadNotificationCount}
         isCondensedView={isCondensedView}
         isImprovingLocations={isImprovingLocations}
+        improveLocationsLabel={
+          improveLocationsProgress
+            ? `Geocoding ${improveLocationsProgress.current}/${improveLocationsProgress.total}`
+            : undefined
+        }
         onOpenAIImport={() => setIsAIParseModalOpen(true)}
         onAddEvent={handleAddEventClick}
         onOpenExploreSuggestions={() => setIsExploreSuggestionsOpen(true)}
@@ -1142,6 +1200,15 @@ const NewTripDetails: React.FC = () => {
           onClose={() => setIsExploreSuggestionsOpen(false)}
           trip={trip}
           onAddSuggestions={handleAddExploreSuggestions}
+        />
+      )}
+
+      {improveLocationsProgress && (
+        <ImproveLocationsProgressDialog
+          open={isImprovingLocations}
+          current={improveLocationsProgress.current}
+          total={improveLocationsProgress.total}
+          eventLabel={improveLocationsProgress.eventLabel}
         />
       )}
 

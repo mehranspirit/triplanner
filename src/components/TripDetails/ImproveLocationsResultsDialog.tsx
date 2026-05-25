@@ -14,7 +14,7 @@ import { GeocodeEventResult } from '@/types/geocodingTypes';
 import { getEventDisplayName, sortEventsByStart } from '@/utils/eventTime';
 import { cn } from '@/lib/utils';
 
-type ResultStatus = 'success' | 'failed' | 'skipped' | 'missing';
+type ResultStatus = 'success' | 'approximate' | 'failed' | 'skipped' | 'no_improvement' | 'missing';
 
 interface ImproveLocationsResultsDialogProps {
   open: boolean;
@@ -24,12 +24,19 @@ interface ImproveLocationsResultsDialogProps {
   events: Event[];
 }
 
-const getResultStatus = (result: GeocodeEventResult): ResultStatus => {
+const getResultStatus = (result: GeocodeEventResult, event?: Event): ResultStatus => {
   if (result.skipped) {
-    return result.reason === 'no_query' ? 'missing' : 'skipped';
+    if (result.reason === 'no_query') {
+      return 'missing';
+    }
+    if (result.reason === 'no_improvement') {
+      const quality = result.location?.quality || event?.location?.quality;
+      return quality === 'inferred' ? 'approximate' : 'no_improvement';
+    }
+    return 'skipped';
   }
   if (result.success) {
-    return 'success';
+    return result.location?.quality === 'inferred' ? 'approximate' : 'success';
   }
   return 'failed';
 };
@@ -46,6 +53,12 @@ const statusConfig: Record<ResultStatus, {
     rowClassName: 'border-emerald-100 bg-emerald-50/70',
     badgeClassName: 'bg-emerald-100 text-emerald-800',
   },
+  approximate: {
+    label: 'Approximate',
+    icon: <CircleAlert className="h-4 w-4" />,
+    rowClassName: 'border-amber-100 bg-amber-50/70',
+    badgeClassName: 'bg-amber-100 text-amber-800',
+  },
   failed: {
     label: 'Unresolved',
     icon: <XCircle className="h-4 w-4" />,
@@ -58,6 +71,12 @@ const statusConfig: Record<ResultStatus, {
     rowClassName: 'border-slate-200 bg-slate-50/80',
     badgeClassName: 'bg-slate-100 text-slate-700',
   },
+  no_improvement: {
+    label: 'No better match',
+    icon: <CircleMinus className="h-4 w-4" />,
+    rowClassName: 'border-slate-200 bg-slate-50/80',
+    badgeClassName: 'bg-slate-100 text-slate-700',
+  },
   missing: {
     label: 'No location text',
     icon: <CircleAlert className="h-4 w-4" />,
@@ -66,14 +85,22 @@ const statusConfig: Record<ResultStatus, {
   },
 };
 
-const getResultDetail = (result: GeocodeEventResult): string | undefined => {
-  const status = getResultStatus(result);
+const getResultDetail = (result: GeocodeEventResult, event?: Event): string | undefined => {
+  const status = getResultStatus(result, event);
 
   if (status === 'success') {
     const parts = [
       result.query ? `Matched "${result.query}"` : undefined,
-      result.location?.quality ? `Quality: ${result.location.quality}` : undefined,
       result.location?.address,
+    ].filter(Boolean);
+    return parts.join(' · ');
+  }
+
+  if (status === 'approximate') {
+    const parts = [
+      result.query ? `Best match for "${result.query}"` : 'Low-confidence match',
+      result.location?.address,
+      'Add a clearer address if this looks wrong.',
     ].filter(Boolean);
     return parts.join(' · ');
   }
@@ -86,7 +113,14 @@ const getResultDetail = (result: GeocodeEventResult): string | undefined => {
     return 'Add an address or location name, then try again.';
   }
 
-  return 'Coordinates were already stored.';
+  if (status === 'no_improvement') {
+    const queriesTried = result.queriesTried ? `Tried ${result.queriesTried} location queries. ` : '';
+    return `${queriesTried}No fallback query produced a better match than the current location.`;
+  }
+
+  return event?.location?.address
+    ? `Exact location stored: ${event.location.address}`
+    : 'Exact coordinates are already stored.';
 };
 
 const ImproveLocationsResultsDialog: React.FC<ImproveLocationsResultsDialogProps> = ({
@@ -110,11 +144,13 @@ const ImproveLocationsResultsDialog: React.FC<ImproveLocationsResultsDialogProps
   }, [events, results]);
 
   const summary = useMemo(() => ({
-    success: results.filter((result) => getResultStatus(result) === 'success').length,
-    failed: results.filter((result) => getResultStatus(result) === 'failed').length,
-    skipped: results.filter((result) => getResultStatus(result) === 'skipped').length,
-    missing: results.filter((result) => getResultStatus(result) === 'missing').length,
-  }), [results]);
+    success: results.filter((result) => getResultStatus(result, eventsById.get(result.eventId)) === 'success').length,
+    approximate: results.filter((result) => getResultStatus(result, eventsById.get(result.eventId)) === 'approximate').length,
+    failed: results.filter((result) => getResultStatus(result, eventsById.get(result.eventId)) === 'failed').length,
+    skipped: results.filter((result) => getResultStatus(result, eventsById.get(result.eventId)) === 'skipped').length,
+    noImprovement: results.filter((result) => getResultStatus(result, eventsById.get(result.eventId)) === 'no_improvement').length,
+    missing: results.filter((result) => getResultStatus(result, eventsById.get(result.eventId)) === 'missing').length,
+  }), [results, eventsById]);
 
   const summaryText = updatedCount > 0
     ? `${updatedCount} event location${updatedCount === 1 ? '' : 's'} updated.`
@@ -137,6 +173,11 @@ const ImproveLocationsResultsDialog: React.FC<ImproveLocationsResultsDialogProps
                 {summary.success} geocoded
               </span>
             )}
+            {summary.approximate > 0 && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800">
+                {summary.approximate} approximate
+              </span>
+            )}
             {summary.failed > 0 && (
               <span className="rounded-full bg-rose-100 px-2.5 py-1 font-medium text-rose-800">
                 {summary.failed} unresolved
@@ -152,6 +193,11 @@ const ImproveLocationsResultsDialog: React.FC<ImproveLocationsResultsDialogProps
                 {summary.skipped} already mapped
               </span>
             )}
+            {summary.noImprovement > 0 && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
+                {summary.noImprovement} unchanged
+              </span>
+            )}
           </div>
         </DialogHeader>
 
@@ -162,9 +208,9 @@ const ImproveLocationsResultsDialog: React.FC<ImproveLocationsResultsDialogProps
             <ul className="space-y-3">
               {sortedResults.map((result) => {
                 const event = eventsById.get(result.eventId);
-                const status = getResultStatus(result);
+                const status = getResultStatus(result, event);
                 const config = statusConfig[status];
-                const detail = getResultDetail(result);
+                const detail = getResultDetail(result, event);
 
                 return (
                   <li

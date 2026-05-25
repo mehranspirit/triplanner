@@ -12,9 +12,10 @@ export interface GeocodeEventLocation {
 export interface GeocodeEventResult {
   eventId: string;
   skipped?: boolean;
-  reason?: 'already_geocoded' | 'no_query';
+  reason?: 'already_geocoded' | 'no_query' | 'no_improvement';
   query?: string;
   success?: boolean;
+  queriesTried?: number;
   location?: GeocodeEventLocation;
 }
 

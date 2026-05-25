@@ -107,9 +107,12 @@ export const useTripDetails = () => {
     }
   }, [trip, tripContext, fetchTrip]);
 
-  const refreshTripLocations = useCallback(async (tripId: string) => {
+  const refreshTripLocations = useCallback(async (tripId: string, eventIds?: string[]) => {
     try {
-      const result = await api.geocodeTripEvents(tripId);
+      const result = await api.geocodeTripEvents(
+        tripId,
+        eventIds?.length ? { eventIds } : undefined,
+      );
       setTrip((currentTrip) => {
         if (!currentTrip) return currentTrip;
         return {
@@ -150,8 +153,11 @@ export const useTripDetails = () => {
       setTrip(updatedTrip);
       await handleTripUpdate(updatedTrip);
 
-      if (newEventsWithMeta.some(eventNeedsMapLocation)) {
-        await refreshTripLocations(trip._id);
+      const eventsNeedingGeocode = newEventsWithMeta
+        .filter(eventNeedsMapLocation)
+        .map((event) => event.id);
+      if (eventsNeedingGeocode.length > 0) {
+        await refreshTripLocations(trip._id, eventsNeedingGeocode);
       }
 
       const thumbnailEntries: Record<string, string> = {};
@@ -200,7 +206,7 @@ export const useTripDetails = () => {
       await handleTripUpdate(updatedTrip);
 
       if (eventNeedsMapLocation(eventWithMeta)) {
-        await refreshTripLocations(trip._id);
+        await refreshTripLocations(trip._id, [eventWithMeta.id]);
       }
       
       return eventWithMeta;

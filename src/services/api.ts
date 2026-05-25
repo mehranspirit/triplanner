@@ -125,7 +125,11 @@ interface API {
   updateTripNotification: (tripId: string, notificationId: string, data: UpdateNotificationRequest) => Promise<TripNotification>;
   getNotificationPreferences: (tripId: string) => Promise<NotificationPreference>;
   updateNotificationPreferences: (tripId: string, data: UpdateNotificationPreferenceRequest) => Promise<NotificationPreference>;
-  geocodeTripEvents: (tripId: string) => Promise<import('@/types/geocodingTypes').GeocodeTripEventsResponse>;
+  geocodeTripEvents: (
+    tripId: string,
+    options?: { eventIds?: string[] }
+  ) => Promise<import('@/types/geocodingTypes').GeocodeTripEventsResponse>;
+  geocodeQuery: (query: string) => Promise<{ lat: number; lng: number; displayName: string; confidence?: number } | null>;
   getTripWeather: (tripId: string, options?: { refresh?: boolean }) => Promise<TripWeatherResponse>;
   getTripFlightStatuses: (tripId: string, options?: { refresh?: boolean }) => Promise<TripFlightStatusesResponse>;
   generateTripAssistantBriefing: (tripId: string) => Promise<TripAssistantBriefingResponse>;
@@ -1219,14 +1223,30 @@ export const api: API = {
     return response.json();
   },
 
-  geocodeTripEvents: async (tripId: string) => {
+  geocodeTripEvents: async (tripId: string, options?: { eventIds?: string[] }) => {
     const response = await fetch(`${API_URL}/api/trips/${tripId}/geocode-events`, {
       method: 'POST',
       headers: getHeaders(),
+      body: JSON.stringify(options?.eventIds ? { eventIds: options.eventIds } : {}),
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to improve event locations');
+    }
+    return response.json();
+  },
+
+  geocodeQuery: async (query: string) => {
+    const params = new URLSearchParams({ query });
+    const response = await fetch(`${API_URL}/api/geocode?${params.toString()}`, {
+      headers: getHeaders(),
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to geocode location');
     }
     return response.json();
   },

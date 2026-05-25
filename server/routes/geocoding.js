@@ -3,7 +3,35 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Trip = require('../models/Trip');
 const { serializeTrip } = require('../utils/tripSerializer');
-const { geocodeTripEvents } = require('../services/geocoding');
+const { geocodeLocation, geocodeTripEvents, withTripGeocodeLock } = require('../services/geocoding');
+
+router.get('/geocode', auth, async (req, res) => {
+  try {
+    const query = String(req.query.query || '').trim();
+    if (!query) {
+      return res.status(400).json({ message: 'Query is required' });
+    }
+
+    const geocoded = await geocodeLocation(query);
+    if (!geocoded) {
+      return res.status(404).json({ message: 'No geocode result found' });
+    }
+
+    res.json({
+      lat: geocoded.lat,
+      lng: geocoded.lng,
+      displayName: geocoded.displayName || query,
+      confidence: geocoded.confidence,
+    });
+  } catch (error) {
+    console.error('Error geocoding query:', {
+      message: error.message,
+      query: req.query.query,
+      userId: req.user?._id,
+    });
+    res.status(500).json({ message: 'Failed to geocode location' });
+  }
+});
 
 router.post('/trips/:tripId/geocode-events', auth, async (req, res) => {
   try {
@@ -17,7 +45,14 @@ router.post('/trips/:tripId/geocode-events', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const result = await geocodeTripEvents(trip);
+    const eventIds = Array.isArray(req.body?.eventIds) ? req.body.eventIds : undefined;
+    const result = await withTripGeocodeLock(trip._id, async () => {
+      const freshTrip = await Trip.findById(trip._id);
+      if (!freshTrip) {
+        throw new Error('Trip not found');
+      }
+      return geocodeTripEvents(freshTrip, { eventIds });
+    });
     const populatedTrip = await Trip.findById(trip._id)
       .populate('owner', 'name email photoUrl')
       .populate('collaborators.user', 'name email photoUrl');

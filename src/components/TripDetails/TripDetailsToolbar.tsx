@@ -29,6 +29,7 @@ interface TripDetailsToolbarProps {
   unreadNotificationCount: number;
   isCondensedView: boolean;
   isImprovingLocations: boolean;
+  improveLocationsLabel?: string;
   onOpenAIImport: () => void;
   onAddEvent: (eventType: EventType) => void;
   onOpenExploreSuggestions: () => void;
@@ -59,6 +60,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   unreadNotificationCount,
   isCondensedView,
   isImprovingLocations,
+  improveLocationsLabel,
   onOpenAIImport,
   onAddEvent,
   onOpenExploreSuggestions,
@@ -167,7 +169,9 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={onImproveLocations} disabled={isImprovingLocations}>
                     <MapPin className="mr-2 h-4 w-4 text-teal-500" />
-                    {isImprovingLocations ? 'Improving...' : 'Improve locations'}
+                    {isImprovingLocations
+                      ? (improveLocationsLabel || 'Improving...')
+                      : 'Improve locations'}
                   </DropdownMenuItem>
                 </>
               )}

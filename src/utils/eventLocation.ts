@@ -108,6 +108,46 @@ export const eventHasLocationAttention = (event: Event): boolean => (
   eventNeedsMapLocation(event)
 );
 
+export const eventNeedsGeocodeRetry = (event: Event): boolean => {
+  const queries = getEventLocationQueries(event);
+  if (queries.length === 0) {
+    return false;
+  }
+
+  if (eventHasMapCoordinates(event) && event.location?.quality === 'exact') {
+    return false;
+  }
+
+  if (!eventHasMapCoordinates(event)) {
+    return true;
+  }
+
+  const quality = event.location?.quality;
+  return quality === 'inferred' || quality === 'unresolved' || !quality;
+};
+
+export const orderGeocodeQueries = (queries: string[], storedQuery?: string): string[] => {
+  if (!storedQuery?.trim()) {
+    return queries;
+  }
+
+  const normalizedStored = storedQuery.trim().toLowerCase();
+  const matched = queries.filter((query) => query.trim().toLowerCase() === normalizedStored);
+  const remaining = queries.filter((query) => query.trim().toLowerCase() !== normalizedStored);
+  return [...matched, ...remaining];
+};
+
+export const EXACT_GEOCODE_CONFIDENCE = 0.8;
+
+export const scoreGeocodeConfidence = (confidence: number): number => {
+  const normalized = Number(confidence) || 0;
+  return normalized >= EXACT_GEOCODE_CONFIDENCE ? 1000 + normalized : normalized;
+};
+
+export const getGeocodeQualityFromConfidence = (confidence: number): 'exact' | 'inferred' => (
+  confidence >= EXACT_GEOCODE_CONFIDENCE ? 'exact' : 'inferred'
+);
+
 export const syncEventLocationOnSave = <T extends Event>(
   event: T,
   previousEvent?: Event | null
