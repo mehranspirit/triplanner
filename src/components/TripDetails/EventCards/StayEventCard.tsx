@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { StayEvent } from '@/types/eventTypes';
+import { StayEvent, Event } from '@/types/eventTypes';
 import { format, parse, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { 
   Clock, 
@@ -30,12 +30,16 @@ import {
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
+import { openEventInGoogleMaps, eventHasGoogleMapsLocation } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
+import { EventLocationQuickAction } from '@/components/TripDetails/EventLocationSearch';
 
 interface StayEventCardProps {
   event: StayEvent;
   thumbnail: string;
+  tripId?: string;
+  onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
@@ -68,7 +72,15 @@ const renderTextWithLinks = (text: string) => {
   });
 };
 
-const StayEventCard: React.FC<StayEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+const StayEventCard: React.FC<StayEventCardProps> = ({
+  event,
+  thumbnail,
+  tripId,
+  onLocationApplied,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
@@ -87,9 +99,7 @@ const StayEventCard: React.FC<StayEventCardProps> = ({ event, thumbnail, onEdit,
 
   const handleOpenInMaps = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (event.address) {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`, '_blank');
-    }
+    openEventInGoogleMaps(event);
   };
 
   const handleAddToCalendar = (e: React.MouseEvent) => {
@@ -182,7 +192,14 @@ const StayEventCard: React.FC<StayEventCardProps> = ({ event, thumbnail, onEdit,
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
-              {event.address && (
+              {tripId && onLocationApplied && (
+                <EventLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
+              {eventHasGoogleMapsLocation(event) && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -275,7 +292,14 @@ const StayEventCard: React.FC<StayEventCardProps> = ({ event, thumbnail, onEdit,
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
-              {event.address && (
+              {tripId && onLocationApplied && (
+                <EventLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
+              {eventHasGoogleMapsLocation(event) && (
                 <Button
                   variant="ghost"
                   size="icon"

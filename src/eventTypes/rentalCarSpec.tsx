@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/popover";
 import { CalendarIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { transportEndpointLocationSchema } from '@/components/TripDetails/eventFormLocationSchema';
+import { EventFormTransportLocationSearchField } from '@/components/TripDetails/TransportLocationSearch';
 
 // Zod Schema for RentalCarEvent
 export const rentalCarEventSchema = z.object({
@@ -45,6 +47,8 @@ export const rentalCarEventSchema = z.object({
     lng: z.number(),
     address: z.string().optional(),
   }).optional(),
+  departureLocation: transportEndpointLocationSchema,
+  arrivalLocation: transportEndpointLocationSchema,
   notes: z.string().optional(),
   status: z.enum(['confirmed', 'exploring']).default('exploring'),
   thumbnailUrl: z.string().optional(),
@@ -202,6 +206,9 @@ const renderRentalCarFormFields = (form: UseFormReturn<RentalCarFormData>): Reac
                 </FormItem>
             )}
             />
+
+        <EventFormTransportLocationSearchField form={form} />
+
         <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}

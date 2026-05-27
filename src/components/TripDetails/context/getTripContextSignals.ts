@@ -177,7 +177,7 @@ export const getTripContextSignals = ({
       title: 'Location issues',
       description: `${locationIssueCount} event${locationIssueCount === 1 ? '' : 's'} need better map data`,
       value: locationIssueCount,
-      actionLabel: 'Improve locations',
+      actionLabel: 'Review locations',
       priority: 45,
     });
   }

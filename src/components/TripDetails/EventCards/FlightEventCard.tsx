@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FlightEvent } from '@/types/eventTypes';
+import { FlightEvent, Event } from '@/types/eventTypes';
 import { format } from 'date-fns'; // For date formatting
 import { Clock, Edit, Trash2, MapPin, Info, MoreVertical, CheckCircle2, Search, Map, Share, Calendar, Plane, ExternalLink, ArrowUpRight, ArrowDownLeft, Ticket } from 'lucide-react'; // Icons
 import { FaPlane } from 'react-icons/fa'; // Import FaPlane from react-icons
@@ -13,18 +13,30 @@ import {
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
+import { openEventInGoogleMaps } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
+import { TransportLocationQuickAction } from '@/components/TripDetails/TransportLocationSearch';
 
 interface FlightEventCardProps {
   event: FlightEvent;
   thumbnail: string;
+  tripId?: string;
+  onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
 }
 
-const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+const FlightEventCard: React.FC<FlightEventCardProps> = ({
+  event,
+  thumbnail,
+  tripId,
+  onLocationApplied,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
@@ -37,9 +49,9 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
     }
   };
 
-  const handleViewAirport = (e: React.MouseEvent, airport: string) => {
+  const handleViewAirport = (e: React.MouseEvent, airport: string, endpoint: 'departure' | 'arrival') => {
     e.stopPropagation();
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(airport + ' airport')}`, '_blank');
+    openEventInGoogleMaps(event, { endpoint, query: airport });
   };
 
   const handleAddToCalendar = (e: React.MouseEvent) => {
@@ -122,6 +134,13 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <TransportLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               {event.flightNumber && event.airline && (
                 <Button
                   variant="ghost"
@@ -138,7 +157,7 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={(e) => handleViewAirport(e, event.departureAirport!)}
+                  onClick={(e) => handleViewAirport(e, event.departureAirport!, 'departure')}
                   title="View Departure Airport"
                 >
                   <div className="relative">
@@ -152,7 +171,7 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={(e) => handleViewAirport(e, event.arrivalAirport!)}
+                  onClick={(e) => handleViewAirport(e, event.arrivalAirport!, 'arrival')}
                   title="View Arrival Airport"
                 >
                   <div className="relative">
@@ -243,6 +262,13 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <TransportLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               {event.flightNumber && event.airline && (
                 <Button
                   variant="ghost"
@@ -259,7 +285,7 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={(e) => handleViewAirport(e, event.departureAirport!)}
+                  onClick={(e) => handleViewAirport(e, event.departureAirport!, 'departure')}
                   title="View Departure Airport"
                 >
                   <div className="relative">
@@ -273,7 +299,7 @@ const FlightEventCard: React.FC<FlightEventCardProps> = ({ event, thumbnail, onE
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={(e) => handleViewAirport(e, event.arrivalAirport!)}
+                  onClick={(e) => handleViewAirport(e, event.arrivalAirport!, 'arrival')}
                   title="View Arrival Airport"
                 >
                   <div className="relative">

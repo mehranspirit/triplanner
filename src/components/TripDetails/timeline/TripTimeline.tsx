@@ -14,6 +14,7 @@ import { isEventCurrentlyActive } from '@/utils/eventGlow';
 
 interface TripTimelineProps {
   events: Event[];
+  tripId?: string;
   tripStartDate?: string;
   tripEndDate?: string;
   eventThumbnails: Record<string, string>;
@@ -26,6 +27,8 @@ interface TripTimelineProps {
   onEditEvent: (event: Event) => void;
   onDeleteEvent: (eventId: string) => void;
   onStatusChange: (event: Event, status: 'confirmed' | 'exploring') => void;
+  onLocationApplied?: (events: Event[]) => void;
+  onReviewEventLocation?: (event: Event) => void;
   onAddEvent?: () => void;
 }
 
@@ -70,16 +73,29 @@ const ContextChip = ({
   icon,
   children,
   className,
+  onClick,
 }: {
   icon: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-}) => (
-  <span className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium', className)}>
-    {icon}
-    {children}
-  </span>
-);
+  onClick?: () => void;
+}) => {
+  const Component = onClick ? 'button' : 'span';
+  return (
+    <Component
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
+        onClick && 'cursor-pointer transition-colors hover:opacity-90',
+        className,
+      )}
+    >
+      {icon}
+      {children}
+    </Component>
+  );
+};
 
 const getDateFromKey = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
@@ -259,6 +275,7 @@ const CondensedEventCard = ({ event, thumbnail }: { event: Event; thumbnail: str
 
 const TripTimeline: React.FC<TripTimelineProps> = ({
   events,
+  tripId,
   tripStartDate,
   tripEndDate,
   eventThumbnails,
@@ -271,6 +288,8 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
   onEditEvent,
   onDeleteEvent,
   onStatusChange,
+  onLocationApplied,
+  onReviewEventLocation,
   onAddEvent,
 }) => {
   const sortedEvents = sortEventsByStart(events);
@@ -395,6 +414,16 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                     const hasLocationIssue = eventHasLocationAttention(event);
                     const hasFlightStatus = event.type === 'flight' && flightStatusSnapshots.some(status => status.eventId === event.id);
 
+                    const hasLocationSearch = (
+                      event.type === 'activity'
+                      || event.type === 'stay'
+                      || event.type === 'destination'
+                      || event.type === 'flight'
+                      || event.type === 'train'
+                      || event.type === 'bus'
+                      || event.type === 'rental_car'
+                    );
+
                     return (
                       <div
                         key={event.id}
@@ -413,6 +442,10 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                             onEdit={canEdit ? () => onEditEvent(event) : undefined}
                             onDelete={canEdit ? () => onDeleteEvent(event.id) : undefined}
                             onStatusChange={canEdit ? (newStatus) => onStatusChange(event, newStatus) : undefined}
+                            {...(hasLocationSearch && canEdit && tripId && onLocationApplied ? {
+                              tripId,
+                              onLocationApplied,
+                            } : {})}
                           />
                         )}
                         {(eventAlerts.length > 0 || hasLocationIssue || hasFlightStatus) && (
@@ -423,8 +456,16 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                               </ContextChip>
                             )}
                             {hasLocationIssue && (
-                              <ContextChip icon={<MapPin className="h-3 w-3" />} className="border-teal-100 bg-teal-50 text-teal-800">
-                                Improve location
+                              <ContextChip
+                                icon={<MapPin className="h-3 w-3" />}
+                                className="border-teal-100 bg-teal-50 text-teal-800"
+                                onClick={
+                                  canEdit && onReviewEventLocation
+                                    ? () => onReviewEventLocation(event)
+                                    : undefined
+                                }
+                              >
+                                Review location
                               </ContextChip>
                             )}
                             {hasFlightStatus && (

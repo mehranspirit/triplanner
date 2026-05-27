@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '@/services/api';
 import { networkAwareApi } from '@/services/networkAwareApi';
 // import { Trip, Event, EventType, User } from '@/types/eventTypes'; // Original import
 import { Trip, Event, EventType, User } from '@/types/eventTypes'; // Ensure this points to the correct file
@@ -9,7 +8,7 @@ import { useTrip } from '@/context/TripContext'; // Corrected import
 import { getDefaultThumbnail, getEventThumbnail } from './thumbnailHelpers';
 import { exportHtml, ItineraryExportMode } from './exportHelpers';
 import { v4 as uuidv4 } from 'uuid';
-import { eventNeedsMapLocation, syncEventLocationOnSave } from '@/utils/eventLocation';
+import { syncEventLocationOnSave } from '@/utils/eventLocation';
 import { normalizeActivityDestinationSchedule } from '@/utils/eventTime';
 
 // Placeholder for a default/unknown user - adjust as needed
@@ -107,26 +106,6 @@ export const useTripDetails = () => {
     }
   }, [trip, tripContext, fetchTrip]);
 
-  const refreshTripLocations = useCallback(async (tripId: string, eventIds?: string[]) => {
-    try {
-      const result = await api.geocodeTripEvents(
-        tripId,
-        eventIds?.length ? { eventIds } : undefined,
-      );
-      setTrip((currentTrip) => {
-        if (!currentTrip) return currentTrip;
-        return {
-          ...currentTrip,
-          events: result.trip?.events ?? currentTrip.events,
-        };
-      });
-      return result.trip;
-    } catch (error) {
-      console.error('Error refreshing event locations:', error);
-      return null;
-    }
-  }, []);
-
   const addEvents = useCallback(async (
     newEventsData: Array<Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>>
   ) => {
@@ -153,13 +132,6 @@ export const useTripDetails = () => {
       setTrip(updatedTrip);
       await handleTripUpdate(updatedTrip);
 
-      const eventsNeedingGeocode = newEventsWithMeta
-        .filter(eventNeedsMapLocation)
-        .map((event) => event.id);
-      if (eventsNeedingGeocode.length > 0) {
-        await refreshTripLocations(trip._id, eventsNeedingGeocode);
-      }
-
       const thumbnailEntries: Record<string, string> = {};
       await Promise.all(newEventsWithMeta.map(async (event) => {
         thumbnailEntries[event.id] = event.thumbnailUrl || await getEventThumbnail(event);
@@ -172,7 +144,7 @@ export const useTripDetails = () => {
       await fetchTrip();
       throw error;
     }
-  }, [trip, user, handleTripUpdate, refreshTripLocations, fetchTrip]);
+  }, [trip, user, handleTripUpdate, fetchTrip]);
 
   const addEvent = useCallback(async (newEventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>) => {
     const results = await addEvents([newEventData]);
@@ -189,34 +161,29 @@ export const useTripDetails = () => {
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser,
     }, previousEvent);
-    
+
     try {
-      // Update the events array
       const updatedEvents = trip.events.map(e => e.id === eventToUpdate.id ? eventWithMeta : e);
       const updatedTrip = { ...trip, events: updatedEvents };
-      
-      // Update local state for optimistic UI
+
       setTrip(updatedTrip);
-      
-      // Update thumbnail
+
       const thumb = eventWithMeta.thumbnailUrl || await getEventThumbnail(eventWithMeta);
       setEventThumbnails(prev => ({ ...prev, [eventWithMeta.id]: thumb }));
-      
-      // Update the backend without triggering a refresh
+
       await handleTripUpdate(updatedTrip);
 
-      if (eventNeedsMapLocation(eventWithMeta)) {
-        await refreshTripLocations(trip._id, [eventWithMeta.id]);
-      }
-      
-      return eventWithMeta;
+      return { event: eventWithMeta, previousEvent };
     } catch (error) {
       console.error('Error updating event:', error);
-      // Only refresh from server on error
       await fetchTrip();
       throw error;
     }
-  }, [trip, user, handleTripUpdate, fetchTrip, refreshTripLocations]);
+  }, [trip, user, handleTripUpdate, fetchTrip]);
+
+  const replaceTripEvents = useCallback((events: Event[]) => {
+    setTrip((current) => (current ? { ...current, events } : current));
+  }, []);
 
   const deleteEvent = useCallback(async (eventId: string) => {
     if (!trip) return;
@@ -268,6 +235,7 @@ export const useTripDetails = () => {
     addEvents,
     updateEvent,
     deleteEvent,
+    replaceTripEvents,
     handleExportHTML,
     canEdit: !!user && (isOwner || canEdit),
     isOwner: !!user && isOwner,

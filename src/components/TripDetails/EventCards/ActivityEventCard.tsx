@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ActivityEvent } from '@/types/eventTypes';
+import { Event, ActivityEvent } from '@/types/eventTypes';
 import { format, parse } from 'date-fns';
 import { 
   Clock, 
@@ -18,29 +18,39 @@ import { FaMountain } from 'react-icons/fa';
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
+import { openEventInGoogleMaps, eventHasGoogleMapsLocation, getGoogleMapsSearchUrl } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
 import EventCardActions from './EventCardActions';
 import EventCardShell from './EventCardShell';
+import { EventLocationQuickAction } from '@/components/TripDetails/EventLocationSearch';
 
 interface ActivityEventCardProps {
   event: ActivityEvent;
   thumbnail: string;
+  tripId?: string;
+  onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
 }
 
-const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+const ActivityEventCard: React.FC<ActivityEventCardProps> = ({
+  event,
+  thumbnail,
+  tripId,
+  onLocationApplied,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
 
   const handleOpenInMaps = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (event.address) {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`, '_blank');
-    }
+    openEventInGoogleMaps(event);
   };
 
   const handleAddToCalendar = (e: React.MouseEvent) => {
@@ -95,7 +105,14 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({ event, thumbnail,
         onDelete={onDelete}
         onStatusChange={onStatusChange}
       >
-        {event.address && (
+        {tripId && onLocationApplied && (
+          <EventLocationQuickAction
+            tripId={tripId}
+            event={event}
+            onApplied={onLocationApplied}
+          />
+        )}
+        {eventHasGoogleMapsLocation(event) && (
           <Button
             variant="ghost"
             size="icon"

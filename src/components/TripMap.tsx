@@ -282,14 +282,61 @@ const geocodeTransportEndpoint = async (
   }
 };
 
+const buildStoredEndpointLocation = (
+  event: Partial<Event> & Record<string, unknown>,
+  endpointRole: 'departure' | 'arrival',
+  locationField: 'departureLocation' | 'arrivalLocation',
+): Location | null => {
+  const endpointLocation = event[locationField] as Event['location'] | undefined;
+  if (!endpointLocation) {
+    return null;
+  }
+
+  const endpointEvent = {
+    ...event,
+    location: endpointLocation,
+  };
+
+  if (!eventHasMapCoordinates(endpointEvent as Event)) {
+    return null;
+  }
+
+  return {
+    lat: Number(endpointLocation.lat),
+    lon: Number(endpointLocation.lng),
+    displayName: endpointLocation.address || getEventMapDisplayName(event),
+    endpointRole,
+    event: attachEventMeta(endpointEvent),
+  };
+};
+
 const resolveTransportEventLocations = async (
   event: Partial<Event> & Record<string, unknown>,
 ): Promise<Location[]> => {
   const { departure, arrival } = getTransportEndpointQueries(event);
-  const departureLocation = await geocodeTransportEndpoint(departure, event, 'departure');
-  const arrivalLocation = await geocodeTransportEndpoint(arrival, event, 'arrival');
+  const locations: Location[] = [];
 
-  return [departureLocation, arrivalLocation].filter((location): location is Location => location !== null);
+  const storedDeparture = buildStoredEndpointLocation(event, 'departure', 'departureLocation');
+  if (storedDeparture) {
+    locations.push(storedDeparture);
+  } else {
+    const departureLocation = await geocodeTransportEndpoint(departure, event, 'departure');
+    if (departureLocation) {
+      locations.push(departureLocation);
+    }
+  }
+
+  const storedArrival = buildStoredEndpointLocation(event, 'arrival', 'arrivalLocation');
+  if (storedArrival) {
+    locations.push(storedArrival);
+  } else {
+    const arrivalLocation = await geocodeTransportEndpoint(arrival, event, 'arrival');
+    if (arrivalLocation) {
+      locations.push(arrivalLocation);
+    }
+  }
+
+  return locations;
 };
 
 const resolveMapLocations = async (
@@ -328,7 +375,7 @@ const resolveMapLocations = async (
     skippedEvents.push({
       eventId: event.id,
       label: getEventMapDisplayName(event),
-      reason: 'No geocoded coordinates — use Improve locations',
+      reason: 'No geocoded coordinates — use Review locations',
     });
   }
 
@@ -346,6 +393,8 @@ const extractMapRelevantData = (trip: Trip) => {
       startDate: event.startDate,
       endDate: event.endDate,
       location: event.location,
+      departureLocation: 'departureLocation' in event ? event.departureLocation : undefined,
+      arrivalLocation: 'arrivalLocation' in event ? event.arrivalLocation : undefined,
       status: event.status,
       // Type-specific fields
       airport: 'airport' in event ? event.airport : undefined,

@@ -27,6 +27,18 @@ import {
 } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon } from 'lucide-react';
+import EventFormLocationSearchField from '@/components/TripDetails/EventFormLocationSearchField';
+
+const eventLocationSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+  address: z.string().optional(),
+  quality: z.enum(['exact', 'inferred', 'unresolved', 'missing']).optional(),
+  source: z.enum(['manual', 'geocoded', 'imported', 'unknown', 'google_places']).optional(),
+  confidence: z.number().optional(),
+  placeId: z.string().optional(),
+  query: z.string().optional(),
+}).optional();
 
 // Zod Schema for StayEvent
 export const stayEventSchema = z.object({
@@ -40,11 +52,7 @@ export const stayEventSchema = z.object({
   checkOutDate: z.string({ required_error: "Check-out date is required." })
                  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   checkOutTime: z.string({ required_error: "Check-out time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
-  location: z.object({ 
-    lat: z.number(),
-    lng: z.number(),
-    address: z.string().optional(),
-  }).optional(),
+  location: eventLocationSchema,
   notes: z.string().optional(),
   status: z.enum(['confirmed', 'exploring']).default('exploring'),
   thumbnailUrl: z.string().optional(),
@@ -101,7 +109,10 @@ const renderStayFormFields = (form: UseFormReturn<StayFormData>): React.ReactNod
                 </FormItem>
             )}
             />
-        {/* Check-in Date/Time */} 
+
+        <EventFormLocationSearchField form={form} />
+
+        {/* Check-in Date/Time */}
         <div className="grid grid-cols-2 gap-4">
              <FormField
                 control={control}

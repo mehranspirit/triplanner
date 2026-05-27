@@ -170,8 +170,8 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                   <DropdownMenuItem onClick={onImproveLocations} disabled={isImprovingLocations}>
                     <MapPin className="mr-2 h-4 w-4 text-teal-500" />
                     {isImprovingLocations
-                      ? (improveLocationsLabel || 'Improving...')
-                      : 'Improve locations'}
+                      ? (improveLocationsLabel || 'Reviewing...')
+                      : 'Review locations'}
                   </DropdownMenuItem>
                 </>
               )}

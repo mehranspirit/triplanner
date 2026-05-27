@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DestinationEvent } from '@/types/eventTypes';
+import { DestinationEvent, Event } from '@/types/eventTypes';
 import { format, parse } from 'date-fns';
 import { 
   Clock, 
@@ -27,17 +27,29 @@ import {
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
+import { openEventInGoogleMaps } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
+import { EventLocationQuickAction } from '@/components/TripDetails/EventLocationSearch';
 
 interface DestinationEventCardProps {
   event: DestinationEvent;
   thumbnail: string;
+  tripId?: string;
+  onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
 }
 
-const DestinationEventCard: React.FC<DestinationEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+const DestinationEventCard: React.FC<DestinationEventCardProps> = ({
+  event,
+  thumbnail,
+  tripId,
+  onLocationApplied,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
@@ -52,8 +64,7 @@ const DestinationEventCard: React.FC<DestinationEventCardProps> = ({ event, thum
 
   // Quick action handlers
   const handleMapClick = () => {
-    const searchQuery = encodeURIComponent(event.address || event.placeName);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${searchQuery}`, '_blank');
+    openEventInGoogleMaps(event);
   };
 
   const handleCalendarClick = () => {
@@ -119,6 +130,13 @@ const DestinationEventCard: React.FC<DestinationEventCardProps> = ({ event, thum
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <EventLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -219,6 +237,13 @@ const DestinationEventCard: React.FC<DestinationEventCardProps> = ({ event, thum
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <EventLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               <Button
                 variant="ghost"
                 size="icon"

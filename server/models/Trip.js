@@ -1,5 +1,26 @@
 const mongoose = require('mongoose');
 
+const locationPointSchema = {
+  lat: Number,
+  lng: Number,
+  address: String,
+  quality: {
+    type: String,
+    enum: ['exact', 'inferred', 'unresolved', 'missing'],
+    default: undefined,
+  },
+  source: {
+    type: String,
+    enum: ['manual', 'geocoded', 'imported', 'unknown', 'google_places'],
+    default: undefined,
+  },
+  query: String,
+  confidence: Number,
+  placeId: String,
+  confirmedAt: String,
+  confirmedBy: String,
+};
+
 const eventSchema = new mongoose.Schema({
   id: String,
   type: {
@@ -12,23 +33,9 @@ const eventSchema = new mongoose.Schema({
   activityType: String,
   thumbnailUrl: String,
   date: String,
-  location: {
-    lat: Number,
-    lng: Number,
-    address: String,
-    quality: {
-      type: String,
-      enum: ['exact', 'inferred', 'unresolved', 'missing'],
-      default: undefined
-    },
-    source: {
-      type: String,
-      enum: ['manual', 'geocoded', 'imported', 'unknown'],
-      default: undefined
-    },
-    query: String,
-    confidence: Number
-  },
+  location: locationPointSchema,
+  departureLocation: locationPointSchema,
+  arrivalLocation: locationPointSchema,
   notes: String,
   status: {
     type: String,

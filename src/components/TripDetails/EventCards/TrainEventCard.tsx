@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TrainEvent } from '@/types/eventTypes';
+import { TrainEvent, Event } from '@/types/eventTypes';
 import { format } from 'date-fns'; // For date formatting
 import { 
   Clock, 
@@ -29,18 +29,30 @@ import {
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
+import { openEventInGoogleMaps } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
+import { TransportLocationQuickAction } from '@/components/TripDetails/TransportLocationSearch';
 
 interface TrainEventCardProps {
   event: TrainEvent;
   thumbnail: string;
+  tripId?: string;
+  onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
 }
 
-const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+const TrainEventCard: React.FC<TrainEventCardProps> = ({
+  event,
+  thumbnail,
+  tripId,
+  onLocationApplied,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
@@ -78,9 +90,8 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
   };
 
   // Quick action handlers
-  const handleMapClick = (location: string) => {
-    const searchQuery = encodeURIComponent(location + ' train station');
-    window.open(`https://www.google.com/maps/search/?api=1&query=${searchQuery}`, '_blank');
+  const handleMapClick = (location: string, endpoint: 'departure' | 'arrival') => {
+    openEventInGoogleMaps(event, { endpoint, query: location });
   };
 
   const handleCalendarClick = () => {
@@ -136,12 +147,19 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <TransportLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               {event.departureStation && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.departureStation!)}
+                  onClick={() => handleMapClick(event.departureStation!, 'departure')}
                   title="View Departure Station"
                 >
                   <div className="relative">
@@ -155,7 +173,7 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.arrivalStation!)}
+                  onClick={() => handleMapClick(event.arrivalStation!, 'arrival')}
                   title="View Arrival Station"
                 >
                   <div className="relative">
@@ -246,12 +264,19 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <TransportLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               {event.departureStation && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.departureStation!)}
+                  onClick={() => handleMapClick(event.departureStation!, 'departure')}
                   title="View Departure Station"
                 >
                   <div className="relative">
@@ -265,7 +290,7 @@ const TrainEventCard: React.FC<TrainEventCardProps> = ({ event, thumbnail, onEdi
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.arrivalStation!)}
+                  onClick={() => handleMapClick(event.arrivalStation!, 'arrival')}
                   title="View Arrival Station"
                 >
                   <div className="relative">

@@ -28,6 +28,7 @@ import {
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
+import { openEventInGoogleMaps } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 
 interface DepartureEventCardProps {
@@ -115,8 +116,7 @@ const DepartureEventCard: React.FC<DepartureEventCardProps> = ({ event, thumbnai
 
   // Quick action handlers
   const handleMapClick = () => {
-    const searchQuery = encodeURIComponent(event.airport + ' airport');
-    window.open(`https://www.google.com/maps/search/?api=1&query=${searchQuery}`, '_blank');
+    openEventInGoogleMaps(event, { query: event.airport });
   };
 
   const handleFlightTrack = () => {

@@ -19,9 +19,12 @@ export interface Event {
     lng: number;
     address?: string;
     quality?: 'exact' | 'inferred' | 'unresolved' | 'missing';
-    source?: 'manual' | 'geocoded' | 'imported' | 'unknown';
+    source?: 'manual' | 'geocoded' | 'imported' | 'unknown' | 'google_places';
     query?: string;
     confidence?: number;
+    placeId?: string;
+    confirmedAt?: string;
+    confirmedBy?: string;
   };
   notes?: string;
   status: 'confirmed' | 'exploring';
@@ -234,6 +237,8 @@ export interface FlightEvent extends Event {
   gate?: string;
   bookingReference?: string;
   cost?: number;
+  departureLocation?: Event['location'];
+  arrivalLocation?: Event['location'];
 }
 
 export interface TrainEvent extends Event {
@@ -248,6 +253,8 @@ export interface TrainEvent extends Event {
   seatNumber?: string;
   bookingReference?: string;
   cost?: number;
+  departureLocation?: Event['location'];
+  arrivalLocation?: Event['location'];
 }
 
 export interface RentalCarEvent extends Event {
@@ -263,6 +270,8 @@ export interface RentalCarEvent extends Event {
   bookingReference?: string;
   licensePlate?: string;
   cost?: number;
+  departureLocation?: Event['location'];
+  arrivalLocation?: Event['location'];
 }
 
 export interface BusEvent extends Event {
@@ -278,6 +287,8 @@ export interface BusEvent extends Event {
   seatNumber?: string;
   bookingReference?: string;
   cost?: number;
+  departureLocation?: Event['location'];
+  arrivalLocation?: Event['location'];
 }
 
 export interface ActivityEvent extends Event {

@@ -16,6 +16,7 @@ import {
   sortEventsByStart,
 } from '@/utils/eventTime';
 import { cn } from '@/lib/utils';
+import { getGoogleMapsSearchUrl } from '@/utils/eventLocation';
 import { getTripStatusSummary } from '@/services/tripStatus';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
 import { TripReplanBriefing, TripTodayBriefing } from '@/types/assistantBriefingTypes';
@@ -48,10 +49,6 @@ const isSameLocalDay = (a: Date, b: Date) => {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
-};
-
-const getMapsUrl = (location: string) => {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
 };
 
 const getDirectionsUrl = (from: RoutePoint, to: RoutePoint) => {
@@ -479,6 +476,7 @@ const EventCard: React.FC<{
 
   const start = getEventStart(event);
   const location = getEventLocationLabel(event);
+  const mapsUrl = getGoogleMapsSearchUrl(event);
   const bookingReference = getEventBookingReference(event);
 
   return (
@@ -499,16 +497,16 @@ const EventCard: React.FC<{
           <Clock className="h-4 w-4" />
           <span>{formatEventDateTime(start)}</span>
         </div>
-        {location && (
+        {mapsUrl && (
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4" />
             <a
-              href={getMapsUrl(location)}
+              href={mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="truncate text-blue-700 hover:underline"
             >
-              {location}
+              {location || 'View on map'}
             </a>
           </div>
         )}
@@ -731,6 +729,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
             <div className="space-y-2">
               {todaysEvents.map((event, index) => {
                 const location = getEventLocationLabel(event);
+                const mapsUrl = getGoogleMapsSearchUrl(event);
                 const transfer = index > 0
                   ? getTransferSummary(todaysEvents[index - 1], event, weatherSnapshots)
                   : null;
@@ -748,9 +747,9 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
                           <FlightStatusRows snapshots={getEventFlightStatusSnapshots(event.id)} />
                           <EventWeatherRows snapshots={getEventWeatherSnapshots(event.id)} />
                         </div>
-                        {location && (
+                        {mapsUrl && (
                           <a
-                            href={getMapsUrl(location)}
+                            href={mapsUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="rounded-md p-1 text-blue-700 hover:bg-blue-50"

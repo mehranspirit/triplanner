@@ -85,13 +85,33 @@ const statusConfig: Record<ResultStatus, {
   },
 };
 
+const formatAttemptSummary = (result: GeocodeEventResult): string | undefined => {
+  const attempts = result.queryAttempts?.filter((attempt) => attempt.matched) ?? [];
+  if (attempts.length === 0) {
+    return result.queriesTried
+      ? `Tried ${result.queriesTried} location ${result.queriesTried === 1 ? 'query' : 'queries'}.`
+      : undefined;
+  }
+
+  const selected = attempts.find((attempt) => attempt.selected) || attempts[attempts.length - 1];
+  const parts = [
+    `Tried ${result.queriesTried ?? attempts.length} queries`,
+    selected?.query ? `best match: "${selected.query}"` : undefined,
+    selected?.confidence !== undefined ? `confidence ${Math.round(selected.confidence * 100)}%` : undefined,
+  ].filter(Boolean);
+
+  return parts.join(' · ');
+};
+
 const getResultDetail = (result: GeocodeEventResult, event?: Event): string | undefined => {
   const status = getResultStatus(result, event);
+  const attemptSummary = formatAttemptSummary(result);
 
   if (status === 'success') {
     const parts = [
       result.query ? `Matched "${result.query}"` : undefined,
       result.location?.address,
+      attemptSummary,
     ].filter(Boolean);
     return parts.join(' · ');
   }
@@ -100,13 +120,17 @@ const getResultDetail = (result: GeocodeEventResult, event?: Event): string | un
     const parts = [
       result.query ? `Best match for "${result.query}"` : 'Low-confidence match',
       result.location?.address,
+      attemptSummary,
       'Add a clearer address if this looks wrong.',
     ].filter(Boolean);
     return parts.join(' · ');
   }
 
   if (status === 'failed') {
-    return result.query ? `No match for "${result.query}"` : 'Geocoding failed';
+    return [
+      result.query ? `No match for "${result.query}"` : 'Geocoding failed',
+      attemptSummary,
+    ].filter(Boolean).join(' · ');
   }
 
   if (status === 'missing') {
@@ -115,7 +139,10 @@ const getResultDetail = (result: GeocodeEventResult, event?: Event): string | un
 
   if (status === 'no_improvement') {
     const queriesTried = result.queriesTried ? `Tried ${result.queriesTried} location queries. ` : '';
-    return `${queriesTried}No fallback query produced a better match than the current location.`;
+    return [
+      `${queriesTried}No fallback query produced a better match than the current location.`,
+      attemptSummary,
+    ].filter(Boolean).join(' · ');
   }
 
   return event?.location?.address

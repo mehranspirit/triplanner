@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
 import { Event, EventType } from '@/types/eventTypes'; // Import EventType
 import { cn } from '@/lib/utils';
 import ExploreSuggestionsModal from '@/components/TripDetails/ExploreSuggestionsModal';
-import ImproveLocationsResultsDialog from '@/components/TripDetails/ImproveLocationsResultsDialog';
-import ImproveLocationsProgressDialog from '@/components/TripDetails/ImproveLocationsProgressDialog';
+import ReviewUnresolvedLocationsDialog from '@/components/TripDetails/ReviewUnresolvedLocationsDialog';
+import LocationConfirmDialog from '@/components/TripDetails/LocationConfirmDialog';
+import { useLocationConfirmQueue } from '@/components/TripDetails/hooks/useLocationConfirmQueue';
 import TripDetailsToolbar from '@/components/TripDetails/TripDetailsToolbar';
 import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
 import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext';
@@ -17,8 +18,7 @@ import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
 import { ProactiveContextCard as ProactiveContextCardData, ProactiveContextCardType } from '@/components/TripDetails/context/tripContextTypes';
 import { generateTripInsights, getMissingLocationInsightId } from '@/services/tripInsights';
-import { eventNeedsMapLocation, eventNeedsGeocodeRetry } from '@/utils/eventLocation';
-import { getEventDisplayName } from '@/utils/eventTime';
+import { eventNeedsMapLocation } from '@/utils/eventLocation';
 import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/travelImportValidation';
 import { api } from '@/services/api';
 import { hashText } from '@/utils/hash';
@@ -27,7 +27,6 @@ import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { WeatherSnapshot } from '@/types/weatherTypes';
 import { ExpenseSummary } from '@/types/expenseTypes';
 import { TravelImport, TravelImportStatus } from '@/types/travelImportTypes';
-import { GeocodeTripEventsResponse, GeocodeEventResult } from '@/types/geocodingTypes';
 import {
   AssistantActionTarget,
   AssistantChecklistItem,
@@ -110,6 +109,7 @@ const NewTripDetails: React.FC = () => {
     addEvents,
     updateEvent, // Function to update event
     deleteEvent, // Function to delete event
+    replaceTripEvents,
     handleExportHTML,
     canEdit,
     isOwner, 
@@ -117,6 +117,11 @@ const NewTripDetails: React.FC = () => {
     handleTripUpdate,
     fetchTrip
   } = useTripDetails();
+
+  const locationConfirmQueue = useLocationConfirmQueue({
+    tripId: trip?._id,
+    onTripUpdated: replaceTripEvents,
+  });
 
   const [modalType, setModalType] = useState<EventType | null>(null); // State to track which modal to show
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
@@ -162,14 +167,7 @@ const NewTripDetails: React.FC = () => {
   const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [deletingEvents, setDeletingEvents] = useState<Set<string>>(new Set());
-  const [isImprovingLocations, setIsImprovingLocations] = useState(false);
-  const [improveLocationsReport, setImproveLocationsReport] = useState<GeocodeTripEventsResponse | null>(null);
-  const [isImproveLocationsDialogOpen, setIsImproveLocationsDialogOpen] = useState(false);
-  const [improveLocationsProgress, setImproveLocationsProgress] = useState<{
-    current: number;
-    total: number;
-    eventLabel?: string;
-  } | null>(null);
+  const [isReviewUnresolvedOpen, setIsReviewUnresolvedOpen] = useState(false);
   const [isExploreSuggestionsOpen, setIsExploreSuggestionsOpen] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
@@ -649,66 +647,14 @@ const NewTripDetails: React.FC = () => {
     }
   };
 
-  const handleImproveLocations = async () => {
-    if (!trip?._id) return;
+  const handleImproveLocations = () => {
+    setIsReviewUnresolvedOpen(true);
+  };
 
-    const eventsNeedingRetry = trip.events.filter(eventNeedsGeocodeRetry);
-    const skippedEventResults: GeocodeEventResult[] = trip.events
-      .filter((event) => !eventNeedsGeocodeRetry(event))
-      .map((event) => ({
-        eventId: event.id,
-        skipped: true,
-        reason: 'already_geocoded' as const,
-        location: event.location,
-      }));
-
-    try {
-      setIsImprovingLocations(true);
-      setImproveLocationsProgress({
-        current: 0,
-        total: Math.max(eventsNeedingRetry.length, 1),
-      });
-
-      let latestTrip = trip;
-      let updatedCount = 0;
-      const results: GeocodeEventResult[] = [...skippedEventResults];
-
-      if (eventsNeedingRetry.length === 0) {
-        setImproveLocationsReport({
-          trip,
-          updatedCount: 0,
-          results: skippedEventResults,
-        });
-        setIsImproveLocationsDialogOpen(true);
-      } else {
-        for (let index = 0; index < eventsNeedingRetry.length; index += 1) {
-          const event = eventsNeedingRetry[index];
-          setImproveLocationsProgress({
-            current: index + 1,
-            total: eventsNeedingRetry.length,
-            eventLabel: getEventDisplayName(event),
-          });
-
-          const result = await api.geocodeTripEvents(trip._id, { eventIds: [event.id] });
-          latestTrip = result.trip;
-          updatedCount += result.updatedCount;
-          results.push(...result.results);
-        }
-
-        await handleTripUpdate(latestTrip);
-        setImproveLocationsReport({
-          trip: latestTrip,
-          updatedCount,
-          results,
-        });
-        setIsImproveLocationsDialogOpen(true);
-      }
-    } catch (error) {
-      console.error('Error improving locations:', error);
-      setSuccess(error instanceof Error ? error.message : 'Failed to improve event locations');
-    } finally {
-      setIsImprovingLocations(false);
-      setImproveLocationsProgress(null);
+  const handleStartLocationReview = (eventsToReview: Event[]) => {
+    const started = locationConfirmQueue.startUnresolvedReview(eventsToReview);
+    if (started) {
+      setIsReviewUnresolvedOpen(false);
     }
   };
 
@@ -751,28 +697,37 @@ const NewTripDetails: React.FC = () => {
   const handleSaveEvent = async (eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'> | Event) => {
     try {
     if ('id' in eventData && editingEvent && eventData.id === editingEvent.id) {
-        // We are editing an existing event
         const eventToUpdate = { ...editingEvent, ...eventData } as Event;
-        const updatedEvent = await updateEvent(eventToUpdate);
-        
-        // Update the local state immediately
-        if (trip && updatedEvent) {
-          const updatedEvents = trip.events.map(event => 
-            event.id === updatedEvent.id ? updatedEvent : event
-          );
-          trip.events = updatedEvents;
+        const result = await updateEvent(eventToUpdate);
+
+        if (result) {
+          locationConfirmQueue.enqueue({
+            event: result.event,
+            previousEvent: result.previousEvent,
+          });
+
+          if (trip) {
+            const updatedEvents = trip.events.map(event =>
+              event.id === result.event.id ? result.event : event
+            );
+            trip.events = updatedEvents;
+          }
         }
     } else {
-        // We are adding a new event
         const newEvent = await addEvent(eventData as Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>);
-        
-        // Update the local state immediately
-        if (trip && newEvent) {
-          trip.events = [...trip.events, newEvent];
+
+        if (newEvent) {
+          locationConfirmQueue.enqueue({
+            event: newEvent,
+            previousEvent: null,
+          });
+
+          if (trip) {
+            trip.events = [...trip.events, newEvent];
+          }
         }
       }
-      
-      // Close the modal
+
       handleCloseModal();
     } catch (error) {
       console.error('NewTripDetails: Error saving event:', error);
@@ -996,7 +951,8 @@ const NewTripDetails: React.FC = () => {
       return eventData;
     });
 
-    await addEvents(eventDataList);
+    const newEvents = await addEvents(eventDataList);
+    locationConfirmQueue.enqueueSavedEvents(newEvents);
   };
 
   if (loading) return <TripLoading />;
@@ -1064,10 +1020,10 @@ const NewTripDetails: React.FC = () => {
         activePanel={activePanel}
         unreadNotificationCount={unreadNotificationCount}
         isCondensedView={isCondensedView}
-        isImprovingLocations={isImprovingLocations}
+        isImprovingLocations={locationConfirmQueue.open}
         improveLocationsLabel={
-          improveLocationsProgress
-            ? `Geocoding ${improveLocationsProgress.current}/${improveLocationsProgress.total}`
+          locationConfirmQueue.open
+            ? `Reviewing ${locationConfirmQueue.queuePosition.current}/${locationConfirmQueue.queuePosition.total}`
             : undefined
         }
         onOpenAIImport={() => setIsAIParseModalOpen(true)}
@@ -1086,6 +1042,7 @@ const NewTripDetails: React.FC = () => {
         <main className="min-w-0">
           <TripTimeline
             events={trip.events}
+            tripId={trip._id}
             tripStartDate={trip.startDate}
             tripEndDate={trip.endDate}
             eventThumbnails={eventThumbnails}
@@ -1098,6 +1055,12 @@ const NewTripDetails: React.FC = () => {
             onEditEvent={handleEditEventClick}
             onDeleteEvent={handleDeleteEvent}
             onStatusChange={handleStatusChange}
+            onLocationApplied={replaceTripEvents}
+            onReviewEventLocation={
+              canEdit
+                ? (event) => locationConfirmQueue.startUnresolvedReview([event])
+                : undefined
+            }
             onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
           />
         </main>
@@ -1203,24 +1166,30 @@ const NewTripDetails: React.FC = () => {
         />
       )}
 
-      {improveLocationsProgress && (
-        <ImproveLocationsProgressDialog
-          open={isImprovingLocations}
-          current={improveLocationsProgress.current}
-          total={improveLocationsProgress.total}
-          eventLabel={improveLocationsProgress.eventLabel}
+      {trip && (
+        <ReviewUnresolvedLocationsDialog
+          open={isReviewUnresolvedOpen}
+          onOpenChange={setIsReviewUnresolvedOpen}
+          events={trip.events}
+          onReviewAll={handleStartLocationReview}
+          onReviewSelected={handleStartLocationReview}
         />
       )}
 
-      {improveLocationsReport && (
-        <ImproveLocationsResultsDialog
-          open={isImproveLocationsDialogOpen}
-          onOpenChange={setIsImproveLocationsDialogOpen}
-          updatedCount={improveLocationsReport.updatedCount}
-          results={improveLocationsReport.results}
-          events={improveLocationsReport.trip.events}
-        />
-      )}
+      <LocationConfirmDialog
+        open={locationConfirmQueue.open}
+        onOpenChange={() => undefined}
+        event={locationConfirmQueue.currentItem?.event ?? null}
+        preview={locationConfirmQueue.preview}
+        loading={locationConfirmQueue.loading}
+        error={locationConfirmQueue.error}
+        queuePosition={locationConfirmQueue.queuePosition}
+        applying={locationConfirmQueue.applying}
+        onConfirm={locationConfirmQueue.handleConfirm}
+        onConfirmTransport={locationConfirmQueue.handleConfirmTransport}
+        onSkip={locationConfirmQueue.handleSkip}
+        onRetry={locationConfirmQueue.handleRetry}
+      />
       </div>
     </div>
   );

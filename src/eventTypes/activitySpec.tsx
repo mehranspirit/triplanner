@@ -27,6 +27,18 @@ import {
 } from "@/components/ui/popover";
 import { CalendarIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import EventFormLocationSearchField from '@/components/TripDetails/EventFormLocationSearchField';
+
+const eventLocationSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+  address: z.string().optional(),
+  quality: z.enum(['exact', 'inferred', 'unresolved', 'missing']).optional(),
+  source: z.enum(['manual', 'geocoded', 'imported', 'unknown', 'google_places']).optional(),
+  confidence: z.number().optional(),
+  placeId: z.string().optional(),
+  query: z.string().optional(),
+}).optional();
 
 // Zod Schema for ActivityEvent
 export const activityEventSchema = z.object({
@@ -42,11 +54,7 @@ export const activityEventSchema = z.object({
             .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, { message: "Invalid date format (YYYY-MM-DD)" }),
   endTime: z.string({ required_error: "End time is required." })
             .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
-  location: z.object({ 
-    lat: z.number(),
-    lng: z.number(),
-    address: z.string().optional(),
-  }).optional(),
+  location: eventLocationSchema,
   notes: z.string().optional(),
   status: z.enum(['confirmed', 'exploring']).default('exploring'),
   thumbnailUrl: z.string().optional(),
@@ -275,6 +283,8 @@ const renderActivityFormFields = (form: UseFormReturn<ActivityFormData>): React.
                 </FormItem>
             )}
             />
+
+        <EventFormLocationSearchField form={form} />
 
         <FormField
             control={control}

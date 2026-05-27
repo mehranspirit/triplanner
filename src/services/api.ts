@@ -129,7 +129,20 @@ interface API {
     tripId: string,
     options?: { eventIds?: string[] }
   ) => Promise<import('@/types/geocodingTypes').GeocodeTripEventsResponse>;
+  geocodePreview: (event: Event) => Promise<import('@/types/geocodingTypes').GeocodePreviewResult>;
+  applyEventLocation: (
+    tripId: string,
+    eventId: string,
+    location: (
+      import('@/types/geocodingTypes').GeocodeEventLocation & { displayName?: string }
+    ) | import('@/types/geocodingTypes').TransportLocationApplyPayload,
+  ) => Promise<import('@/types/geocodingTypes').ApplyEventLocationResponse>;
   geocodeQuery: (query: string) => Promise<{ lat: number; lng: number; displayName: string; confidence?: number } | null>;
+  placesAutocomplete: (
+    input: string,
+    options?: { lat?: number; lng?: number },
+  ) => Promise<import('@/types/geocodingTypes').PlaceAutocompleteResult[]>;
+  placeDetails: (placeId: string) => Promise<import('@/types/geocodingTypes').PlaceDetailsResult>;
   getTripWeather: (tripId: string, options?: { refresh?: boolean }) => Promise<TripWeatherResponse>;
   getTripFlightStatuses: (tripId: string, options?: { refresh?: boolean }) => Promise<TripFlightStatusesResponse>;
   generateTripAssistantBriefing: (tripId: string) => Promise<TripAssistantBriefingResponse>;
@@ -1236,6 +1249,37 @@ export const api: API = {
     return response.json();
   },
 
+  geocodePreview: async (event: Event) => {
+    const response = await fetch(`${API_URL}/api/geocode/preview`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ event }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to preview event location');
+    }
+    return response.json();
+  },
+
+  applyEventLocation: async (
+    tripId: string,
+    eventId: string,
+    location: import('@/types/geocodingTypes').GeocodeEventLocation & { displayName?: string }
+      | import('@/types/geocodingTypes').TransportLocationApplyPayload,
+  ) => {
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/events/${eventId}/location`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(location),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to apply event location');
+    }
+    return response.json();
+  },
+
   geocodeQuery: async (query: string) => {
     const params = new URLSearchParams({ query });
     const response = await fetch(`${API_URL}/api/geocode?${params.toString()}`, {
@@ -1247,6 +1291,37 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to geocode location');
+    }
+    return response.json();
+  },
+
+  placesAutocomplete: async (input: string, options?: { lat?: number; lng?: number }) => {
+    const params = new URLSearchParams({ input });
+    if (options?.lat !== undefined) params.set('lat', String(options.lat));
+    if (options?.lng !== undefined) params.set('lng', String(options.lng));
+
+    const response = await fetch(`${API_URL}/api/places/autocomplete?${params.toString()}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to search places');
+    }
+    const data = await response.json();
+    return data.results ?? [];
+  },
+
+  placeDetails: async (placeId: string) => {
+    const params = new URLSearchParams({ placeId });
+    const response = await fetch(`${API_URL}/api/places/details?${params.toString()}`, {
+      headers: getHeaders(),
+    });
+    if (response.status === 404) {
+      throw new Error('Place not found');
+    }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch place details');
     }
     return response.json();
   },

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RentalCarEvent } from '@/types/eventTypes';
+import { RentalCarEvent, Event } from '@/types/eventTypes';
 import { format, parse, formatISO } from 'date-fns';
 import { 
   Clock, 
@@ -29,18 +29,30 @@ import {
 import { cn } from '@/lib/utils';
 import { CollapsibleContent, ShowMoreButton } from './utils';
 import GlowingIcon from '@/components/ui/GlowingIcon';
+import { openEventInGoogleMaps } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
+import { TransportLocationQuickAction } from '@/components/TripDetails/TransportLocationSearch';
 
 interface RentalCarEventCardProps {
   event: RentalCarEvent;
   thumbnail: string;
+  tripId?: string;
+  onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
 }
 
-const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnail, onEdit, onDelete, onStatusChange }) => {
+const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({
+  event,
+  thumbnail,
+  tripId,
+  onLocationApplied,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
@@ -62,9 +74,8 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
   };
 
   // Quick action handlers
-  const handleMapClick = (location: string) => {
-    const searchQuery = encodeURIComponent(location);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${searchQuery}`, '_blank');
+  const handleMapClick = (location: string, endpoint: 'pickup' | 'dropoff') => {
+    openEventInGoogleMaps(event, { endpoint, query: location });
   };
 
   const handleCalendarClick = () => {
@@ -128,12 +139,19 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <TransportLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               {event.pickupLocation && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.pickupLocation!)}
+                  onClick={() => handleMapClick(event.pickupLocation!, 'pickup')}
                   title="View Pickup Location"
                 >
                   <div className="relative">
@@ -147,7 +165,7 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.dropoffLocation!)}
+                  onClick={() => handleMapClick(event.dropoffLocation!, 'dropoff')}
                   title="View Dropoff Location"
                 >
                   <div className="relative">
@@ -238,12 +256,19 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
             <div 
               className="flex flex-col gap-1 relative before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:-translate-y-[6px] before:w-[2px] before:h-[6px] before:bg-gray-200"
             >
+              {tripId && onLocationApplied && (
+                <TransportLocationQuickAction
+                  tripId={tripId}
+                  event={event}
+                  onApplied={onLocationApplied}
+                />
+              )}
               {event.pickupLocation && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.pickupLocation!)}
+                  onClick={() => handleMapClick(event.pickupLocation!, 'pickup')}
                   title="View Pickup Location"
                 >
                   <div className="relative">
@@ -257,7 +282,7 @@ const RentalCarEventCard: React.FC<RentalCarEventCardProps> = ({ event, thumbnai
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  onClick={() => handleMapClick(event.dropoffLocation!)}
+                  onClick={() => handleMapClick(event.dropoffLocation!, 'dropoff')}
                   title="View Dropoff Location"
                 >
                   <div className="relative">

@@ -20,6 +20,7 @@ const aiParserRoutes = require('./routes/aiParser');
 const aiGenerationRoutes = require('./routes/aiGeneration');
 const notificationRoutes = require('./routes/notifications');
 const geocodingRoutes = require('./routes/geocoding');
+const placesRoutes = require('./routes/places');
 const weatherRoutes = require('./routes/weather');
 const flightStatusRoutes = require('./routes/flightStatus');
 const assistantBriefingRoutes = require('./routes/assistantBriefing');
@@ -226,6 +227,9 @@ app.use('/api', notificationRoutes);
 
 // Mount server-side geocoding routes
 app.use('/api', geocodingRoutes);
+
+// Mount server-side Google Places routes
+app.use('/api', placesRoutes);
 
 // Mount server-side weather context routes
 app.use('/api', weatherRoutes);
@@ -1770,4 +1774,5 @@ app.post('/api/trips/:id/checklist/personal', auth, async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   logger.info(`Server is running on port ${PORT}`);
+  logger.info(`Geocoding provider: ${require('./services/geocoding').getActivePrimaryProvider()}`);
 }); 
