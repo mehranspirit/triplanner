@@ -9,12 +9,13 @@ import { Event } from '@/types/eventTypes';
 
 const baseDecision = (slot: DecisionSet['slot']): DecisionSet => ({
   id: 'dec-1',
+  tripId: 'trip-1',
   title: 'Test',
   status: 'open',
   optionEventIds: [],
   slot,
   createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
+  createdBy: { _id: 'u1', name: 'Test', email: 'test@test.com' },
 });
 
 describe('getOptionSlotAlignment', () => {
@@ -25,7 +26,7 @@ describe('getOptionSlotAlignment', () => {
       type: 'activity',
       status: 'exploring',
       startDate: '2026-06-12',
-    } as Event;
+    } as unknown as Event;
 
     expect(getOptionSlotAlignment(decision, event)).toBe('misaligned');
     expect(getOptionSlotAlignmentLabel('misaligned')).toBe('Outside decision slot');
@@ -39,7 +40,7 @@ describe('getOptionSlotAlignment', () => {
       status: 'exploring',
       checkIn: '2026-06-08',
       checkOut: '2026-06-12',
-    } as Event;
+    } as unknown as Event;
 
     expect(getOptionSlotAlignment(decision, event)).toBe('partial');
   });
@@ -52,7 +53,7 @@ describe('getOptionSlotAlignment', () => {
       status: 'exploring',
       checkIn: '2026-06-10',
       checkOut: '2026-06-14',
-    } as Event;
+    } as unknown as Event;
 
     expect(getOptionSlotAlignment(decision, event)).toBe('aligned');
   });

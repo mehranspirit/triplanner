@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { DestinationEvent } from '@/types/eventTypes';
 import DestinationEventCard from '../components/TripDetails/EventCards/DestinationEventCard';
@@ -55,7 +56,7 @@ export const destinationEventSchema = z.object({
             .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   location: eventLocationSchema,
   notes: z.string().optional(),
-  status: z.enum(['confirmed', 'exploring']).default('exploring'),
+  status: eventFormStatusSchema,
   thumbnailUrl: z.string().optional(),
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
   address: z.string().optional(),

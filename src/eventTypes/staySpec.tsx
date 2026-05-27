@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { StayEvent } from '@/types/eventTypes';
 import StayEventCard from '../components/TripDetails/EventCards/StayEventCard';
@@ -54,7 +55,7 @@ export const stayEventSchema = z.object({
   checkOutTime: z.string({ required_error: "Check-out time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   location: eventLocationSchema,
   notes: z.string().optional(),
-  status: z.enum(['confirmed', 'exploring']).default('exploring'),
+  status: eventFormStatusSchema,
   thumbnailUrl: z.string().optional(),
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
   accommodationName: z.string().min(1, { message: "Accommodation name is required" }),

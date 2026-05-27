@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Event } from '@/types/eventTypes';
+import { Event, FlightEvent } from '@/types/eventTypes';
 import {
   buildFlightRoleMap,
   isRoundTripPair,
@@ -9,7 +9,7 @@ import { detectTransportGaps } from '@/services/tripHealth/detectors/transportGa
 
 const owner = { _id: 'u1', name: 'Owner', email: 'owner@test.com' };
 
-const flight = (overrides: Partial<Event> & { id: string }): Event => ({
+const flight = (overrides: Partial<FlightEvent> & { id: string }): FlightEvent => ({
   type: 'flight',
   startDate: '2026-06-01',
   endDate: '2026-06-01',
@@ -21,7 +21,7 @@ const flight = (overrides: Partial<Event> & { id: string }): Event => ({
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...overrides,
-} as Event);
+} as FlightEvent);
 
 describe('flightTripRoles', () => {
   it('detects round-trip airport pairs', () => {

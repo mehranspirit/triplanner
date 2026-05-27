@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { TrainEvent } from '@/types/eventTypes';
 import TrainEventCard from '../components/TripDetails/EventCards/TrainEventCard';
@@ -50,7 +51,7 @@ export const trainEventSchema = z.object({
   departureLocation: transportEndpointLocationSchema,
   arrivalLocation: transportEndpointLocationSchema,
   notes: z.string().optional(),
-  status: z.enum(['confirmed', 'exploring']).default('exploring'),
+  status: eventFormStatusSchema,
   thumbnailUrl: z.string().optional(),
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
   trainOperator: z.string().optional(),

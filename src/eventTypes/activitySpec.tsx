@@ -28,6 +28,7 @@ import {
 import { CalendarIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import EventFormLocationSearchField from '@/components/TripDetails/EventFormLocationSearchField';
+import { eventFormStatusSchema } from './eventFormStatus';
 
 const eventLocationSchema = z.object({
   lat: z.number(),
@@ -56,7 +57,7 @@ export const activityEventSchema = z.object({
             .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Invalid time format (HH:mm)" }),
   location: eventLocationSchema,
   notes: z.string().optional(),
-  status: z.enum(['confirmed', 'exploring']).default('exploring'),
+  status: eventFormStatusSchema,
   thumbnailUrl: z.string().optional(),
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
   address: z.string().optional(),
