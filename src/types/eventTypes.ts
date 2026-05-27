@@ -1,3 +1,6 @@
+import type { DecisionSet } from './decisionTypes';
+import type { HealthDismissal } from './tripHealthTypes';
+
 export type EventType = 'arrival' | 'departure' | 'stay' | 'destination' | 'flight' | 'train' | 'rental_car' | 'bus' | 'activity';
 
 export interface User {
@@ -27,7 +30,7 @@ export interface Event {
     confirmedBy?: string;
   };
   notes?: string;
-  status: 'confirmed' | 'exploring';
+  status: 'confirmed' | 'exploring' | 'alternative';
   source?: 'manual' | 'google_places' | 'google_flights' | 'booking.com' | 'airbnb' | 'expedia' | 'tripadvisor' | 'other';
   createdBy: User;
   updatedBy: User;
@@ -162,6 +165,8 @@ export interface Trip {
     };
   };
   shareableLink?: string;
+  healthDismissals?: HealthDismissal[];
+  decisions?: DecisionSet[];
 }
 
 export interface AuthUser extends User {
@@ -193,7 +198,7 @@ export interface EventFormData {
   description?: string;
   openingHours?: string;
   notes?: string;
-  status: 'confirmed' | 'exploring';
+  status: 'confirmed' | 'exploring' | 'alternative';
   thumbnailUrl?: string;
   source?: 'manual' | 'google_places' | 'google_flights' | 'booking.com' | 'airbnb' | 'expedia' | 'tripadvisor' | 'other';
   location?: {

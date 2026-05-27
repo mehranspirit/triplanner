@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { Bell, CalendarPlus, CloudSun, Info, MapPin } from 'lucide-react';
+import { Bell, CalendarPlus, CheckSquare, CloudSun, Info, MapPin, Scale, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { EVENT_TYPES } from '@/eventTypes/registry';
-import { Event } from '@/types/eventTypes';
+import { Event, Trip } from '@/types/eventTypes';
+import { TripHealthIssue } from '@/types/tripHealthTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { TripNotification } from '@/types/notificationTypes';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
@@ -11,10 +13,16 @@ import { cn } from '@/lib/utils';
 import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
 import { eventHasLocationAttention } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
+import { EventVoteAction } from '@/components/TripDetails/hooks/useEventVotes';
+import EventVoteControls from '@/components/TripDetails/EventCards/EventVoteControls';
+import { getDecisionForEvent, getSharedDecisionComparisonType, isEventSelectableForDecision } from '@/utils/decisionHelpers';
+import { indexTimelineHealthIssuesByDate } from '@/utils/timelineHealthChips';
 
 interface TripTimelineProps {
   events: Event[];
+  trip?: Trip;
   tripId?: string;
+  currentUserId?: string;
   tripStartDate?: string;
   tripEndDate?: string;
   eventThumbnails: Record<string, string>;
@@ -27,6 +35,11 @@ interface TripTimelineProps {
   onEditEvent: (event: Event) => void;
   onDeleteEvent: (eventId: string) => void;
   onStatusChange: (event: Event, status: 'confirmed' | 'exploring') => void;
+  onVote?: (eventId: string, voteType: EventVoteAction) => void;
+  onOpenDecision?: (decisionId: string) => void;
+  onCompareSelectedEvents?: (eventIds: string[]) => void;
+  healthIssues?: TripHealthIssue[];
+  onOpenHealthIssue?: (issueId: string) => void;
   onLocationApplied?: (events: Event[]) => void;
   onReviewEventLocation?: (event: Event) => void;
   onAddEvent?: () => void;
@@ -216,7 +229,29 @@ const getEventIcon = (event: Event) => {
   }
 };
 
-const CondensedEventCard = ({ event, thumbnail }: { event: Event; thumbnail: string }) => {
+const CondensedEventCard = ({
+  event,
+  thumbnail,
+  trip,
+  currentUserId,
+  onVote,
+  isSelectionMode = false,
+  isSelected = false,
+  isSelectable = false,
+  onToggleSelected,
+  canEdit = true,
+}: {
+  event: Event;
+  thumbnail: string;
+  trip?: Trip;
+  currentUserId?: string;
+  onVote?: (eventId: string, voteType: EventVoteAction) => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  isSelectable?: boolean;
+  onToggleSelected?: () => void;
+  canEdit?: boolean;
+}) => {
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
   const start = getEventStart(event);
@@ -226,9 +261,23 @@ const CondensedEventCard = ({ event, thumbnail }: { event: Event; thumbnail: str
       className={cn(
         'relative flex items-center gap-3 rounded-2xl border bg-white p-3 shadow-sm transition-all duration-200 hover:border-blue-200 hover:shadow-md',
         isExploring && 'border-amber-200 bg-amber-50/80',
-        isActive && !isExploring && 'border-blue-200 bg-blue-50/60 shadow-blue-100'
+        isActive && !isExploring && 'border-blue-200 bg-blue-50/60 shadow-blue-100',
+        isSelectionMode && isSelected && 'border-violet-400 ring-2 ring-violet-100',
+        isSelectionMode && isSelectable && 'cursor-pointer',
       )}
+      onClick={isSelectionMode && isSelectable ? onToggleSelected : undefined}
     >
+      {isSelectionMode && isSelectable && (
+        <div className="absolute left-2 top-2 z-10">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelected}
+            onClick={(eventClick) => eventClick.stopPropagation()}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+        </div>
+      )}
       {isActive && !isExploring && (
         <div className="absolute -left-1 top-3 h-[calc(100%-1.5rem)] w-1 rounded-full bg-blue-500" />
       )}
@@ -255,6 +304,15 @@ const CondensedEventCard = ({ event, thumbnail }: { event: Event; thumbnail: str
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
           {start && <span>{format(start, 'MMM d, h:mm a')}</span>}
+          {isExploring && trip && onVote && (
+            <EventVoteControls
+              event={event}
+              trip={trip}
+              currentUserId={currentUserId}
+              onVote={onVote}
+              readOnly={!canEdit}
+            />
+          )}
           {event.location?.quality && event.location.quality !== 'exact' && (
             <span className="inline-flex items-center gap-1">
               <MapPin className="h-3 w-3" />
@@ -275,7 +333,9 @@ const CondensedEventCard = ({ event, thumbnail }: { event: Event; thumbnail: str
 
 const TripTimeline: React.FC<TripTimelineProps> = ({
   events,
+  trip,
   tripId,
+  currentUserId,
   tripStartDate,
   tripEndDate,
   eventThumbnails,
@@ -288,11 +348,89 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
   onEditEvent,
   onDeleteEvent,
   onStatusChange,
+  onVote,
+  onOpenDecision,
+  onCompareSelectedEvents,
+  healthIssues = [],
+  onOpenHealthIssue,
   onLocationApplied,
   onReviewEventLocation,
   onAddEvent,
 }) => {
-  const sortedEvents = sortEventsByStart(events);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
+
+  const selectableEventIds = useMemo(() => {
+    if (!trip) return new Set<string>();
+    return new Set(
+      events
+        .filter((event) => isEventSelectableForDecision(event, trip))
+        .map((event) => event.id),
+    );
+  }, [events, trip]);
+
+  const selectedEvents = useMemo(
+    () => events.filter((event) => selectedEventIds.has(event.id)),
+    [events, selectedEventIds],
+  );
+
+  const activeSelectionType = useMemo(
+    () => getSharedDecisionComparisonType(selectedEvents),
+    [selectedEvents],
+  );
+
+  const healthChipsByDate = useMemo(
+    () => indexTimelineHealthIssuesByDate(healthIssues, events),
+    [healthIssues, events],
+  );
+
+  const toggleSelectedEvent = (eventId: string) => {
+    const event = events.find((candidate) => candidate.id === eventId);
+    if (!event || !selectableEventIds.has(eventId)) return;
+
+    setSelectedEventIds((current) => {
+      const next = new Set(current);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+        return next;
+      }
+
+      if (next.size === 0) {
+        next.add(eventId);
+        return next;
+      }
+
+      const currentType = getSharedDecisionComparisonType(
+        events.filter((candidate) => next.has(candidate.id)),
+      );
+
+      if (currentType && currentType !== event.type) {
+        return new Set([eventId]);
+      }
+
+      next.add(eventId);
+      return next;
+    });
+  };
+
+  const isEventSelectionEligible = (event: Event) => (
+    selectableEventIds.has(event.id)
+    && (!activeSelectionType || event.type === activeSelectionType)
+  );
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedEventIds(new Set());
+  };
+
+  const handleCompareSelected = () => {
+    if (selectedEventIds.size < 2) return;
+    if (!getSharedDecisionComparisonType(selectedEvents)) return;
+    onCompareSelectedEvents?.([...selectedEventIds]);
+    exitSelectionMode();
+  };
+
+  const sortedEvents = sortEventsByStart(events).filter((event) => event.status !== 'alternative');
   const tripDateRange = (() => {
     const start = tripStartDate ? new Date(tripStartDate) : null;
     const end = tripEndDate ? new Date(tripEndDate) : null;
@@ -322,10 +460,50 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
           <p className="hidden text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 sm:block">Main itinerary</p>
           <h2 className="text-xl font-bold tracking-tight text-slate-950 md:text-2xl">Timeline</h2>
         </div>
-        <p className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 md:px-3 md:py-1 md:text-sm">
-          {sortedEvents.length} event{sortedEvents.length === 1 ? '' : 's'}
-        </p>
+        <div className="flex items-center gap-2">
+          {canEdit && onCompareSelectedEvents && selectableEventIds.size >= 2 && (
+            <Button
+              type="button"
+              variant={isSelectionMode ? 'secondary' : 'outline'}
+              size="sm"
+              className="h-8 rounded-full px-3 text-xs"
+              onClick={() => {
+                if (isSelectionMode) {
+                  exitSelectionMode();
+                } else {
+                  setIsSelectionMode(true);
+                }
+              }}
+            >
+              {isSelectionMode ? (
+                <>
+                  <X className="mr-1 h-3.5 w-3.5" />
+                  Cancel
+                </>
+              ) : (
+                <>
+                  <CheckSquare className="mr-1 h-3.5 w-3.5" />
+                  Select
+                </>
+              )}
+            </Button>
+          )}
+          <p className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 md:px-3 md:py-1 md:text-sm">
+            {sortedEvents.length} event{sortedEvents.length === 1 ? '' : 's'}
+          </p>
+        </div>
       </div>
+
+      {isSelectionMode && (
+        <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-900">
+          Select two or more exploring options of the same type — activity, destination, or stay — then compare them as alternatives.
+          {activeSelectionType && (
+            <span className="mt-1 block font-medium">
+              Currently selecting {activeSelectionType === 'stay' ? 'stays' : `${activeSelectionType}s`}.
+            </span>
+          )}
+        </div>
+      )}
 
       {outOfRangeEvents.length > 0 && (
         <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
@@ -362,6 +540,7 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
             const hasActiveEvent = dateEvents.some(event => isEventCurrentlyActive(event));
             const dayAlertCount = getDayNotificationCount(dateKey, notifications);
             const dayWeatherSummary = getDayWeatherSummary(dateKey, weatherSnapshots);
+            const dayHealthChips = healthChipsByDate.get(dateKey) ?? [];
 
             return (
               <div key={dateKey} className="relative pl-7">
@@ -387,8 +566,23 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                       </span>
                     )}
                   </div>
-                  {(dayWeatherSummary || dayAlertCount > 0) && (
+                  {(dayWeatherSummary || dayAlertCount > 0 || dayHealthChips.length > 0) && (
                     <div className="mt-2 flex flex-wrap gap-2">
+                      {dayHealthChips.map((chip) => (
+                        <ContextChip
+                          key={chip.issueId}
+                          icon={<Info className="h-3 w-3" />}
+                          className={cn(
+                            'cursor-pointer',
+                            chip.severity === 'critical' && 'border-rose-100 bg-rose-50 text-rose-800',
+                            chip.severity === 'warning' && 'border-amber-100 bg-amber-50 text-amber-800',
+                            chip.severity === 'info' && 'border-blue-100 bg-blue-50 text-blue-800',
+                          )}
+                          onClick={onOpenHealthIssue ? () => onOpenHealthIssue(chip.issueId) : undefined}
+                        >
+                          {chip.label}
+                        </ContextChip>
+                      ))}
                       {dayWeatherSummary && (
                         <ContextChip icon={<CloudSun className="h-3 w-3" />} className="border-sky-100 bg-sky-50 text-sky-800">
                           {dayWeatherSummary}
@@ -424,6 +618,13 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                       || event.type === 'rental_car'
                     );
 
+                    const voteableEvent = event.type === 'activity'
+                      || event.type === 'destination'
+                      || event.type === 'stay';
+                    const activeDecision = trip
+                      ? getDecisionForEvent(trip.decisions, event.id)
+                      : undefined;
+
                     return (
                       <div
                         key={event.id}
@@ -434,9 +635,47 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                       >
                         <div className="absolute -left-[1.45rem] top-6 h-3 w-3 rounded-full border-2 border-white bg-slate-300 shadow ring-2 ring-slate-100" />
                         {isCondensedView ? (
-                          <CondensedEventCard event={event} thumbnail={thumbnail} />
+                          <CondensedEventCard
+                            event={event}
+                            thumbnail={thumbnail}
+                            trip={trip}
+                            currentUserId={currentUserId}
+                            onVote={onVote}
+                            isSelectionMode={isSelectionMode}
+                            isSelected={selectedEventIds.has(event.id)}
+                            isSelectable={isEventSelectionEligible(event)}
+                            onToggleSelected={() => toggleSelectedEvent(event.id)}
+                            canEdit={canEdit}
+                          />
                         ) : (
-                          <EventCardComponent
+                          <div
+                            className={cn(
+                              'relative',
+                              isSelectionMode && isEventSelectionEligible(event) && 'cursor-pointer',
+                              isSelectionMode && selectedEventIds.has(event.id) && 'rounded-2xl ring-2 ring-violet-100',
+                              isSelectionMode
+                                && selectableEventIds.has(event.id)
+                                && !isEventSelectionEligible(event)
+                                && 'opacity-50',
+                            )}
+                            onClick={
+                              isSelectionMode && isEventSelectionEligible(event)
+                                ? () => toggleSelectedEvent(event.id)
+                                : undefined
+                            }
+                          >
+                            {isSelectionMode && isEventSelectionEligible(event) && (
+                              <div className="absolute left-3 top-3 z-10">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedEventIds.has(event.id)}
+                                  onChange={() => toggleSelectedEvent(event.id)}
+                                  onClick={(eventClick) => eventClick.stopPropagation()}
+                                  className="h-4 w-4 rounded border-slate-300"
+                                />
+                              </div>
+                            )}
+                            <EventCardComponent
                             event={event}
                             thumbnail={thumbnail}
                             onEdit={canEdit ? () => onEditEvent(event) : undefined}
@@ -446,10 +685,26 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                               tripId,
                               onLocationApplied,
                             } : {})}
+                            {...(voteableEvent && trip && onVote ? {
+                              trip,
+                              currentUserId,
+                              onVote,
+                              canVote: canEdit,
+                            } : {})}
                           />
+                          </div>
                         )}
-                        {(eventAlerts.length > 0 || hasLocationIssue || hasFlightStatus) && (
+                        {(eventAlerts.length > 0 || hasLocationIssue || hasFlightStatus || activeDecision) && (
                           <div className="mt-2 flex flex-wrap gap-2">
+                            {activeDecision && onOpenDecision && (
+                              <ContextChip
+                                icon={<Scale className="h-3 w-3" />}
+                                className="border-violet-100 bg-violet-50 text-violet-800"
+                                onClick={() => onOpenDecision(activeDecision.id)}
+                              >
+                                In decision: {activeDecision.title}
+                              </ContextChip>
+                            )}
                             {eventAlerts.length > 0 && (
                               <ContextChip icon={<Bell className="h-3 w-3" />} className="border-amber-100 bg-amber-50 text-amber-800">
                                 {eventAlerts.length} alert{eventAlerts.length === 1 ? '' : 's'}
@@ -484,6 +739,19 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {isSelectionMode && selectedEventIds.size >= 2 && (
+        <div className="sticky bottom-3 z-20 mt-4 flex justify-center md:bottom-4">
+          <Button
+            type="button"
+            className="rounded-full shadow-lg"
+            onClick={handleCompareSelected}
+          >
+            <Scale className="mr-2 h-4 w-4" />
+            Compare {selectedEventIds.size} as alternatives
+          </Button>
         </div>
       )}
     </section>

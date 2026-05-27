@@ -211,7 +211,14 @@ const normalizeSuggestionSchedule = ({ startDate, startTime, endDate, endTime })
   };
 };
 
-const generateDestinationSuggestions = async ({ existingEvents = [], tripDates, keywords = [], user }) => {
+const generateDestinationSuggestions = async ({
+  existingEvents = [],
+  tripDates,
+  keywords = [],
+  scopedDate,
+  scopedEndDate,
+  user,
+}) => {
   const normalizedKeywords = keywords
     .map(keyword => String(keyword || '').trim())
     .filter(Boolean);
@@ -219,6 +226,37 @@ const generateDestinationSuggestions = async ({ existingEvents = [], tripDates, 
   if (normalizedKeywords.length === 0) {
     throw new Error('At least one activity or destination keyword is required');
   }
+
+  const normalizedScopedEnd = scopedEndDate && scopedEndDate !== scopedDate
+    ? scopedEndDate
+    : undefined;
+  const hasScopedRange = Boolean(scopedDate && normalizedScopedEnd);
+  const hasScopedDay = Boolean(scopedDate && !hasScopedRange);
+
+  const tripStart = tripDates.startDate?.slice(0, 10) || tripDates.startDate;
+  const tripEnd = tripDates.endDate?.slice(0, 10) || tripDates.endDate;
+  let effectiveStart = tripStart;
+  let effectiveEnd = tripEnd;
+
+  if (scopedDate) {
+    effectiveStart = scopedDate;
+    effectiveEnd = normalizedScopedEnd || scopedDate;
+  }
+
+  if (tripStart && effectiveStart < tripStart) effectiveStart = tripStart;
+  if (tripEnd && effectiveEnd > tripEnd) effectiveEnd = tripEnd;
+
+  const scopedDayHint = hasScopedRange
+    ? `Focus suggestions within ${scopedDate} to ${normalizedScopedEnd}. Spread the three suggestions across appropriate days in that window when it makes sense, or keep them on the best-fit days inside the range.`
+    : hasScopedDay
+      ? `Focus suggestions on ${scopedDate}. All three suggestions should be scheduled on ${scopedDate} unless the slot truly spans multiple days.`
+      : 'Spread suggestions across open days when possible.';
+
+  const dateWindowLabel = hasScopedRange
+    ? `${scopedDate} to ${normalizedScopedEnd}`
+    : hasScopedDay
+      ? scopedDate
+      : `${effectiveStart} to ${effectiveEnd}`;
 
   const nonAiSuggestions = existingEvents.filter(event => !event.isAISuggestion);
   const formattedEvents = nonAiSuggestions.map(formatEventForPrompt).join('\n\n');
@@ -232,6 +270,9 @@ const generateDestinationSuggestions = async ({ existingEvents = [], tripDates, 
 
 User interests/keywords: ${keywordList}
 Trip dates: ${tripDates.startDate} to ${tripDates.endDate}
+Target scheduling window: ${dateWindowLabel}
+${hasScopedRange ? `Target date range: ${scopedDate} to ${normalizedScopedEnd}` : ''}
+${hasScopedDay ? `Target day: ${scopedDate}` : ''}
 Trip location context: ${locationContext}
 
 Rules:
@@ -239,11 +280,11 @@ Rules:
 2. Prefer real venues, parks, tour operators, museums, trails, or businesses that match the keywords and trip location.
 3. Include practical details whenever possible: full street address, phone and/or website, opening hours, and booking/reservation notes.
 4. Use "unknown" only when a field truly cannot be determined.
-5. All dates must be between ${tripDates.startDate} and ${tripDates.endDate}.
+5. All event dates must fall within ${effectiveStart} and ${effectiveEnd}, and also within the overall trip dates.
 6. All dates must be YYYY-MM-DD and all times must be HH:mm (24-hour).
 7. Most activities and destinations are single-day: set endDate equal to startDate unless the event truly spans multiple days.
 8. Do not overlap with existing events.
-9. Spread suggestions across open days when possible.
+9. ${scopedDayHint}
 
 Existing events:
 ${formattedEvents || 'None yet'}

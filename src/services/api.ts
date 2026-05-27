@@ -22,6 +22,18 @@ import {
   TripReplanBriefingResponse,
   TripTodayBriefingResponse
 } from '../types/assistantBriefingTypes';
+import {
+  AddHealthDismissalRequest,
+  HealthDismissal,
+} from '../types/tripHealthTypes';
+import {
+  ConfirmDecisionRequest,
+  ConfirmDecisionResponse,
+  CreateDecisionRequest,
+  DecisionSet,
+  GenerateComparisonOverviewResponse,
+  UpdateDecisionRequest,
+} from '../types/decisionTypes';
 import { resolvePublicAppUrl } from '../utils/publicAppUrl';
 
 export interface TripInviteLink {
@@ -118,6 +130,18 @@ interface API {
   updateDreamTripCollaboratorRole: (tripId: string, userId: string, role: 'editor' | 'viewer') => Promise<DreamTrip>;
   getTripNotes: (tripId: string) => Promise<TripNote>;
   updateTripNotes: (tripId: string, content: string) => Promise<TripNote>;
+  getHealthDismissals: (tripId: string) => Promise<HealthDismissal[]>;
+  patchHealthDismissals: (tripId: string, data: AddHealthDismissalRequest) => Promise<HealthDismissal[]>;
+  getDecisions: (tripId: string) => Promise<DecisionSet[]>;
+  createDecision: (tripId: string, data: CreateDecisionRequest) => Promise<DecisionSet[]>;
+  updateDecision: (tripId: string, decisionId: string, data: UpdateDecisionRequest) => Promise<DecisionSet[]>;
+  deleteDecision: (tripId: string, decisionId: string) => Promise<DecisionSet[]>;
+  confirmDecision: (tripId: string, decisionId: string, data: ConfirmDecisionRequest) => Promise<ConfirmDecisionResponse>;
+  generateComparisonOverview: (
+    tripId: string,
+    decisionId: string,
+    options?: { refresh?: boolean },
+  ) => Promise<GenerateComparisonOverviewResponse>;
   getTravelImports: (tripId: string) => Promise<TravelImport[]>;
   createTravelImport: (tripId: string, data: CreateTravelImportRequest) => Promise<TravelImport>;
   updateTravelImport: (tripId: string, importId: string, data: UpdateTravelImportRequest) => Promise<TravelImport>;
@@ -157,6 +181,8 @@ interface API {
     existingEvents: Event[];
     tripDates: { startDate: string; endDate: string };
     keywords: string[];
+    scopedDate?: string;
+    scopedEndDate?: string;
     user: User;
   }) => Promise<Event[]>;
   parseEventFromText: (request: { text: string; trip: Pick<Trip, '_id' | 'name' | 'description' | 'startDate' | 'endDate' | 'events'>; user: User }) => Promise<Event | Event[]>;
@@ -372,7 +398,14 @@ export const api: API = {
       updatedAt: trip.updatedAt,
       isPublic: trip.isPublic,
       status: trip.status || 'planning',
-      tags: trip.tags || []
+      tags: trip.tags || [],
+      healthDismissals: Array.isArray(trip.healthDismissals) ? trip.healthDismissals : [],
+      decisions: Array.isArray(trip.decisions)
+        ? trip.decisions.map((decision: DecisionSet) => ({
+            ...decision,
+            tripId: decision.tripId || trip._id,
+          }))
+        : [],
     };
 
     return transformedTrip;
@@ -1137,6 +1170,127 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to update trip notes');
+    }
+    return response.json();
+  },
+
+  getHealthDismissals: async (tripId: string): Promise<HealthDismissal[]> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/health-dismissals`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to fetch health dismissals');
+    }
+    return response.json();
+  },
+
+  patchHealthDismissals: async (
+    tripId: string,
+    data: AddHealthDismissalRequest,
+  ): Promise<HealthDismissal[]> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/health-dismissals`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to update health dismissals');
+    }
+    return response.json();
+  },
+
+  getDecisions: async (tripId: string): Promise<DecisionSet[]> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/decisions`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to fetch decisions');
+    }
+    return response.json();
+  },
+
+  createDecision: async (tripId: string, data: CreateDecisionRequest): Promise<DecisionSet[]> => {
+    if (!tripId) throw new Error('Trip ID is required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/decisions`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to create decision');
+    }
+    return response.json();
+  },
+
+  updateDecision: async (
+    tripId: string,
+    decisionId: string,
+    data: UpdateDecisionRequest,
+  ): Promise<DecisionSet[]> => {
+    if (!tripId || !decisionId) throw new Error('Trip ID and decision ID are required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/decisions/${decisionId}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to update decision');
+    }
+    return response.json();
+  },
+
+  deleteDecision: async (tripId: string, decisionId: string): Promise<DecisionSet[]> => {
+    if (!tripId || !decisionId) throw new Error('Trip ID and decision ID are required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/decisions/${decisionId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to delete decision');
+    }
+    return response.json();
+  },
+
+  confirmDecision: async (
+    tripId: string,
+    decisionId: string,
+    data: ConfirmDecisionRequest,
+  ): Promise<ConfirmDecisionResponse> => {
+    if (!tripId || !decisionId) throw new Error('Trip ID and decision ID are required');
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/decisions/${decisionId}/confirm`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to confirm decision');
+    }
+    const payload = await response.json();
+    return {
+      decisions: payload.decisions || [],
+      events: normalizeEventDates(payload.events || []),
+    };
+  },
+
+  generateComparisonOverview: async (
+    tripId: string,
+    decisionId: string,
+    options?: { refresh?: boolean },
+  ): Promise<GenerateComparisonOverviewResponse> => {
+    if (!tripId || !decisionId) throw new Error('Trip ID and decision ID are required');
+    const response = await fetch(
+      `${API_URL}/api/trips/${tripId}/decisions/${decisionId}/comparison-overview`,
+      {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ refresh: Boolean(options?.refresh) }),
+      },
+    );
+    if (!response.ok) {
+      await throwApiError(response, 'Failed to generate comparison overview');
     }
     return response.json();
   },

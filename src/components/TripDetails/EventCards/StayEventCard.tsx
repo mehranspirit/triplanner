@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { StayEvent, Event } from '@/types/eventTypes';
+import { StayEvent, Event, Trip } from '@/types/eventTypes';
 import { format, parse, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { 
   Clock, 
@@ -34,15 +34,21 @@ import { openEventInGoogleMaps, eventHasGoogleMapsLocation } from '@/utils/event
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
 import { EventLocationQuickAction } from '@/components/TripDetails/EventLocationSearch';
+import EventVoteControls from './EventVoteControls';
+import { EventVoteAction } from '@/components/TripDetails/hooks/useEventVotes';
 
 interface StayEventCardProps {
   event: StayEvent;
   thumbnail: string;
+  trip?: Trip;
+  currentUserId?: string;
   tripId?: string;
   onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
+  onVote?: (eventId: string, voteType: EventVoteAction) => void;
+  canVote?: boolean;
 }
 
 const renderTextWithLinks = (text: string) => {
@@ -75,11 +81,15 @@ const renderTextWithLinks = (text: string) => {
 const StayEventCard: React.FC<StayEventCardProps> = ({
   event,
   thumbnail,
+  trip,
+  currentUserId,
   tripId,
   onLocationApplied,
   onEdit,
   onDelete,
   onStatusChange,
+  onVote,
+  canVote = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
@@ -492,6 +502,16 @@ const StayEventCard: React.FC<StayEventCardProps> = ({
                 {event.accommodationName}
               </CardTitle>
             </div>
+
+            {isExploring && trip && onVote && (
+              <EventVoteControls
+                event={event}
+                trip={trip}
+                currentUserId={currentUserId}
+                onVote={onVote}
+                readOnly={!canVote}
+              />
+            )}
 
             <div className="flex items-center text-sm space-x-2">
               <Clock className={cn(

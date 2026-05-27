@@ -6,7 +6,7 @@ import { Trip, Event, EventType, User } from '@/types/eventTypes'; // Ensure thi
 import { useAuth } from '@/context/AuthContext';
 import { useTrip } from '@/context/TripContext'; // Corrected import
 import { getDefaultThumbnail, getEventThumbnail } from './thumbnailHelpers';
-import { exportHtml, ItineraryExportMode } from './exportHelpers';
+import { exportHtml, ItineraryExportOptions } from './exportHelpers';
 import { v4 as uuidv4 } from 'uuid';
 import { syncEventLocationOnSave } from '@/utils/eventLocation';
 import { normalizeActivityDestinationSchedule } from '@/utils/eventTime';
@@ -209,9 +209,9 @@ export const useTripDetails = () => {
   }, [trip, handleTripUpdate, tripContext, fetchTrip]);
   
   // --- Export --- 
-  const handleExportHTML = useCallback((mode: ItineraryExportMode = 'detailed') => {
+  const handleExportHTML = useCallback((options: ItineraryExportOptions = { mode: 'detailed' }) => {
       if (!trip) return;
-      exportHtml(trip, eventThumbnails, mode);
+      exportHtml(trip, eventThumbnails, options);
   }, [trip, eventThumbnails]);
   
   // --- Permissions ---
@@ -222,6 +222,10 @@ export const useTripDetails = () => {
   // Ensure collaborator is the correct type before accessing role
   const role = (typeof collaborator === 'object' && collaborator !== null && 'role' in collaborator) ? collaborator.role : undefined;
   const canEdit = isOwner || role === 'editor';
+
+  const patchTripLocal = useCallback((updates: Partial<Trip>) => {
+    setTrip((prev) => (prev ? { ...prev, ...updates } : prev));
+  }, []);
 
   // --- Return values ---
   return {
@@ -240,7 +244,8 @@ export const useTripDetails = () => {
     canEdit: !!user && (isOwner || canEdit),
     isOwner: !!user && isOwner,
     user,
-    handleTripUpdate
+    handleTripUpdate,
+    patchTripLocal,
   };
 };
 

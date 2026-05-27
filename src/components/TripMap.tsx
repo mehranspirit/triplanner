@@ -462,6 +462,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   const [unmappedEvents, setUnmappedEvents] = useState<{ eventId: string; label: string; reason: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAlternatives, setShowAlternatives] = useState(false);
   const mapRef = useRef<LeafletMap | null>(null);
   const loadingRef = useRef<boolean>(true); // Add ref to track loading state
   const routeEndpointEventTypes = new Set<EventType>(['flight', 'train', 'bus', 'rental_car']);
@@ -526,7 +527,14 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
     return 'confirmed';
   };
 
-  const mapRelevantData = useMemo(() => extractMapRelevantData(trip), [
+  const mapRelevantData = useMemo(() => {
+    const filteredEvents = showAlternatives
+      ? trip.events
+      : trip.events.filter((event) => event.status !== 'alternative');
+
+    return extractMapRelevantData({ ...trip, events: filteredEvents });
+  }, [
+    showAlternatives,
     trip._id,
     trip.name,
     trip.events.map(event => {
@@ -965,9 +973,9 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                           <div className="mt-1 text-sm text-gray-600">{eventDetails.additionalInfo}</div>
                         )}
                         <div className={`mt-1 text-sm font-medium ${
-                          isConfirmed ? 'text-blue-600' : 'text-green-600'
+                          isConfirmed ? 'text-blue-600' : originalEvent?.status === 'alternative' ? 'text-violet-600' : 'text-green-600'
                         }`}>
-                          {isConfirmed ? 'Confirmed' : 'Exploring'}
+                          {isConfirmed ? 'Confirmed' : originalEvent?.status === 'alternative' ? 'Alternative' : 'Exploring'}
                         </div>
                       </div>
                     );
@@ -1007,6 +1015,20 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
                 <div className="w-4 h-4 bg-green-500 rounded-full"></div>
                 <span className="text-sm">Exploring Event</span>
               </div>
+              <label className="flex cursor-pointer items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  checked={showAlternatives}
+                  onChange={(event) => setShowAlternatives(event.target.checked)}
+                />
+                <span className="text-sm">Show archived alternatives</span>
+              </label>
+              {showAlternatives && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-violet-500 rounded-full"></div>
+                  <span className="text-sm">Archived alternative</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

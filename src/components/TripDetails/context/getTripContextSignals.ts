@@ -1,4 +1,5 @@
 import { Trip } from '@/types/eventTypes';
+import { TripHealthResult } from '@/types/tripHealthTypes';
 import { eventHasLocationAttention } from '@/utils/eventLocation';
 import { getMissingLocationInsightId } from '@/services/tripInsights';
 import { TripInsight } from '@/types/insightTypes';
@@ -63,6 +64,7 @@ const getTravelStatusCount = (
 const getPhaseWeight = (phase: TripPhase, type: ProactiveContextCard['type']) => {
   const weights: Record<TripPhase, Partial<Record<ProactiveContextCard['type'], number>>> = {
     before: {
+      trip_health: -45,
       pending_imports: -30,
       location_issues: -25,
       next_up: -10,
@@ -78,6 +80,7 @@ const getPhaseWeight = (phase: TripPhase, type: ProactiveContextCard['type']) =>
       urgent_insights: -15,
     },
     unscheduled: {
+      trip_health: -20,
       location_issues: -15,
       pending_imports: -10,
     },
@@ -95,6 +98,7 @@ export const getTripContextSignals = ({
   flightStatusSnapshots,
   dismissedInsightIds = [],
   dismissedContextCardTypes = [],
+  tripHealth = null,
   now = new Date(),
 }: {
   trip: Trip;
@@ -105,6 +109,7 @@ export const getTripContextSignals = ({
   flightStatusSnapshots: FlightStatusSnapshot[];
   dismissedInsightIds?: string[];
   dismissedContextCardTypes?: ProactiveContextCardType[];
+  tripHealth?: TripHealthResult | null;
   now?: Date;
 }): TripContextSignals => {
   const phase = getTripPhase(trip, now);
@@ -124,6 +129,23 @@ export const getTripContextSignals = ({
   const travelStatusCount = getTravelStatusCount(flightStatusSnapshots, weatherSnapshots);
 
   const cards: ProactiveContextCard[] = [];
+
+  if (
+    (phase === 'before' || phase === 'unscheduled')
+    && tripHealth
+    && tripHealth.summary.openIssueCount > 0
+    && !dismissedContextCardTypes.includes('trip_health')
+  ) {
+    cards.push({
+      type: 'trip_health',
+      title: 'Trip health',
+      description: `${tripHealth.summary.openIssueCount} open issue${tripHealth.summary.openIssueCount === 1 ? '' : 's'} · ${tripHealth.summary.headlineScore}% ready`,
+      value: tripHealth.summary.headlineScore,
+      healthScore: tripHealth.summary.headlineScore,
+      actionLabel: 'Open planning',
+      priority: 15,
+    });
+  }
 
   if (nextEvent) {
     cards.push({
@@ -183,14 +205,17 @@ export const getTripContextSignals = ({
   }
 
   if (urgentInsightCount > 0 && !dismissedContextCardTypes.includes('urgent_insights')) {
-    cards.push({
-      type: 'urgent_insights',
-      title: 'Needs attention',
-      description: `${urgentInsightCount} planning issue${urgentInsightCount === 1 ? '' : 's'} detected`,
-      value: urgentInsightCount,
-      actionLabel: 'Review',
-      priority: 30,
-    });
+    const hasTripHealthCard = cards.some((card) => card.type === 'trip_health');
+    if (!hasTripHealthCard) {
+      cards.push({
+        type: 'urgent_insights',
+        title: 'Needs attention',
+        description: `${urgentInsightCount} planning issue${urgentInsightCount === 1 ? '' : 's'} detected`,
+        value: urgentInsightCount,
+        actionLabel: 'Review',
+        priority: 30,
+      });
+    }
   }
 
   if ((phase === 'during' || todayEvents.length > 0) && travelStatusCount > 0) {

@@ -13,12 +13,16 @@ import {
 import TripChecklist from '../TripChecklist';
 import InTripAssistant from '../InTripAssistant';
 import TripNotifications from '../TripNotifications';
+import PlanningPanel from './PlanningPanel';
 import TripSheet from './TripSheet';
-import { TripPanel } from '../hooks/useTripPanelManager';
+import { TripPanel, TripPanelOptions } from '../hooks/useTripPanelManager';
 import { cn } from '@/lib/utils';
+import { ResolutionAction, HealthDismissalReason } from '@/types/tripHealthTypes';
+import { TripHealthSummary, TripHealthIssue } from '@/types/tripHealthTypes';
 
 interface TripPanelHostProps {
   activePanel: TripPanel | null;
+  panelOptions?: TripPanelOptions;
   trip: Trip;
   canEdit: boolean;
   insights: TripInsight[];
@@ -47,6 +51,12 @@ interface TripPanelHostProps {
   onGenerateReplanBriefing: () => void;
   onEditEvent: (event: Trip['events'][number]) => void;
   onDismissInsight?: (insightId: string) => void;
+  tripHealthSummary: TripHealthSummary;
+  tripHealthIssues: TripHealthIssue[];
+  isComputingTripHealth?: boolean;
+  onExecuteHealthResolution: (action: ResolutionAction, payload?: Record<string, unknown>) => void;
+  onOpenDecision: (decisionId: string) => void;
+  onCreateDecision: () => void;
 }
 
 const panelCopy: Record<TripPanel, { title: string; description: string; className?: string }> = {
@@ -73,6 +83,11 @@ const panelCopy: Record<TripPanel, { title: string; description: string; classNa
     description: 'Map view of trip events.',
     className: 'md:w-[560px]',
   },
+  planning: {
+    title: 'Planning',
+    description: 'Trip health, open decisions, and planning readiness.',
+    className: 'md:w-[480px]',
+  },
 };
 
 const panelGroups: Array<{
@@ -89,6 +104,7 @@ const panelGroups: Array<{
   {
     label: 'Plan',
     panels: [
+      { id: 'planning', label: 'Planning' },
       { id: 'checklist', label: 'Checklist' },
       { id: 'notes', label: 'Notes' },
     ],
@@ -104,6 +120,7 @@ const panelGroups: Array<{
 const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
   const {
     activePanel,
+    panelOptions = {},
     trip,
     canEdit,
     insights,
@@ -132,6 +149,12 @@ const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
     onGenerateReplanBriefing,
     onEditEvent,
     onDismissInsight,
+    tripHealthSummary,
+    tripHealthIssues,
+    isComputingTripHealth = false,
+    onExecuteHealthResolution,
+    onOpenDecision,
+    onCreateDecision,
   } = props;
 
   if (!activePanel) return null;
@@ -244,6 +267,19 @@ const TripPanelHost: React.FC<TripPanelHostProps> = (props) => {
         <div className="h-full overflow-hidden">
           <TripMap trip={trip} />
         </div>
+      )}
+      {activePanel === 'planning' && (
+        <PlanningPanel
+          trip={trip}
+          summary={tripHealthSummary}
+          issues={tripHealthIssues}
+          isLoading={isComputingTripHealth}
+          canEdit={canEdit}
+          highlightIssueId={panelOptions.issueId}
+          onExecuteResolution={onExecuteHealthResolution}
+          onOpenDecision={onOpenDecision}
+          onCreateDecision={onCreateDecision}
+        />
       )}
       </div>
       </div>

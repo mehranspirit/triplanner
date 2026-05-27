@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Event, ActivityEvent } from '@/types/eventTypes';
+import { Event, ActivityEvent, Trip } from '@/types/eventTypes';
 import { format, parse } from 'date-fns';
 import { 
   Clock, 
@@ -23,26 +23,36 @@ import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { formatCurrency } from '@/utils/format';
 import EventCardActions from './EventCardActions';
 import EventCardShell from './EventCardShell';
+import EventVoteControls from './EventVoteControls';
+import { EventVoteAction } from '@/components/TripDetails/hooks/useEventVotes';
 import { EventLocationQuickAction } from '@/components/TripDetails/EventLocationSearch';
 
 interface ActivityEventCardProps {
   event: ActivityEvent;
   thumbnail: string;
+  trip?: Trip;
+  currentUserId?: string;
   tripId?: string;
   onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
+  onVote?: (eventId: string, voteType: EventVoteAction) => void;
+  canVote?: boolean;
 }
 
 const ActivityEventCard: React.FC<ActivityEventCardProps> = ({
   event,
   thumbnail,
+  trip,
+  currentUserId,
   tripId,
   onLocationApplied,
   onEdit,
   onDelete,
   onStatusChange,
+  onVote,
+  canVote = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
@@ -247,6 +257,16 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({
                 {event.title}
               </CardTitle>
             </div>
+
+            {isExploring && trip && onVote && (
+              <EventVoteControls
+                event={event}
+                trip={trip}
+                currentUserId={currentUserId}
+                onVote={onVote}
+                readOnly={!canVote}
+              />
+            )}
             
             <div className={cn(
               "text-xs mb-2 transition-all duration-200",

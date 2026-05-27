@@ -18,6 +18,11 @@ import {
 import { cn } from '@/lib/utils';
 import { getGoogleMapsSearchUrl } from '@/utils/eventLocation';
 import { getTripStatusSummary } from '@/services/tripStatus';
+import {
+  getDirectionsUrl,
+  getTransferSummary,
+  TransferSummary,
+} from '@/utils/transferAnalysis';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
 import { TripReplanBriefing, TripTodayBriefing } from '@/types/assistantBriefingTypes';
 
@@ -50,28 +55,6 @@ const isSameLocalDay = (a: Date, b: Date) => {
     a.getDate() === b.getDate()
   );
 };
-
-const getDirectionsUrl = (from: RoutePoint, to: RoutePoint) => {
-  const origin = `${from.lat},${from.lng}`;
-  const destination = `${to.lat},${to.lng}`;
-  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
-};
-
-interface RoutePoint {
-  lat: number;
-  lng: number;
-}
-
-interface TransferSummary {
-  from: Event;
-  to: Event;
-  fromPoint: RoutePoint;
-  toPoint: RoutePoint;
-  gapMinutes: number;
-  estimatedTravelMinutes: number;
-  distanceMiles: number;
-  severity: 'ok' | 'tight' | 'long';
-}
 
 const copyText = async (text: string) => {
   if (!navigator.clipboard) return;
@@ -148,107 +131,6 @@ const FlightStatusRows: React.FC<{ snapshots: FlightStatusSnapshot[] }> = ({ sna
       })}
     </div>
   );
-};
-
-const getUsableEventLocation = (event: Event): RoutePoint | null => {
-  if (
-    !event.location ||
-    !event.location.lat ||
-    !event.location.lng ||
-    event.location.lat === 0 ||
-    event.location.lng === 0
-  ) {
-    return null;
-  }
-
-  return { lat: event.location.lat, lng: event.location.lng };
-};
-
-const getFlightEndpointPoint = (
-  event: Event,
-  role: 'departure' | 'arrival',
-  weatherSnapshots: WeatherSnapshot[]
-): RoutePoint | null => {
-  if (event.type !== 'flight') return null;
-
-  const snapshot = weatherSnapshots.find((item) => (
-    (item.originalEventId || item.eventId) === event.id &&
-    item.locationRole === role &&
-    item.lat &&
-    item.lng
-  ));
-
-  return snapshot ? { lat: snapshot.lat, lng: snapshot.lng } : null;
-};
-
-const getRoutePoint = (
-  event: Event,
-  side: 'from' | 'to',
-  weatherSnapshots: WeatherSnapshot[]
-): RoutePoint | null => {
-  if (event.type === 'flight') {
-    return getFlightEndpointPoint(event, side === 'from' ? 'arrival' : 'departure', weatherSnapshots);
-  }
-
-  return getUsableEventLocation(event);
-};
-
-const getDistanceKm = (from: RoutePoint, to: RoutePoint) => {
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const earthRadiusKm = 6371;
-  const dLat = toRadians(to.lat - from.lat);
-  const dLng = toRadians(to.lng - from.lng);
-  const lat1 = toRadians(from.lat);
-  const lat2 = toRadians(to.lat);
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
-const estimateTravelMinutes = (distanceKm: number) => {
-  return Math.ceil((distanceKm / 40) * 60 + 15);
-};
-
-const getTransferSummary = (
-  from: Event,
-  to: Event,
-  weatherSnapshots: WeatherSnapshot[]
-): TransferSummary | null => {
-  const fromEnd = getEventEnd(from);
-  const toStart = getEventStart(to);
-  if (!fromEnd || !toStart) return null;
-
-  const gapMinutes = Math.round((toStart.getTime() - fromEnd.getTime()) / (60 * 1000));
-  if (gapMinutes < 0) return null;
-
-  const fromPoint = getRoutePoint(from, 'from', weatherSnapshots);
-  const toPoint = getRoutePoint(to, 'to', weatherSnapshots);
-  if (!fromPoint || !toPoint) return null;
-
-  const distanceKm = getDistanceKm(fromPoint, toPoint);
-  if (distanceKm < 2) return null;
-
-  const estimatedTravelMinutes = estimateTravelMinutes(distanceKm);
-  const severity = gapMinutes < estimatedTravelMinutes
-    ? 'tight'
-    : distanceKm >= 50 && gapMinutes < estimatedTravelMinutes + 45
-      ? 'long'
-      : 'ok';
-
-  return {
-    from,
-    to,
-    fromPoint,
-    toPoint,
-    gapMinutes,
-    estimatedTravelMinutes,
-    distanceMiles: Math.round(distanceKm * 0.621371),
-    severity,
-  };
 };
 
 const TransferRow: React.FC<{ transfer: TransferSummary; onEditEvent: (event: Event) => void }> = ({

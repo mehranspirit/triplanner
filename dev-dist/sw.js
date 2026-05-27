@@ -82,7 +82,7 @@ define(['./workbox-524de8a6'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "index.html",
-    "revision": "0.25odbg13re"
+    "revision": "0.rqltn5fj7ng"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
@@ -97,7 +97,7 @@ define(['./workbox-524de8a6'], (function (workbox) { 'use strict';
       maxRetentionTime: 1440
     })]
   }), 'GET');
-  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+$/, new workbox.NetworkFirst({
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^/]+$/, new workbox.NetworkFirst({
     "cacheName": "trip-details-cache",
     "networkTimeoutSeconds": 10,
     plugins: [new workbox.CacheableResponsePlugin({
@@ -106,7 +106,7 @@ define(['./workbox-524de8a6'], (function (workbox) { 'use strict';
       maxRetentionTime: 1440
     })]
   }), 'GET');
-  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/expenses/, new workbox.NetworkFirst({
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^/]+\/expenses/, new workbox.NetworkFirst({
     "cacheName": "expenses-api-cache",
     "networkTimeoutSeconds": 8,
     plugins: [new workbox.CacheableResponsePlugin({
@@ -115,7 +115,7 @@ define(['./workbox-524de8a6'], (function (workbox) { 'use strict';
       maxRetentionTime: 1440
     })]
   }), 'GET');
-  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/settlements/, new workbox.NetworkFirst({
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^/]+\/settlements/, new workbox.NetworkFirst({
     "cacheName": "settlements-api-cache",
     "networkTimeoutSeconds": 8,
     plugins: [new workbox.CacheableResponsePlugin({
@@ -124,7 +124,7 @@ define(['./workbox-524de8a6'], (function (workbox) { 'use strict';
       maxRetentionTime: 1440
     })]
   }), 'GET');
-  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/notes/, new workbox.NetworkFirst({
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^/]+\/notes/, new workbox.NetworkFirst({
     "cacheName": "notes-api-cache",
     "networkTimeoutSeconds": 8,
     plugins: [new workbox.CacheableResponsePlugin({
@@ -133,7 +133,7 @@ define(['./workbox-524de8a6'], (function (workbox) { 'use strict';
       maxRetentionTime: 1440
     })]
   }), 'GET');
-  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^\/]+\/checklist/, new workbox.NetworkFirst({
+  workbox.registerRoute(/^https?:\/\/.*\/api\/trips\/[^/]+\/checklist/, new workbox.NetworkFirst({
     "cacheName": "checklist-api-cache",
     "networkTimeoutSeconds": 8,
     plugins: [new workbox.CacheableResponsePlugin({

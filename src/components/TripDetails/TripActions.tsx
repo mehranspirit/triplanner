@@ -26,7 +26,7 @@ import { Trash2, Edit, MoreHorizontal, Sparkles, DollarSign, Download, Users, Fi
 import CollaboratorModal from '../CollaboratorModal';
 import TripEditModal from './TripEditModal';
 import AISuggestionsModal from './AISuggestionsModal';
-import { ItineraryExportMode } from './exportHelpers';
+import { ItineraryExportOptions } from './exportHelpers';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -67,7 +67,7 @@ interface TripActionsProps {
   trip: EventTypesTrip;
   isOwner: boolean;
   canEdit: boolean;
-  onExport: (mode: ItineraryExportMode) => void;
+  onExport: (options: ItineraryExportOptions) => void;
   onTripUpdate: (trip: EventTypesTrip) => Promise<void>;
   className?: string;
 }
@@ -171,13 +171,22 @@ const TripActions: React.FC<TripActionsProps> = ({
                 <span>Export Itinerary</span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                <DropdownMenuItem onClick={() => onExport('detailed')}>
+                <DropdownMenuItem onClick={() => onExport({ mode: 'detailed' })}>
                   <FileText className="mr-2 h-4 w-4" />
                   <span>Detailed</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onExport('compact')}>
+                <DropdownMenuItem onClick={() => onExport({ mode: 'compact' })}>
                   <Minimize2 className="mr-2 h-4 w-4" />
                   <span>Compact (PDF-friendly)</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onExport({ mode: 'detailed', excludeAlternatives: true })}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Detailed (confirmed only)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onExport({ mode: 'compact', excludeAlternatives: true })}>
+                  <Minimize2 className="mr-2 h-4 w-4" />
+                  <span>Compact (confirmed only)</span>
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -254,13 +263,22 @@ const TripActions: React.FC<TripActionsProps> = ({
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>Export itinerary</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onExport('detailed')}>
+            <DropdownMenuItem onClick={() => onExport({ mode: 'detailed' })}>
               <FileText className="mr-2 h-4 w-4" />
               <span>Detailed</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onExport('compact')}>
+            <DropdownMenuItem onClick={() => onExport({ mode: 'compact' })}>
               <Minimize2 className="mr-2 h-4 w-4" />
               <span>Compact (PDF-friendly)</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onExport({ mode: 'detailed', excludeAlternatives: true })}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Detailed (confirmed only)</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onExport({ mode: 'compact', excludeAlternatives: true })}>
+              <Minimize2 className="mr-2 h-4 w-4" />
+              <span>Compact (confirmed only)</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

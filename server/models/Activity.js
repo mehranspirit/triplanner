@@ -34,7 +34,11 @@ const ActivitySchema = new Schema({
       'collaborator_invite_accept',
       'event_like',
       'event_dislike',
-      'event_vote_remove'
+      'event_vote_remove',
+      'decision_created',
+      'decision_closed',
+      'decision_deleted',
+      'winner_confirmed',
     ],
     required: true
   },

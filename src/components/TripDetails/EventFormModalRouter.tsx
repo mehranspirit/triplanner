@@ -13,6 +13,7 @@ import TrainFormModal from './EventFormModals/TrainFormModal';
 interface EventFormModalRouterProps {
   modalType: EventType | null;
   editingEvent: Event | null;
+  draftEvent?: Partial<Event> | null;
   onClose: () => void;
   onSave: (event: any) => void | Promise<void>;
 }
@@ -20,14 +21,16 @@ interface EventFormModalRouterProps {
 const EventFormModalRouter: React.FC<EventFormModalRouterProps> = ({
   modalType,
   editingEvent,
+  draftEvent = null,
   onClose,
   onSave,
 }) => {
+  const eventToEdit = editingEvent ?? (draftEvent as Event | null) ?? null;
   const commonProps = {
     isOpen: Boolean(modalType),
     onClose,
     onSave,
-    eventToEdit: editingEvent as any,
+    eventToEdit: eventToEdit as any,
   };
 
   switch (modalType) {

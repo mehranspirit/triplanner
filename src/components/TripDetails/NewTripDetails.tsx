@@ -1,8 +1,8 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTripDetails } from './hooks';
 import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
-import { Event, EventType } from '@/types/eventTypes'; // Import EventType
+import { Event, EventType, Trip } from '@/types/eventTypes'; // Import EventType
 import { cn } from '@/lib/utils';
 import ExploreSuggestionsModal from '@/components/TripDetails/ExploreSuggestionsModal';
 import ReviewUnresolvedLocationsDialog from '@/components/TripDetails/ReviewUnresolvedLocationsDialog';
@@ -18,6 +18,23 @@ import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
 import { ProactiveContextCard as ProactiveContextCardData, ProactiveContextCardType } from '@/components/TripDetails/context/tripContextTypes';
 import { generateTripInsights, getMissingLocationInsightId } from '@/services/tripInsights';
+import { computeTripHealth } from '@/services/tripHealth';
+import { executeResolution, ExploreScope } from '@/services/resolutionDispatcher';
+import { HealthDismissalReason, ResolutionAction } from '@/types/tripHealthTypes';
+import { buildEventDraftFromPrefill } from '@/utils/eventFormPrefill';
+import { useEventVotes } from '@/components/TripDetails/hooks/useEventVotes';
+import { useDecisions } from '@/components/TripDetails/hooks/useDecisions';
+import DecisionComparisonView from '@/components/TripDetails/decisions/DecisionComparisonView';
+import CreateDecisionDialog from '@/components/TripDetails/decisions/CreateDecisionDialog';
+import AddDecisionOptionDialog from '@/components/TripDetails/decisions/AddDecisionOptionDialog';
+import {
+  getExploreScopeForDecisionEvent,
+  getOrphanExploringEvents,
+  inferDecisionSlotFromEvents,
+  normalizePreselectedDecisionIds,
+  suggestDecisionTitle,
+} from '@/utils/decisionHelpers';
+import { DecisionLoserAction } from '@/types/decisionTypes';
 import { eventNeedsMapLocation } from '@/utils/eventLocation';
 import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/travelImportValidation';
 import { api } from '@/services/api';
@@ -115,6 +132,7 @@ const NewTripDetails: React.FC = () => {
     isOwner, 
     user,
     handleTripUpdate,
+    patchTripLocal,
     fetchTrip
   } = useTripDetails();
 
@@ -125,8 +143,9 @@ const NewTripDetails: React.FC = () => {
 
   const [modalType, setModalType] = useState<EventType | null>(null); // State to track which modal to show
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [eventFormDraft, setEventFormDraft] = useState<Partial<Event> | null>(null);
   const [isCondensedView, setIsCondensedView] = useState(false);
-  const { activePanel, openPanel, closePanel } = useTripPanelManager();
+  const { activePanel, panelOptions, openPanel, closePanel } = useTripPanelManager();
   const [notifications, setNotifications] = useState<TripNotification[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference | null>(null);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
@@ -169,6 +188,12 @@ const NewTripDetails: React.FC = () => {
   const [deletingEvents, setDeletingEvents] = useState<Set<string>>(new Set());
   const [isReviewUnresolvedOpen, setIsReviewUnresolvedOpen] = useState(false);
   const [isExploreSuggestionsOpen, setIsExploreSuggestionsOpen] = useState(false);
+  const [exploreScope, setExploreScope] = useState<ExploreScope | null>(null);
+  const [activeDecisionId, setActiveDecisionId] = useState<string | null>(null);
+  const [isCreateDecisionOpen, setIsCreateDecisionOpen] = useState(false);
+  const [createDecisionPreselectedIds, setCreateDecisionPreselectedIds] = useState<string[]>([]);
+  const [isAddDecisionOptionOpen, setIsAddDecisionOptionOpen] = useState(false);
+  const [decisionActionError, setDecisionActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dismissedInsightIds, setDismissedInsightIds] = useState<string[]>([]);
   const [dismissedContextCardTypes, setDismissedContextCardTypes] = useState<ProactiveContextCardType[]>([]);
@@ -180,6 +205,55 @@ const NewTripDetails: React.FC = () => {
     () => tripInsights.filter(insight => !dismissedInsightIds.includes(insight.id)),
     [tripInsights, dismissedInsightIds]
   );
+  const tripHealth = useMemo(
+    () => (trip
+      ? computeTripHealth({
+          trip,
+          dismissals: trip.healthDismissals ?? [],
+          decisions: trip.decisions ?? [],
+          weatherSnapshots,
+        })
+      : null),
+    [trip, weatherSnapshots],
+  );
+  const { handleVote } = useEventVotes(trip, replaceTripEvents);
+
+  const handleDecisionsUpdated = useCallback(async (
+    updates: Partial<Pick<Trip, 'decisions' | 'events'>>,
+  ) => {
+    if (!trip) return;
+
+    // Decisions are persisted via dedicated API routes — merge locally only.
+    if (updates.events) {
+      await handleTripUpdate(updates);
+      return;
+    }
+
+    if (updates.decisions) {
+      patchTripLocal({ decisions: updates.decisions });
+    }
+  }, [trip, handleTripUpdate, patchTripLocal]);
+
+  const {
+    createDecision,
+    updateDecision,
+    deleteDecision,
+    confirmDecision,
+    generateComparisonOverview,
+  } = useDecisions(trip, handleDecisionsUpdated);
+
+  const activeDecision = useMemo(
+    () => trip?.decisions?.find((decision) => decision.id === activeDecisionId) ?? null,
+    [trip?.decisions, activeDecisionId],
+  );
+
+  useEffect(() => {
+    if (!panelOptions.issueId?.startsWith('open_decision:')) return;
+    const decisionId = panelOptions.issueId.slice('open_decision:'.length);
+    if (decisionId) {
+      setActiveDecisionId(decisionId);
+    }
+  }, [panelOptions.issueId]);
 
   useEffect(() => {
     setDismissedInsightIds((current) => (
@@ -196,8 +270,9 @@ const NewTripDetails: React.FC = () => {
       flightStatusSnapshots,
       dismissedInsightIds,
       dismissedContextCardTypes,
+      tripHealth,
     }) : null,
-    [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots, dismissedInsightIds, dismissedContextCardTypes]
+    [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots, dismissedInsightIds, dismissedContextCardTypes, tripHealth]
   );
   const unreadNotificationCount = notifications.filter(notification => !notification.readAt).length;
   const handledAssistantChecklistItemIds = assistantSuggestionFeedback
@@ -678,20 +753,221 @@ const NewTripDetails: React.FC = () => {
     }
   };
 
-  const handleAddEventClick = (type: EventType) => {
+  const handleOpenDecision = useCallback((decisionId: string) => {
+    setActiveDecisionId(decisionId);
+    openPanel('planning');
+  }, [openPanel]);
+
+  const handleOpenHealthIssue = useCallback((issueId: string) => {
+    openPanel('planning', { issueId });
+  }, [openPanel]);
+
+  const handleCreateDecisionClick = useCallback((preselectedEventIds: string[] = []) => {
+    if (trip) {
+      const orphanEvents = getOrphanExploringEvents(trip);
+      setCreateDecisionPreselectedIds(
+        normalizePreselectedDecisionIds(orphanEvents, preselectedEventIds),
+      );
+    } else {
+      setCreateDecisionPreselectedIds(preselectedEventIds);
+    }
+    setIsCreateDecisionOpen(true);
+    openPanel('planning');
+  }, [openPanel, trip]);
+
+  const handleExploreDecisionAlternative = useCallback((event: Event) => {
+    const scope = getExploreScopeForDecisionEvent(event);
+    setExploreScope({
+      date: scope.date,
+      endDate: scope.endDate,
+      defaultKeywords: scope.defaultKeywords,
+    });
+    setIsCreateDecisionOpen(false);
+    setIsExploreSuggestionsOpen(true);
+  }, []);
+
+  const handleCreateDecision = useCallback(async (payload: {
+    title: string;
+    optionEventIds: string[];
+    slot?: { date?: string; endDate?: string; label?: string };
+  }) => {
+    setDecisionActionError(null);
+    const decisions = await createDecision(payload);
+    if (!decisions?.length) {
+      throw new Error('Failed to create decision');
+    }
+
+    const created = decisions.find((decision) => (
+      decision.optionEventIds.length === payload.optionEventIds.length
+      && payload.optionEventIds.every((eventId) => decision.optionEventIds.includes(eventId))
+    )) ?? decisions[decisions.length - 1];
+
+    const hasOverview = Boolean(
+      created.comparisonOverview && !created.comparisonOverview.stale,
+    );
+
+    if (!hasOverview) {
+      try {
+        await generateComparisonOverview(created.id);
+      } catch (error) {
+        setDecisionActionError(
+          error instanceof Error ? error.message : 'Failed to generate comparison overview',
+        );
+      }
+    }
+
+    setActiveDecisionId(created.id);
+    setIsCreateDecisionOpen(false);
+  }, [createDecision, generateComparisonOverview]);
+
+  const handleRemoveDecisionOption = useCallback(async (decisionId: string, eventId: string) => {
+    setDecisionActionError(null);
+    await updateDecision(decisionId, { removeOptionEventIds: [eventId] });
+  }, [updateDecision]);
+
+  const handleAddDecisionOption = useCallback(async (eventId: string) => {
+    if (!activeDecisionId) return;
+    setDecisionActionError(null);
+    await updateDecision(activeDecisionId, { addOptionEventIds: [eventId] });
+  }, [activeDecisionId, updateDecision]);
+
+  const handleExploreNewDecisionOption = useCallback(() => {
+    if (!activeDecision) return;
+    setExploreScope(activeDecision.slot?.date ? {
+      date: activeDecision.slot.date,
+      endDate: activeDecision.slot.endDate,
+    } : null);
+    setIsExploreSuggestionsOpen(true);
+  }, [activeDecision]);
+
+  const handleOpenAddDecisionOption = useCallback((decisionId: string) => {
+    setActiveDecisionId(decisionId);
+    setIsAddDecisionOptionOpen(true);
+  }, []);
+
+  const handleGenerateComparisonOverview = useCallback(async (
+    decisionId: string,
+    options?: { refresh?: boolean },
+  ) => {
+    setDecisionActionError(null);
+    await generateComparisonOverview(decisionId, options);
+  }, [generateComparisonOverview]);
+
+  const handleDeferDecision = useCallback(async (decisionId: string) => {
+    setDecisionActionError(null);
+    await updateDecision(decisionId, { status: 'deferred' });
+  }, [updateDecision]);
+
+  const handleDeleteDecision = useCallback(async (decisionId: string) => {
+    setDecisionActionError(null);
+    await deleteDecision(decisionId);
+    if (activeDecisionId === decisionId) {
+      setActiveDecisionId(null);
+    }
+  }, [deleteDecision, activeDecisionId]);
+
+  const handleConfirmDecision = useCallback(async (
+    decisionId: string,
+    winnerEventId: string,
+    loserAction: DecisionLoserAction,
+  ) => {
+    setDecisionActionError(null);
+    await confirmDecision(decisionId, { winnerEventId, loserAction });
+    setActiveDecisionId(null);
+  }, [confirmDecision]);
+
+  const handleAddEventClick = useCallback((type: EventType, prefill?: Record<string, unknown>) => {
     setEditingEvent(null);
+    setEventFormDraft(
+      trip ? buildEventDraftFromPrefill(type, prefill, trip.events) : null,
+    );
     setModalType(type);
-  };
+  }, [trip]);
 
   const handleEditEventClick = (event: Event) => {
+    setEventFormDraft(null);
     setEditingEvent(event);
     setModalType(event.type); // Open the modal corresponding to the event type
     // setIsModalOpen(true); // No longer needed
   };
 
+  const handleDismissHealthIssue = useCallback(async (
+    issueKey: string,
+    reason: HealthDismissalReason,
+    note?: string,
+    reopenBeforeTripDays?: number,
+  ) => {
+    if (!trip?._id) return;
+
+    const dismissals = await api.patchHealthDismissals(trip._id, {
+      issueKey,
+      reason,
+      note,
+      reopenBeforeTripDays,
+    });
+    await handleTripUpdate({ healthDismissals: dismissals });
+  }, [trip?._id, handleTripUpdate]);
+
+  const handleExecuteHealthResolution = useCallback(async (
+    action: ResolutionAction,
+    payload?: Record<string, unknown>,
+  ) => {
+    if (!trip) return;
+
+    await executeResolution(action, payload, {
+      tripId: trip._id,
+      openPanel,
+      onAddEvent: handleAddEventClick,
+      onEditEvent: (eventId) => {
+        const event = trip.events.find((candidate) => candidate.id === eventId);
+        if (event) {
+          handleEditEventClick(event);
+        }
+      },
+      onOpenExplore: (scope) => {
+        setExploreScope(scope ?? null);
+        setIsExploreSuggestionsOpen(true);
+      },
+      onReviewLocation: (eventId) => {
+        const event = trip.events.find((candidate) => candidate.id === eventId);
+        if (event) {
+          locationConfirmQueue.startUnresolvedReview([event]);
+        }
+      },
+      onOpenImport: () => setIsAIParseModalOpen(true),
+      onOpenDecision: (decisionId) => {
+        if (decisionId) {
+          handleOpenDecision(decisionId);
+        } else {
+          openPanel('planning');
+        }
+      },
+      onDeferDecision: handleDeferDecision,
+      onCreateDecisionGroup: (optionEventIds) => handleCreateDecisionClick(optionEventIds),
+      onAddDecisionOption: handleOpenAddDecisionOption,
+      onDismissIssue: handleDismissHealthIssue,
+    });
+  }, [
+    trip,
+    openPanel,
+    handleAddEventClick,
+    handleDismissHealthIssue,
+    locationConfirmQueue,
+    handleOpenDecision,
+    handleDeferDecision,
+    handleCreateDecisionClick,
+    handleOpenAddDecisionOption,
+  ]);
+
   const handleCloseModal = () => {
     setModalType(null); // Close by clearing the type
     setEditingEvent(null);
+    setEventFormDraft(null);
+  };
+
+  const handleCloseExploreSuggestions = () => {
+    setIsExploreSuggestionsOpen(false);
+    setExploreScope(null);
   };
 
   const handleSaveEvent = async (eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'> | Event) => {
@@ -935,7 +1211,10 @@ const NewTripDetails: React.FC = () => {
     }
   };
 
-  const handleAddExploreSuggestions = async (eventsToAdd: Event[]) => {
+  const handleAddExploreSuggestions = async (
+    eventsToAdd: Event[],
+    options?: { groupAsDecision?: boolean; decisionTitle?: string },
+  ) => {
     const eventDataList = eventsToAdd.map((event) => {
       const {
         id: _id,
@@ -953,6 +1232,15 @@ const NewTripDetails: React.FC = () => {
 
     const newEvents = await addEvents(eventDataList);
     locationConfirmQueue.enqueueSavedEvents(newEvents);
+
+    if (options?.groupAsDecision && newEvents.length >= 2) {
+      const title = options.decisionTitle?.trim() || suggestDecisionTitle(newEvents);
+      await handleCreateDecision({
+        title,
+        optionEventIds: newEvents.map((event) => event.id),
+        slot: inferDecisionSlotFromEvents(newEvents),
+      });
+    }
   };
 
   if (loading) return <TripLoading />;
@@ -984,6 +1272,9 @@ const NewTripDetails: React.FC = () => {
         break;
       case 'location_issues':
         handleImproveLocations();
+        break;
+      case 'trip_health':
+        openPanel('planning');
         break;
       default:
         break;
@@ -1042,7 +1333,9 @@ const NewTripDetails: React.FC = () => {
         <main className="min-w-0">
           <TripTimeline
             events={trip.events}
+            trip={trip}
             tripId={trip._id}
+            currentUserId={user?._id}
             tripStartDate={trip.startDate}
             tripEndDate={trip.endDate}
             eventThumbnails={eventThumbnails}
@@ -1055,6 +1348,11 @@ const NewTripDetails: React.FC = () => {
             onEditEvent={handleEditEventClick}
             onDeleteEvent={handleDeleteEvent}
             onStatusChange={handleStatusChange}
+            onVote={handleVote}
+            onOpenDecision={handleOpenDecision}
+            onCompareSelectedEvents={canEdit ? handleCreateDecisionClick : undefined}
+            healthIssues={tripHealth?.issues ?? []}
+            onOpenHealthIssue={handleOpenHealthIssue}
             onLocationApplied={replaceTripEvents}
             onReviewEventLocation={
               canEdit
@@ -1078,6 +1376,7 @@ const NewTripDetails: React.FC = () => {
 
       <TripPanelHost
         activePanel={activePanel}
+        panelOptions={panelOptions}
         trip={trip}
         canEdit={canEdit}
         insights={visibleTripInsights}
@@ -1106,6 +1405,19 @@ const NewTripDetails: React.FC = () => {
         onGenerateReplanBriefing={handleGenerateReplanBriefing}
         onEditEvent={handleEditEventClick}
         onDismissInsight={handleDismissInsight}
+        tripHealthSummary={tripHealth?.summary ?? {
+          headlineScore: 100,
+          logisticsScore: 100,
+          contentScore: 100,
+          openIssueCount: 0,
+          criticalCount: 0,
+          warningCount: 0,
+        }}
+        tripHealthIssues={tripHealth?.issues ?? []}
+        isComputingTripHealth={loading}
+        onExecuteHealthResolution={handleExecuteHealthResolution}
+        onOpenDecision={handleOpenDecision}
+        onCreateDecision={() => handleCreateDecisionClick()}
       />
 
       <TravelImportDialog
@@ -1147,6 +1459,7 @@ const NewTripDetails: React.FC = () => {
       <EventFormModalRouter
         modalType={modalType}
         editingEvent={editingEvent}
+        draftEvent={eventFormDraft}
         onClose={handleCloseModal}
         onSave={handleSaveEvent}
       />
@@ -1160,10 +1473,65 @@ const NewTripDetails: React.FC = () => {
       {trip && (
         <ExploreSuggestionsModal
           isOpen={isExploreSuggestionsOpen}
-          onClose={() => setIsExploreSuggestionsOpen(false)}
+          onClose={handleCloseExploreSuggestions}
           trip={trip}
+          canEdit={canEdit}
           onAddSuggestions={handleAddExploreSuggestions}
+          scopedDate={exploreScope?.date}
+          scopedEndDate={exploreScope?.endDate}
+          defaultKeywords={
+            exploreScope?.defaultKeywords
+              ? exploreScope.defaultKeywords.split(',').map((keyword) => keyword.trim()).filter(Boolean)
+              : []
+          }
         />
+      )}
+
+      {trip && (
+        <>
+          <CreateDecisionDialog
+            open={isCreateDecisionOpen}
+            onOpenChange={setIsCreateDecisionOpen}
+            trip={trip}
+            preselectedEventIds={createDecisionPreselectedIds}
+            onCreate={handleCreateDecision}
+            onExploreAlternative={canEdit ? handleExploreDecisionAlternative : undefined}
+          />
+
+          <DecisionComparisonView
+            open={Boolean(activeDecisionId && activeDecision)}
+            onOpenChange={(open) => !open && setActiveDecisionId(null)}
+            trip={trip}
+            decision={activeDecision}
+            eventThumbnails={eventThumbnails}
+            currentUserId={user?._id}
+            canEdit={canEdit}
+            onVote={handleVote}
+            onEditEvent={handleEditEventClick}
+            onRemoveOption={handleRemoveDecisionOption}
+            onDeferDecision={handleDeferDecision}
+            onDeleteDecision={canEdit ? handleDeleteDecision : undefined}
+            onConfirmDecision={handleConfirmDecision}
+            onAddExistingOption={canEdit ? () => setIsAddDecisionOptionOpen(true) : undefined}
+            onExploreNewOption={canEdit ? handleExploreNewDecisionOption : undefined}
+            onGenerateComparisonOverview={handleGenerateComparisonOverview}
+          />
+
+          <AddDecisionOptionDialog
+            open={isAddDecisionOptionOpen}
+            onOpenChange={setIsAddDecisionOptionOpen}
+            trip={trip}
+            decisionTitle={activeDecision?.title}
+            excludeEventIds={activeDecision?.optionEventIds}
+            onAdd={handleAddDecisionOption}
+          />
+        </>
+      )}
+
+      {decisionActionError && (
+        <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 shadow-lg">
+          {decisionActionError}
+        </div>
       )}
 
       {trip && (

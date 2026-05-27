@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DestinationEvent, Event } from '@/types/eventTypes';
+import { DestinationEvent, Event, Trip } from '@/types/eventTypes';
 import { format, parse } from 'date-fns';
 import { 
   Clock, 
@@ -30,25 +30,35 @@ import GlowingIcon from '@/components/ui/GlowingIcon';
 import { openEventInGoogleMaps } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { EventLocationQuickAction } from '@/components/TripDetails/EventLocationSearch';
+import EventVoteControls from './EventVoteControls';
+import { EventVoteAction } from '@/components/TripDetails/hooks/useEventVotes';
 
 interface DestinationEventCardProps {
   event: DestinationEvent;
   thumbnail: string;
+  trip?: Trip;
+  currentUserId?: string;
   tripId?: string;
   onLocationApplied?: (events: Event[]) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onStatusChange?: (status: 'confirmed' | 'exploring') => void;
+  onVote?: (eventId: string, voteType: EventVoteAction) => void;
+  canVote?: boolean;
 }
 
 const DestinationEventCard: React.FC<DestinationEventCardProps> = ({
   event,
   thumbnail,
+  trip,
+  currentUserId,
   tripId,
   onLocationApplied,
   onEdit,
   onDelete,
   onStatusChange,
+  onVote,
+  canVote = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const isExploring = event.status === 'exploring';
@@ -444,6 +454,16 @@ const DestinationEventCard: React.FC<DestinationEventCardProps> = ({
                 {event.placeName}
               </CardTitle>
             </div>
+
+            {isExploring && trip && onVote && (
+              <EventVoteControls
+                event={event}
+                trip={trip}
+                currentUserId={currentUserId}
+                onVote={onVote}
+                readOnly={!canVote}
+              />
+            )}
             
             <div className="flex items-center text-sm space-x-2">
               <Clock className={cn(

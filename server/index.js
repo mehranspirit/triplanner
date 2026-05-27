@@ -24,6 +24,8 @@ const placesRoutes = require('./routes/places');
 const weatherRoutes = require('./routes/weather');
 const flightStatusRoutes = require('./routes/flightStatus');
 const assistantBriefingRoutes = require('./routes/assistantBriefing');
+const tripHealthRoutes = require('./routes/tripHealth');
+const decisionsRoutes = require('./routes/decisions');
 const auth = require('./middleware/auth');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
@@ -239,6 +241,8 @@ app.use('/api', flightStatusRoutes);
 
 // Mount server-side AI assistant briefing routes
 app.use('/api', assistantBriefingRoutes);
+app.use('/api', tripHealthRoutes);
+app.use('/api', decisionsRoutes);
 
 // Mount dream trips routes
 app.use('/api/trips/dream', dreamTripsRouter);

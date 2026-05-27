@@ -3,14 +3,14 @@ import { Trip } from '@/types/eventTypes';
 import { CollaboratorAvatars } from './CollaboratorAvatars';
 import TripActions from './TripActions';
 import { cn } from '@/lib/utils';
-import { ItineraryExportMode } from './exportHelpers';
+import { ItineraryExportOptions } from './exportHelpers';
 
 interface TripHeaderProps {
   trip: Trip;
   currentUserId?: string;
   isOwner: boolean;
   canEdit: boolean;
-  onExport: (mode: ItineraryExportMode) => void;
+  onExport: (options: ItineraryExportOptions) => void;
   onTripUpdate: (trip: Trip) => Promise<void>;
   className?: string;
 }

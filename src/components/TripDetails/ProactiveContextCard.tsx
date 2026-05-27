@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock3, CloudSun, MapPin, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock3, CloudSun, HeartPulse, MapPin, Sparkles, X } from 'lucide-react';
 import { ProactiveContextCard as ProactiveContextCardData } from './context/tripContextTypes';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +11,7 @@ const iconByType: Record<ProactiveContextCardData['type'], React.ReactNode> = {
   location_issues: <MapPin className="h-4 w-4" />,
   urgent_insights: <AlertTriangle className="h-4 w-4" />,
   travel_status: <CloudSun className="h-4 w-4" />,
+  trip_health: <HeartPulse className="h-4 w-4" />,
 };
 
 const toneByType: Record<ProactiveContextCardData['type'], string> = {
@@ -21,6 +22,7 @@ const toneByType: Record<ProactiveContextCardData['type'], string> = {
   location_issues: 'border-teal-100 bg-teal-50/90 text-teal-900',
   urgent_insights: 'border-orange-100 bg-orange-50/90 text-orange-900',
   travel_status: 'border-sky-100 bg-sky-50/90 text-sky-900',
+  trip_health: 'border-rose-100 bg-rose-50/90 text-rose-900',
 };
 
 const DISMISSIBLE_CARD_TYPES = new Set<ProactiveContextCardData['type']>([

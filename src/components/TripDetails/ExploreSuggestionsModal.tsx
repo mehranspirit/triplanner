@@ -16,46 +16,79 @@ import { Label } from '@/components/ui/label';
 import { ActivityEvent, DestinationEvent, Event, Trip } from '@/types/eventTypes';
 import { api } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
+import { suggestDecisionTitle } from '@/utils/decisionHelpers';
 
 type SelectableEvent = Event & { selected?: boolean };
+
+export interface ExploreAddOptions {
+  groupAsDecision?: boolean;
+  decisionTitle?: string;
+}
 
 interface ExploreSuggestionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   trip: Trip;
-  onAddSuggestions: (events: Event[]) => Promise<void>;
+  canEdit?: boolean;
+  onAddSuggestions: (events: Event[], options?: ExploreAddOptions) => Promise<void>;
+  /** Scope AI suggestions to a calendar day or range (from trip health / decisions). */
+  scopedDate?: string;
+  scopedEndDate?: string;
+  /** Pre-fill keyword chips when opening from trip health. */
+  defaultKeywords?: string[];
 }
 
 const ExploreSuggestionsModal: React.FC<ExploreSuggestionsModalProps> = ({
   isOpen,
   onClose,
   trip,
+  canEdit = false,
   onAddSuggestions,
+  scopedDate,
+  scopedEndDate,
+  defaultKeywords = [],
 }) => {
   const { user } = useAuth();
   const [step, setStep] = useState<'keywords' | 'results'>('keywords');
   const [keywordInput, setKeywordInput] = useState('');
   const [keywords, setKeywords] = useState<string[]>([]);
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [addState, setAddState] = useState<'idle' | 'adding' | 'success'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SelectableEvent[]>([]);
+  const [groupAsDecision, setGroupAsDecision] = useState(false);
+  const [decisionTitle, setDecisionTitle] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
       setStep('keywords');
       setKeywordInput('');
       setKeywords([]);
+      setDateStart('');
+      setDateEnd('');
       setError(null);
       setSuggestions([]);
       setIsGenerating(false);
       setAddState('idle');
+      setGroupAsDecision(false);
+      setDecisionTitle('');
+      return;
     }
-  }, [isOpen]);
+
+    if (defaultKeywords.length > 0) {
+      setKeywords(defaultKeywords);
+      setStep('keywords');
+    }
+
+    setDateStart(scopedDate || '');
+    setDateEnd(scopedEndDate || scopedDate || '');
+  }, [isOpen, defaultKeywords, scopedDate, scopedEndDate]);
 
   const isAdding = addState === 'adding' || addState === 'success';
 
-  const tripDates = (() => {
+  const tripBounds = (() => {
     const sortedEvents = [...trip.events].sort(
       (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     );
@@ -64,6 +97,24 @@ const ExploreSuggestionsModal: React.FC<ExploreSuggestionsModalProps> = ({
       endDate: trip.endDate || sortedEvents[sortedEvents.length - 1]?.endDate || new Date().toISOString(),
     };
   })();
+
+  const resolveTripDates = () => {
+    const startKey = dateStart.trim().slice(0, 10);
+    const endKey = (dateEnd.trim() || dateStart.trim()).slice(0, 10);
+
+    if (startKey) {
+      return { startDate: startKey, endDate: endKey || startKey };
+    }
+
+    return tripBounds;
+  };
+
+  const resolveScopedDates = () => {
+    const startKey = dateStart.trim().slice(0, 10) || undefined;
+    const endKey = dateEnd.trim().slice(0, 10) || undefined;
+    const scopedEnd = endKey && startKey && endKey !== startKey ? endKey : undefined;
+    return { scopedDate: startKey, scopedEndDate: scopedEnd };
+  };
 
   const addKeyword = () => {
     const value = keywordInput.trim();
@@ -86,14 +137,26 @@ const ExploreSuggestionsModal: React.FC<ExploreSuggestionsModalProps> = ({
       return;
     }
 
+    const startKey = dateStart.trim().slice(0, 10);
+    const endKey = (dateEnd.trim() || dateStart.trim()).slice(0, 10);
+    if (startKey && endKey && endKey < startKey) {
+      setError('End date must be on or after the start date.');
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
 
     try {
+      const tripDates = resolveTripDates();
+      const { scopedDate: effectiveScopedDate, scopedEndDate: effectiveScopedEndDate } = resolveScopedDates();
+
       const generated = await api.generateDestinationSuggestions({
         existingEvents: trip.events,
         tripDates,
         keywords,
+        scopedDate: effectiveScopedDate,
+        scopedEndDate: effectiveScopedEndDate,
         user: {
           _id: user._id,
           name: user.name,
@@ -116,15 +179,26 @@ const ExploreSuggestionsModal: React.FC<ExploreSuggestionsModalProps> = ({
     }
   };
 
+  const selectedSuggestions = suggestions.filter(item => item.selected);
+  const selectedCount = selectedSuggestions.length;
+
+  useEffect(() => {
+    if (step !== 'results' || selectedCount < 2) {
+      setGroupAsDecision(false);
+    }
+  }, [step, selectedCount]);
+
   const handleAddSelected = async () => {
-    const selected = suggestions.filter(item => item.selected);
-    if (selected.length === 0) return;
+    if (selectedCount === 0) return;
 
     setAddState('adding');
     setError(null);
 
     try {
-      await onAddSuggestions(selected);
+      await onAddSuggestions(selectedSuggestions, groupAsDecision && selectedCount >= 2 ? {
+        groupAsDecision: true,
+        decisionTitle: decisionTitle.trim() || suggestDecisionTitle(selectedSuggestions),
+      } : undefined);
       setAddState('success');
       window.setTimeout(() => onClose(), 900);
     } catch (addError) {
@@ -199,7 +273,7 @@ const ExploreSuggestionsModal: React.FC<ExploreSuggestionsModalProps> = ({
           </DialogTitle>
           <DialogDescription>
             {step === 'keywords'
-              ? 'Add activities or places you want ideas for, like horseback riding, hikes, or museums.'
+              ? 'Add activities or places you want ideas for. Optionally narrow to a specific day or date range.'
               : 'Pick the real venues and activities you want to add to your trip as exploring events.'}
           </DialogDescription>
         </DialogHeader>
@@ -224,6 +298,38 @@ const ExploreSuggestionsModal: React.FC<ExploreSuggestionsModalProps> = ({
                 <Button type="button" variant="outline" onClick={addKeyword}>
                   <Plus className="h-4 w-4" />
                 </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>When (optional)</Label>
+              <p className="text-xs text-slate-500">
+                Leave blank to spread suggestions across the trip, or pick a day or range to focus ideas.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="explore-date-start" className="text-xs font-normal text-slate-500">
+                    From
+                  </Label>
+                  <Input
+                    id="explore-date-start"
+                    type="date"
+                    value={dateStart}
+                    onChange={(event) => setDateStart(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="explore-date-end" className="text-xs font-normal text-slate-500">
+                    To
+                  </Label>
+                  <Input
+                    id="explore-date-end"
+                    type="date"
+                    value={dateEnd}
+                    min={dateStart || undefined}
+                    onChange={(event) => setDateEnd(event.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -318,6 +424,44 @@ const ExploreSuggestionsModal: React.FC<ExploreSuggestionsModalProps> = ({
             ))}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
+
+            {canEdit && selectedCount >= 2 && (
+              <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={groupAsDecision}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setGroupAsDecision(checked);
+                      if (checked && !decisionTitle.trim()) {
+                        setDecisionTitle(suggestDecisionTitle(selectedSuggestions));
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-violet-950">
+                      Add as alternatives in one decision
+                    </span>
+                    <span className="mt-0.5 block text-xs text-violet-800/80">
+                      Create a decision set so the group can vote before confirming one option.
+                    </span>
+                  </span>
+                </label>
+                {groupAsDecision && (
+                  <div className="mt-3 space-y-2">
+                    <Label htmlFor="explore-decision-title">Decision title</Label>
+                    <Input
+                      id="explore-decision-title"
+                      value={decisionTitle}
+                      onChange={(event) => setDecisionTitle(event.target.value)}
+                      placeholder="Saturday dinner options"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

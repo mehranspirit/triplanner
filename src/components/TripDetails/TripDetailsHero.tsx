@@ -7,7 +7,7 @@ import { Trip } from '@/types/eventTypes';
 import { ExpenseSummary } from '@/types/expenseTypes';
 import { cn } from '@/lib/utils';
 import { getTripStatusSummary } from '@/services/tripStatus';
-import { ItineraryExportMode } from './exportHelpers';
+import { ItineraryExportOptions } from './exportHelpers';
 
 interface TripDetailsHeroProps {
   trip: Trip;
@@ -17,7 +17,7 @@ interface TripDetailsHeroProps {
   canEdit: boolean;
   descriptionHtml: string;
   expenseSummary?: ExpenseSummary | null;
-  onExport: (mode: ItineraryExportMode) => void;
+  onExport: (options: ItineraryExportOptions) => void;
   onTripUpdate: (trip: Trip) => Promise<void>;
 }
 

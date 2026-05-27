@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, CalendarDays, CheckSquare, FileText, MapIcon, Menu, X } from 'lucide-react';
+import { Bell, CalendarDays, CheckSquare, ClipboardList, FileText, MapIcon, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -66,7 +66,11 @@ const MobileTripActionsFab: React.FC<MobileTripActionsFabProps> = ({
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onOpenPanel('checklist')}>
             <CheckSquare className="mr-2 h-4 w-4 text-green-500" />
-            Plan
+            Checklist
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onOpenPanel('planning')}>
+            <ClipboardList className="mr-2 h-4 w-4 text-blue-500" />
+            Planning
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onOpenPanel('notes')}>
             <FileText className="mr-2 h-4 w-4 text-purple-500" />

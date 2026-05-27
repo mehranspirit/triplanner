@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { Bell, CalendarDays, CheckSquare, CreditCard, FileText, MapIcon, MapPin, Plus, Sparkles, Users, Wand2 } from 'lucide-react';
+import { Bell, CalendarDays, CheckSquare, ClipboardList, CreditCard, FileText, MapIcon, MapPin, Plus, Sparkles, Users, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -147,6 +147,10 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Plan</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => onOpenPanel('planning')}>
+                <ClipboardList className="mr-2 h-4 w-4 text-blue-500" />
+                Planning
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onOpenPanel('checklist')}>
                 <CheckSquare className="mr-2 h-4 w-4 text-green-500" />
                 Checklist

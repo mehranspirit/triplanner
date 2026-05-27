@@ -243,6 +243,146 @@ const tripSchema = new mongoose.Schema({
     of: [ChecklistBinSchema],
     default: {},
   },
+  healthDismissals: [{
+    issueKey: {
+      type: String,
+      required: true,
+    },
+    reason: {
+      type: String,
+      required: true,
+      enum: [
+        'intentional_rest_day',
+        'planning_deferred',
+        'day_trip',
+        'red_eye',
+        'alternate_lodging',
+        'overnight_transport',
+        'connection_ok',
+        'ad_hoc_ground_transport',
+        'location_optional',
+        'booking_not_required',
+        'other',
+      ],
+    },
+    note: String,
+    dismissedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    dismissedBy: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      name: String,
+      email: String,
+      photoUrl: String,
+    },
+    reopenBeforeTripDays: Number,
+  }],
+  decisions: [{
+    id: {
+      type: String,
+      required: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    slot: {
+      date: String,
+      endDate: String,
+      startTime: String,
+      endTime: String,
+      label: String,
+    },
+    optionEventIds: {
+      type: [String],
+      default: [],
+    },
+    status: {
+      type: String,
+      enum: ['open', 'decided', 'deferred'],
+      default: 'open',
+    },
+    winnerEventId: String,
+    decidedAt: Date,
+    decidedBy: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      name: String,
+      email: String,
+      photoUrl: String,
+    },
+    createdBy: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      name: String,
+      email: String,
+      photoUrl: String,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    comparisonOverview: {
+      generatedAt: Date,
+      generatedBy: {
+        type: String,
+        enum: ['ai', 'deterministic'],
+      },
+      model: String,
+      stale: {
+        type: Boolean,
+        default: false,
+      },
+      summary: String,
+      context: {
+        comparisonType: String,
+        slotLabel: String,
+        referenceLabel: String,
+        referenceDescription: String,
+        staticMapUrl: String,
+      },
+      dimensions: [{
+        key: String,
+        label: String,
+        values: [{
+          eventId: String,
+          display: String,
+          highlight: {
+            type: String,
+            enum: ['best', 'worst', 'neutral'],
+          },
+        }],
+      }],
+      optionSummaries: [{
+        eventId: String,
+        bestFor: [String],
+        watchOuts: [String],
+        oneLiner: String,
+      }],
+      tradeoffs: [String],
+      missingInfo: [String],
+      softRecommendation: {
+        eventId: String,
+        label: String,
+        reason: String,
+        confidence: {
+          type: String,
+          enum: ['low', 'medium', 'high'],
+        },
+        caveats: [String],
+      },
+    },
+  }],
 }, {
   timestamps: true,
   toJSON: {

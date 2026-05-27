@@ -22,6 +22,11 @@ const getExportDateKey = (event: Event): string => {
 
 export type ItineraryExportMode = 'detailed' | 'compact';
 
+export interface ItineraryExportOptions {
+  mode: ItineraryExportMode;
+  excludeAlternatives?: boolean;
+}
+
 const getExportStyles = (mode: ItineraryExportMode): string => {
   if (mode === 'compact') {
     return `
@@ -572,7 +577,8 @@ const getExportStyles = (mode: ItineraryExportMode): string => {
 export const generateHtmlItinerary = (
   trip: Trip,
   eventThumbnails: { [key: string]: string },
-  mode: ItineraryExportMode = 'detailed'
+  mode: ItineraryExportMode = 'detailed',
+  excludeAlternatives = false,
 ): string => {
   if (!trip) return '';
 
@@ -807,7 +813,10 @@ export const generateHtmlItinerary = (
   };
 
   // Data Preparation
-  const sortedEvents = sortEventsByStart(trip.events);
+  const exportEvents = excludeAlternatives
+    ? trip.events.filter((event) => event.status !== 'alternative')
+    : trip.events;
+  const sortedEvents = sortEventsByStart(exportEvents);
   const eventsByDate: Record<string, Event[]> = {};
   sortedEvents.forEach((event: Event) => {
     const dateKey = getExportDateKey(event);
@@ -866,8 +875,19 @@ export const generateHtmlItinerary = (
                 const details = isCompact
                   ? getEventDetails(event).filter(([label]) => label !== 'Status').slice(0, 4)
                   : getEventDetails(event);
-                const statusClass = event.status === 'exploring' ? 'status-badge exploring' : 'status-badge';
-                const eventClass = event.status === 'exploring' ? 'event-card exploring' : 'event-card';
+                const statusClass = event.status === 'exploring'
+                  ? 'status-badge exploring'
+                  : event.status === 'alternative'
+                    ? 'status-badge exploring'
+                    : 'status-badge';
+                const eventClass = event.status === 'exploring' || event.status === 'alternative'
+                  ? 'event-card exploring'
+                  : 'event-card';
+                const statusLabel = event.status === 'exploring'
+                  ? 'Exploring'
+                  : event.status === 'alternative'
+                    ? 'Alternative'
+                    : 'Confirmed';
                 
                 return `
                   <article class="${eventClass}">
@@ -878,7 +898,7 @@ export const generateHtmlItinerary = (
                       <div class="event-header">
                         <span class="event-icon">${getEventIcon(event.type)}</span>
                         <span class="event-type">${event.type.replace('_', ' ')}</span>
-                        <span class="${statusClass}">${event.status === 'exploring' ? 'Exploring' : 'Confirmed'}</span>
+                        <span class="${statusClass}">${statusLabel}</span>
                         ${getTimeSummary(event) ? `<span class="time-chip">${getTimeSummary(event)}</span>` : ''}
                       </div>
                       <h3 class="event-title">${getEventTitle(event)}</h3>
@@ -916,9 +936,17 @@ export const generateHtmlItinerary = (
 export const exportHtml = (
   trip: Trip,
   eventThumbnails: { [key: string]: string },
-  mode: ItineraryExportMode = 'detailed'
+  options: ItineraryExportOptions | ItineraryExportMode = 'detailed',
 ) => {
-  const htmlContent = generateHtmlItinerary(trip, eventThumbnails, mode);
+  const normalized: ItineraryExportOptions = typeof options === 'string'
+    ? { mode: options }
+    : options;
+  const htmlContent = generateHtmlItinerary(
+    trip,
+    eventThumbnails,
+    normalized.mode,
+    normalized.excludeAlternatives,
+  );
   const blob = new Blob([htmlContent], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');

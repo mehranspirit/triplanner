@@ -9,7 +9,8 @@ export type ProactiveContextCardType =
   | 'pending_imports'
   | 'location_issues'
   | 'urgent_insights'
-  | 'travel_status';
+  | 'travel_status'
+  | 'trip_health';
 
 export interface ProactiveContextCard {
   type: ProactiveContextCardType;
@@ -19,6 +20,8 @@ export interface ProactiveContextCard {
   actionLabel: string;
   priority: number;
   event?: Event;
+  issueId?: string;
+  healthScore?: number;
 }
 
 export interface TripContextSignals {
