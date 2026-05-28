@@ -15,7 +15,11 @@ export const useMapView = (tripId: string | undefined) => {
 
     const urlPref = searchParams.get('view') === 'map';
     const storedPref = loadMapViewPreference(tripId);
-    setIsMapViewState(urlPref || storedPref === true);
+    const next = urlPref || storedPref === true;
+    setIsMapViewState(next);
+    if (urlPref) {
+      saveMapViewPreference(tripId, true);
+    }
     setIsHydrated(true);
   }, [tripId, searchParams]);
 

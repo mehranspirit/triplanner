@@ -1,6 +1,7 @@
 import {
   MAP_VIEW_GLOBAL_KEY,
   mapViewTripKey,
+  mapViewSuggestKey,
 } from '@/types/mapViewTypes';
 
 export const loadMapViewPreference = (tripId: string): boolean | null => {
@@ -30,4 +31,19 @@ export const loadGlobalMapViewDefault = (): boolean => {
 export const saveGlobalMapViewDefault = (isMapView: boolean) => {
   if (typeof localStorage === 'undefined') return;
   localStorage.setItem(MAP_VIEW_GLOBAL_KEY, isMapView ? '1' : '0');
+};
+
+export const hasTripMapViewPreference = (tripId: string): boolean => {
+  if (typeof localStorage === 'undefined' || !tripId) return false;
+  return localStorage.getItem(mapViewTripKey(tripId)) !== null;
+};
+
+export const loadMapViewSuggestDismissed = (tripId: string): boolean => {
+  if (typeof localStorage === 'undefined' || !tripId) return false;
+  return localStorage.getItem(mapViewSuggestKey(tripId)) === '1';
+};
+
+export const saveMapViewSuggestDismissed = (tripId: string) => {
+  if (typeof localStorage === 'undefined' || !tripId) return;
+  localStorage.setItem(mapViewSuggestKey(tripId), '1');
 };

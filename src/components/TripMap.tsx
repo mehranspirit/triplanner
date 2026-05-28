@@ -1,12 +1,21 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import type { Map as LeafletMap } from 'leaflet';
 import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '@/types/eventTypes';
-import { sortEventsByStart } from '@/utils/eventTime';
+import { getEventEnd, getEventStart, sortEventsByStart } from '@/utils/eventTime';
 import { eventHasMapCoordinates } from '@/utils/eventLocation';
 import { api } from '@/services/api';
+import { cn } from '@/lib/utils';
+import { endOfDay, startOfDay } from 'date-fns';
+import { MapTileStyle, OSM_TILE_URL, OSM_ATTRIBUTION, resolveMapTileLayer } from '@/config/mapTiles';
+import MapViewSkeleton from '@/components/TripDetails/map/MapViewSkeleton';
+
+export type TripMapFilter = 'all' | 'today';
+export type TripMapVariant = 'default' | 'immersive';
+
+const MAP_LEAFLET_LAYER_CLASS =
+  '[&_.leaflet-pane]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-top]:!z-[2] [&_.leaflet-bottom]:!z-[2] [&_.leaflet-container]:!z-0';
 
 // Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -114,7 +123,32 @@ interface GroupedMapMarker {
 interface TripMapProps {
   trip: Trip;
   className?: string;
+  variant?: TripMapVariant;
+  mapFilter?: TripMapFilter;
+  tileStyle?: MapTileStyle;
+  onEventSelect?: (event: Event) => void;
+  focusEventId?: string | null;
+  onNavigableEventsChange?: (events: Event[]) => void;
 }
+
+const filterEventsForMap = (events: Event[], mapFilter: TripMapFilter) => {
+  if (mapFilter === 'all') {
+    return events;
+  }
+
+  const today = new Date();
+  const dayStart = startOfDay(today);
+  const dayEnd = endOfDay(today);
+
+  return events.filter((event) => {
+    const start = getEventStart(event);
+    const end = getEventEnd(event) ?? start;
+    if (!start) {
+      return false;
+    }
+    return start <= dayEnd && (end ?? start) >= dayStart;
+  });
+};
 
 interface Location {
   lat: number;
@@ -383,6 +417,70 @@ const resolveMapLocations = async (
   return { locations, skippedEvents };
 };
 
+/** Drop home-airport bookends so the map centers on the destination area. */
+const filterBookendFlightEndpoints = (
+  locations: Location[],
+  events: ReturnType<typeof extractMapRelevantData>['events'],
+): Location[] => {
+  const flights = events.filter((event) => event.type === 'flight');
+  if (flights.length === 0) {
+    return locations;
+  }
+
+  const firstFlightId = flights[0].id;
+  const lastFlightId = flights[flights.length - 1].id;
+
+  return locations.filter((location) => {
+    if (location.event.type !== 'flight') {
+      return true;
+    }
+    if (location.event.id === firstFlightId && location.endpointRole === 'departure') {
+      return false;
+    }
+    if (location.event.id === lastFlightId && location.endpointRole === 'arrival') {
+      return false;
+    }
+    return true;
+  });
+};
+
+const MapPinBounds: React.FC<{
+  locations: Location[];
+  focusEventId?: string | null;
+  variant?: TripMapVariant;
+}> = ({ locations, focusEventId, variant = 'default' }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (focusEventId) {
+      const target = locations.find((location) => location.event.id === focusEventId);
+      if (target) {
+        map.flyTo([target.lat, target.lon], Math.max(map.getZoom(), 14), { duration: 0.75 });
+      }
+      return;
+    }
+
+    if (locations.length === 0) {
+      return;
+    }
+
+    if (locations.length === 1) {
+      map.setView([locations[0].lat, locations[0].lon], 14);
+      return;
+    }
+
+    const bounds = L.latLngBounds(locations.map((location) => [location.lat, location.lon] as [number, number]));
+
+    map.fitBounds(bounds, {
+      paddingTopLeft: [48, 48],
+      paddingBottomRight: variant === 'immersive' ? [48, 128] : [48, 48],
+      maxZoom: 15,
+    });
+  }, [map, locations, focusEventId, variant]);
+
+  return null;
+};
+
 // Extract only the event data needed for the map to prevent unnecessary re-renders
 const extractMapRelevantData = (trip: Trip) => {
   return {
@@ -457,15 +555,27 @@ const fetchWithRetry = async (url: string, retries = MAX_RETRIES, delay = RATE_L
   }
 };
 
-const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
+const TripMap: React.FC<TripMapProps> = ({
+  trip,
+  className,
+  variant = 'default',
+  mapFilter = 'all',
+  tileStyle = 'streets',
+  onEventSelect,
+  focusEventId,
+  onNavigableEventsChange,
+}) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [unmappedEvents, setUnmappedEvents] = useState<{ eventId: string; label: string; reason: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAlternatives, setShowAlternatives] = useState(false);
-  const mapRef = useRef<LeafletMap | null>(null);
-  const loadingRef = useRef<boolean>(true); // Add ref to track loading state
+  const [tileLayer, setTileLayer] = useState(() => resolveMapTileLayer(tileStyle));
+  const [useOsmFallback, setUseOsmFallback] = useState(false);
+  const [tilesUnavailable, setTilesUnavailable] = useState(false);
+  const tileErrorCountRef = useRef(0);
+  const loadingRef = useRef<boolean>(true);
   const routeEndpointEventTypes = new Set<EventType>(['flight', 'train', 'bus', 'rental_car']);
 
   const eventTimelineNumbers = useMemo(() => {
@@ -515,6 +625,22 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
     });
   }, [locations, eventTimelineNumbers]);
 
+  const navigableEvents = useMemo(() => (
+    [...groupedMarkers]
+      .sort((left, right) => left.timelineNumbers[0] - right.timelineNumbers[0])
+      .map((marker) => {
+        const primaryTimeline = marker.timelineNumbers[0];
+        const location = marker.locations.find(
+          (entry) => eventTimelineNumbers.get(entry.event.id) === primaryTimeline,
+        ) || marker.locations[0];
+        return trip.events.find((event) => event.id === location.event.id) ?? location.event;
+      })
+  ), [groupedMarkers, eventTimelineNumbers, trip.events]);
+
+  useEffect(() => {
+    onNavigableEventsChange?.(navigableEvents);
+  }, [navigableEvents, onNavigableEventsChange]);
+
   const getMarkerVariant = (markerLocations: Location[]): 'confirmed' | 'exploring' => {
     const statuses = markerLocations.map((location) => {
       const originalEvent = trip.events.find((event) => event.id === location.event.id);
@@ -528,13 +654,22 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
     return 'confirmed';
   };
 
+  useEffect(() => {
+    setUseOsmFallback(false);
+    setTilesUnavailable(false);
+    tileErrorCountRef.current = 0;
+    setTileLayer(resolveMapTileLayer(tileStyle));
+  }, [tileStyle]);
+
   const mapRelevantData = useMemo(() => {
-    const filteredEvents = showAlternatives
+    const statusFiltered = showAlternatives
       ? trip.events
       : trip.events.filter((event) => event.status !== 'alternative');
+    const filteredEvents = filterEventsForMap(statusFiltered, mapFilter);
 
     return extractMapRelevantData({ ...trip, events: filteredEvents });
   }, [
+    mapFilter,
     showAlternatives,
     trip._id,
     trip.name,
@@ -571,22 +706,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
       loadingRef.current = false;
     };
   }, []);
-
-  // Add a useEffect to force map update when locations change
-  useEffect(() => {
-    if (mapRef.current && locations.length > 0) {
-      const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lon]));
-      mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-    }
-  }, [locations]);
-
-  // Add a useEffect to force map update when routes change
-  useEffect(() => {
-    if (mapRef.current && routes.length > 0) {
-      const bounds = L.latLngBounds(routes.flatMap(route => route.coordinates));
-      mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-    }
-  }, [routes]);
 
   const fetchRoute = async (start: Location, end: Location, type: 'driving' | 'train' | 'flight' = 'driving'): Promise<RouteInfo | null> => {
     try {
@@ -703,7 +822,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
         setError(null);
         loadingRef.current = true;
 
-        const { locations: validLocations, skippedEvents } = await resolveMapLocations(
+        const { locations: resolvedLocations, skippedEvents } = await resolveMapLocations(
           mapRelevantData.events,
           () => loadingRef.current,
         );
@@ -711,6 +830,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
         if (!loadingRef.current) {
           return;
         }
+
+        const validLocations = filterBookendFlightEndpoints(resolvedLocations, mapRelevantData.events);
 
         setLocations(validLocations);
         setUnmappedEvents(skippedEvents);
@@ -753,11 +874,6 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
 
         const validRoutes = routeResults.filter((route): route is RouteInfo => route !== null);
         setRoutes(validRoutes);
-
-        if (validLocations.length > 0 && mapRef.current) {
-          const bounds = L.latLngBounds(validLocations.map((loc) => [loc.lat, loc.lon]));
-          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-        }
       } catch (err) {
         if (loadingRef.current) {
           setError(err instanceof Error ? err.message : 'Failed to load map');
@@ -773,17 +889,32 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
   }, [mapRelevantData]);
 
   if (isLoading) {
+    if (variant === 'immersive') {
+      return <MapViewSkeleton className={className} />;
+    }
+
     return (
-      <div className="flex justify-center items-center h-full bg-gray-50 rounded-lg">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      <div className={cn('flex h-full items-center justify-center rounded-lg bg-gray-50', className)}>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-indigo-600 motion-reduce:animate-none" />
       </div>
     );
   }
 
-  if (error || groupedMarkers.length === 0) {
+  const emptyMessage = error
+    || (mapFilter === 'today'
+      ? 'No stops scheduled today'
+      : trip.events.length === 0
+        ? 'No stops yet — add events to see them on the map'
+        : 'No map locations found for these events');
+
+  if (groupedMarkers.length === 0) {
     return (
-      <div className="flex justify-center items-center h-full bg-gray-50 rounded-lg">
-        <p className="text-gray-500">{error || 'No locations found'}</p>
+      <div className={cn(
+        'flex h-full items-center justify-center px-6 text-center',
+        variant === 'immersive' ? 'bg-slate-900 text-slate-300' : 'rounded-lg bg-gray-50 text-gray-500',
+        className,
+      )}>
+        <p className="max-w-sm text-sm">{emptyMessage}</p>
       </div>
     );
   }
@@ -891,23 +1022,46 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
   };
 
   return (
-    <div className={className ?? 'h-full rounded-lg overflow-hidden [&_.leaflet-pane]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-top]:!z-[2] [&_.leaflet-bottom]:!z-[2]'}>
+    <div className={cn('relative h-full overflow-hidden', MAP_LEAFLET_LAYER_CLASS, className)}>
+      {tilesUnavailable && (
+        <div
+          className="pointer-events-none absolute inset-x-3 top-3 z-[6] rounded-xl border border-amber-200/80 bg-amber-50/95 px-3 py-2 text-xs text-amber-950 shadow-lg backdrop-blur-sm"
+          role="status"
+        >
+          Map tiles could not be loaded. Pin locations may still be visible below.
+        </div>
+      )}
       <MapContainer
-        key={`map-container-${trip._id}-${Date.now()}`}
-        center={[groupedMarkers[0]?.lat || locations[0]?.lat || 0, groupedMarkers[0]?.lon || locations[0]?.lon || 0]}
+        key={`map-container-${trip._id}-${mapFilter}-${tileStyle}-${useOsmFallback ? 'osm' : 'primary'}`}
+        center={[groupedMarkers[0]?.lat || locations[0]?.lat || 20, groupedMarkers[0]?.lon || locations[0]?.lon || 0]}
         zoom={4}
         style={{ height: '100%', width: '100%' }}
-        ref={mapRef}
       >
+        <MapPinBounds locations={locations} focusEventId={focusEventId} variant={variant} />
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url={useOsmFallback ? OSM_TILE_URL : tileLayer.url}
+          attribution={useOsmFallback ? OSM_ATTRIBUTION : tileLayer.attribution}
           crossOrigin="anonymous"
           maxNativeZoom={19}
           maxZoom={19}
           updateWhenIdle={true}
           updateWhenZooming={false}
-          subdomains={['a', 'b', 'c']}
+          {...(useOsmFallback || tileLayer.url.includes('{s}')
+            ? { subdomains: ['a', 'b', 'c'] as const }
+            : {})}
+          eventHandlers={{
+            tileerror: () => {
+              if (!useOsmFallback) {
+                setUseOsmFallback(true);
+                tileErrorCountRef.current = 0;
+                return;
+              }
+              tileErrorCountRef.current += 1;
+              if (tileErrorCountRef.current >= 3) {
+                setTilesUnavailable(true);
+              }
+            },
+          }}
         />
         
         {/* Render routes */}
@@ -946,12 +1100,22 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
             })
             .sort((left, right) => left.timelineNumber - right.timelineNumber);
 
+          const primaryEvent = markerEntries[0]?.originalEvent ?? markerEntries[0]?.location.event;
+
           return (
             <Marker
               key={`marker-group-${marker.label}-${marker.lat}-${marker.lon}`}
               position={[marker.lat, marker.lon]}
               icon={createNumberedMarkerIcon(marker.label, markerVariant)}
+              eventHandlers={onEventSelect && primaryEvent ? {
+                click: (event) => {
+                  event.originalEvent?.preventDefault();
+                  event.originalEvent?.stopPropagation();
+                  onEventSelect(primaryEvent);
+                },
+              } : undefined}
             >
+              {!onEventSelect && (
               <Popup>
                 <div className="space-y-3">
                   {markerEntries.map(({ timelineNumber, eventDetails, originalEvent }) => {
@@ -983,25 +1147,26 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
                   })}
                 </div>
               </Popup>
+              )}
             </Marker>
           );
         })}
 
-        {/* Map Legend */}
-        <div className="leaflet-bottom leaflet-left">
-          <div className="leaflet-control bg-white p-3 rounded-lg shadow-lg m-4">
-            <h4 className="font-semibold mb-2">Legend</h4>
+        {/* Map legend + unmapped warning (top-right, above bottom sheet) */}
+        <div className="leaflet-top leaflet-right m-3 flex max-w-xs flex-col items-end gap-2">
+          <div className="leaflet-control rounded-lg bg-white p-3 shadow-lg">
+            <h4 className="mb-2 font-semibold">Legend</h4>
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-0.5 bg-blue-600"></div>
+                <div className="h-0.5 w-6 bg-blue-600" />
                 <span className="text-sm">Driving Route</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-6 h-0.5 bg-emerald-600" style={{ borderTop: '2px dashed #059669' }}></div>
+                <div className="h-0.5 w-6 bg-emerald-600" style={{ borderTop: '2px dashed #059669' }} />
                 <span className="text-sm">Train Route</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-6 h-0.5 bg-violet-600"></div>
+                <div className="h-0.5 w-6 bg-violet-600" />
                 <span className="text-sm">Flight Route</span>
               </div>
               <div className="flex items-center gap-2">
@@ -1009,11 +1174,11 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
                 <span className="text-sm">Timeline stop number</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                <div className="w-4 h-4 rounded-full bg-blue-500" />
                 <span className="text-sm">Confirmed Event</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                <div className="w-4 h-4 rounded-full bg-green-500" />
                 <span className="text-sm">Exploring Event</span>
               </div>
               <label className="flex cursor-pointer items-center gap-2 pt-1">
@@ -1026,17 +1191,15 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
               </label>
               {showAlternatives && (
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-violet-500 rounded-full"></div>
+                  <div className="w-4 h-4 rounded-full bg-violet-500" />
                   <span className="text-sm">Archived alternative</span>
                 </div>
               )}
             </div>
           </div>
-        </div>
 
-        {unmappedEvents.length > 0 && (
-          <div className="leaflet-top leaflet-right">
-            <div className="leaflet-control m-4 max-w-xs rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 shadow-lg">
+          {unmappedEvents.length > 0 && (
+            <div className="leaflet-control rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 shadow-lg">
               <div className="font-semibold">
                 {unmappedEvents.length} event{unmappedEvents.length === 1 ? '' : 's'} not shown on map
               </div>
@@ -1051,8 +1214,8 @@ const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
                 )}
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </MapContainer>
     </div>
   );

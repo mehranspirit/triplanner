@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  hasTripMapViewPreference,
   loadGlobalMapViewDefault,
   loadMapViewPreference,
+  loadMapViewSuggestDismissed,
   saveGlobalMapViewDefault,
   saveMapViewPreference,
+  saveMapViewSuggestDismissed,
 } from '@/utils/mapViewPreferences';
 import { MAP_VIEW_GLOBAL_KEY, mapViewTripKey } from '@/types/mapViewTypes';
 
@@ -42,5 +45,12 @@ describe('mapViewPreferences', () => {
     expect(localStorage.getItem(MAP_VIEW_GLOBAL_KEY)).toBe('1');
     expect(loadMapViewPreference('trip-2')).toBe(true);
     expect(loadGlobalMapViewDefault()).toBe(true);
+  });
+
+  it('tracks per-trip suggest dismissal', () => {
+    expect(hasTripMapViewPreference('trip-3')).toBe(false);
+    expect(loadMapViewSuggestDismissed('trip-3')).toBe(false);
+    saveMapViewSuggestDismissed('trip-3');
+    expect(loadMapViewSuggestDismissed('trip-3')).toBe(true);
   });
 });

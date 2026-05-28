@@ -12,9 +12,11 @@ import TripDetailsToolbar from '@/components/TripDetails/TripDetailsToolbar';
 import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
 import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext';
 import TripPanelHost from '@/components/TripDetails/panels/TripPanelHost';
-import { useTripPanelManager } from '@/components/TripDetails/hooks/useTripPanelManager';
+import { useTripPanelManager, TripPanel, TripPanelOptions } from '@/components/TripDetails/hooks/useTripPanelManager';
 import { useMapView } from '@/components/TripDetails/hooks/useMapView';
 import MapTripView from '@/components/TripDetails/map/MapTripView';
+import MapSheetBody from '@/components/TripDetails/map/MapSheetBody';
+import MapViewSuggestPrompt from '@/components/TripDetails/map/MapViewSuggestPrompt';
 import TripTimeline from '@/components/TripDetails/timeline/TripTimeline';
 import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/imports/TravelImportDialog';
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
@@ -58,6 +60,12 @@ import {
 import { networkAwareApi } from '@/services/networkAwareApi';
 import EventFormModalRouter from './EventFormModalRouter';
 import TripLoading from '@/components/ui/trip-loading';
+import { getTripStatusSummary } from '@/services/tripStatus';
+import {
+  hasTripMapViewPreference,
+  loadMapViewSuggestDismissed,
+  saveMapViewSuggestDismissed,
+} from '@/utils/mapViewPreferences';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -154,6 +162,8 @@ const NewTripDetails: React.FC = () => {
     if (next) closePanel();
     setMapView(next);
   }, [closePanel, setMapView]);
+
+  const [showMapSuggest, setShowMapSuggest] = useState(false);
   const [notifications, setNotifications] = useState<TripNotification[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference | null>(null);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
@@ -306,6 +316,31 @@ const NewTripDetails: React.FC = () => {
       setIsLoadingNotifications(false);
     }
   };
+
+  const handleOpenPanelForMap = useCallback((panel: TripPanel, options?: TripPanelOptions) => {
+    if (panel === 'map') {
+      closePanel();
+      return;
+    }
+    openPanel(panel, options);
+    if (panel === 'notifications') {
+      fetchNotifications();
+    }
+  }, [closePanel, openPanel, fetchNotifications]);
+
+  useEffect(() => {
+    if (!trip?._id || !isHydrated || isMapView) {
+      setShowMapSuggest(false);
+      return;
+    }
+
+    const status = getTripStatusSummary(trip);
+    setShowMapSuggest(
+      status.status === 'active'
+        && !hasTripMapViewPreference(trip._id)
+        && !loadMapViewSuggestDismissed(trip._id),
+    );
+  }, [trip, isHydrated, isMapView]);
 
   const fetchTravelImports = async () => {
     if (!trip?._id) return;
@@ -1291,14 +1326,130 @@ const NewTripDetails: React.FC = () => {
 
   const showMapView = isHydrated && isMapView;
 
+  const isL4ModalOpen = isAIParseModalOpen
+    || Boolean(modalType)
+    || isExploreSuggestionsOpen
+    || isCreateDecisionOpen
+    || isAddDecisionOptionOpen
+    || isReviewUnresolvedOpen
+    || locationConfirmQueue.open
+    || Boolean(activeDecisionId);
+
+  const tripTimeline = (
+    <TripTimeline
+      events={trip.events}
+      trip={trip}
+      tripId={trip._id}
+      currentUserId={user?._id}
+      tripStartDate={trip.startDate}
+      tripEndDate={trip.endDate}
+      eventThumbnails={eventThumbnails}
+      isCondensedView={isCondensedView}
+      canEdit={canEdit}
+      deletingEvents={deletingEvents}
+      weatherSnapshots={weatherSnapshots}
+      flightStatusSnapshots={flightStatusSnapshots}
+      notifications={notifications}
+      onEditEvent={handleEditEventClick}
+      onDeleteEvent={handleDeleteEvent}
+      onStatusChange={handleStatusChange}
+      onVote={handleVote}
+      onOpenDecision={handleOpenDecision}
+      onCompareSelectedEvents={canEdit ? handleCreateDecisionClick : undefined}
+      healthIssues={tripHealth?.issues ?? []}
+      onOpenHealthIssue={handleOpenHealthIssue}
+      onLocationApplied={replaceTripEvents}
+      onReviewEventLocation={
+        canEdit
+          ? (event) => locationConfirmQueue.startUnresolvedReview([event])
+          : undefined
+      }
+      onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
+    />
+  );
+
+  const mapSheetBody = (
+    <MapSheetBody
+      activePanel={activePanel}
+      panelOptions={panelOptions}
+      timeline={tripTimeline}
+      trip={trip}
+      canEdit={canEdit}
+      insights={visibleTripInsights}
+      notifications={notifications}
+      notificationPreferences={notificationPreferences}
+      isLoadingNotifications={isLoadingNotifications}
+      notificationError={notificationError}
+      weatherSnapshots={weatherSnapshots}
+      flightStatusSnapshots={flightStatusSnapshots}
+      todayBriefing={todayBriefing?.briefing}
+      todayBriefingGeneratedAt={todayBriefing?.generatedAt}
+      todayBriefingError={todayBriefingError}
+      isGeneratingTodayBriefing={isGeneratingTodayBriefing}
+      replanBriefing={replanBriefing?.briefing}
+      replanBriefingGeneratedAt={replanBriefing?.generatedAt}
+      replanBriefingError={replanBriefingError}
+      isGeneratingReplanBriefing={isGeneratingReplanBriefing}
+      onClose={closePanel}
+      onOpenPanel={handleOpenPanelForMap}
+      onRefreshNotifications={() => fetchNotifications()}
+      onMarkNotificationRead={(notification) => handleUpdateNotification(notification, { read: true })}
+      onDismissNotification={(notification) => handleUpdateNotification(notification, { dismissed: true })}
+      onNotificationAction={handleNotificationAction}
+      onUpdateNotificationPreferences={handleUpdateNotificationPreferences}
+      onGenerateTodayBriefing={handleGenerateTodayBriefing}
+      onGenerateReplanBriefing={handleGenerateReplanBriefing}
+      onEditEvent={handleEditEventClick}
+      onDismissInsight={handleDismissInsight}
+      tripHealthSummary={tripHealth?.summary ?? {
+        headlineScore: 100,
+        logisticsScore: 100,
+        contentScore: 100,
+        openIssueCount: 0,
+        criticalCount: 0,
+        warningCount: 0,
+      }}
+      tripHealthIssues={tripHealth?.issues ?? []}
+      isComputingTripHealth={loading}
+      onExecuteHealthResolution={handleExecuteHealthResolution}
+      onOpenDecision={handleOpenDecision}
+      onCreateDecision={() => handleCreateDecisionClick()}
+    />
+  );
+
   return (
     <>
       {showMapView ? (
         <MapTripView
           trip={trip}
           canEdit={canEdit}
+          sheetBody={mapSheetBody}
+          activePanel={activePanel}
+          collapseSheet={isL4ModalOpen}
+          unreadNotificationCount={unreadNotificationCount}
           onExitMapView={() => handleSetMapView(false)}
           onReviewLocations={handleImproveLocations}
+          onOpenEvent={handleEditEventClick}
+          onClosePanel={closePanel}
+          toolsMenuProps={{
+            tripId: trip._id,
+            canEdit,
+            addableEventTypes,
+            isCondensedView,
+            isImprovingLocations: locationConfirmQueue.open,
+            improveLocationsLabel: locationConfirmQueue.open
+              ? `Reviewing ${locationConfirmQueue.queuePosition.current}/${locationConfirmQueue.queuePosition.total}`
+              : undefined,
+            onOpenAIImport: () => setIsAIParseModalOpen(true),
+            onAddEvent: handleAddEventClick,
+            onOpenExploreSuggestions: () => setIsExploreSuggestionsOpen(true),
+            onImproveLocations: handleImproveLocations,
+            onOpenPanel: handleOpenPanelForMap,
+            onOpenNotifications: () => {
+              handleOpenPanelForMap('notifications');
+            },
+            onCondensedViewChange: setIsCondensedView,
+          }}
         />
       ) : (
     <div className="min-h-screen bg-slate-100/70">
@@ -1350,38 +1501,23 @@ const NewTripDetails: React.FC = () => {
         onMapViewChange={handleSetMapView}
       />
 
+      {showMapSuggest && (
+        <MapViewSuggestPrompt
+          onTryMapView={() => {
+            if (trip?._id) saveMapViewSuggestDismissed(trip._id);
+            setShowMapSuggest(false);
+            handleSetMapView(true);
+          }}
+          onDismiss={() => {
+            if (trip?._id) saveMapViewSuggestDismissed(trip._id);
+            setShowMapSuggest(false);
+          }}
+        />
+      )}
+
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
         <main className="min-w-0">
-          <TripTimeline
-            events={trip.events}
-            trip={trip}
-            tripId={trip._id}
-            currentUserId={user?._id}
-            tripStartDate={trip.startDate}
-            tripEndDate={trip.endDate}
-            eventThumbnails={eventThumbnails}
-            isCondensedView={isCondensedView}
-            canEdit={canEdit}
-            deletingEvents={deletingEvents}
-            weatherSnapshots={weatherSnapshots}
-            flightStatusSnapshots={flightStatusSnapshots}
-            notifications={notifications}
-            onEditEvent={handleEditEventClick}
-            onDeleteEvent={handleDeleteEvent}
-            onStatusChange={handleStatusChange}
-            onVote={handleVote}
-            onOpenDecision={handleOpenDecision}
-            onCompareSelectedEvents={canEdit ? handleCreateDecisionClick : undefined}
-            healthIssues={tripHealth?.issues ?? []}
-            onOpenHealthIssue={handleOpenHealthIssue}
-            onLocationApplied={replaceTripEvents}
-            onReviewEventLocation={
-              canEdit
-                ? (event) => locationConfirmQueue.startUnresolvedReview([event])
-                : undefined
-            }
-            onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
-          />
+          {tripTimeline}
         </main>
 
         <div className="hidden space-y-4 lg:block">

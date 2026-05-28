@@ -545,7 +545,7 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
             return (
               <div key={dateKey} className="relative pl-7">
                 <div className="absolute bottom-0 left-3 top-12 w-px bg-gradient-to-b from-blue-200 via-slate-200 to-transparent" />
-                <div className="sticky top-14 z-30 mb-3 -ml-7 bg-white/90 py-1.5 backdrop-blur md:top-20 md:mb-4 md:py-2">
+                <div className="sticky top-[var(--trip-timeline-sticky-top,3.5rem)] z-30 mb-3 -ml-7 bg-white/90 py-1.5 backdrop-blur md:top-[var(--trip-timeline-sticky-top-md,5rem)] md:mb-4 md:py-2">
                   <div className={cn(
                     'inline-flex items-center gap-3 rounded-2xl border px-4 py-2 shadow-sm',
                     hasActiveEvent
