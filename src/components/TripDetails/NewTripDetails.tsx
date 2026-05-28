@@ -13,6 +13,8 @@ import TripDetailsHero from '@/components/TripDetails/TripDetailsHero';
 import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext';
 import TripPanelHost from '@/components/TripDetails/panels/TripPanelHost';
 import { useTripPanelManager } from '@/components/TripDetails/hooks/useTripPanelManager';
+import { useMapView } from '@/components/TripDetails/hooks/useMapView';
+import MapTripView from '@/components/TripDetails/map/MapTripView';
 import TripTimeline from '@/components/TripDetails/timeline/TripTimeline';
 import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/imports/TravelImportDialog';
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
@@ -146,6 +148,12 @@ const NewTripDetails: React.FC = () => {
   const [eventFormDraft, setEventFormDraft] = useState<Partial<Event> | null>(null);
   const [isCondensedView, setIsCondensedView] = useState(false);
   const { activePanel, panelOptions, openPanel, closePanel } = useTripPanelManager();
+  const { isMapView, isHydrated, setMapView } = useMapView(trip?._id);
+
+  const handleSetMapView = useCallback((next: boolean) => {
+    if (next) closePanel();
+    setMapView(next);
+  }, [closePanel, setMapView]);
   const [notifications, setNotifications] = useState<TripNotification[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference | null>(null);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
@@ -1281,7 +1289,18 @@ const NewTripDetails: React.FC = () => {
     }
   };
 
+  const showMapView = isHydrated && isMapView;
+
   return (
+    <>
+      {showMapView ? (
+        <MapTripView
+          trip={trip}
+          canEdit={canEdit}
+          onExitMapView={() => handleSetMapView(false)}
+          onReviewLocations={handleImproveLocations}
+        />
+      ) : (
     <div className="min-h-screen bg-slate-100/70">
       <div className="mx-auto max-w-7xl space-y-3 px-3 py-4 lg:space-y-6 lg:px-4 lg:py-6">
       <TripDetailsHero
@@ -1327,6 +1346,8 @@ const NewTripDetails: React.FC = () => {
           fetchNotifications();
         }}
         onCondensedViewChange={setIsCondensedView}
+        isMapView={isMapView}
+        onMapViewChange={handleSetMapView}
       />
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
@@ -1373,7 +1394,11 @@ const NewTripDetails: React.FC = () => {
           )}
         </div>
       </div>
+      </div>
+    </div>
+      )}
 
+      {!showMapView && (
       <TripPanelHost
         activePanel={activePanel}
         panelOptions={panelOptions}
@@ -1419,6 +1444,7 @@ const NewTripDetails: React.FC = () => {
         onOpenDecision={handleOpenDecision}
         onCreateDecision={() => handleCreateDecisionClick()}
       />
+      )}
 
       <TravelImportDialog
         open={isAIParseModalOpen}
@@ -1558,8 +1584,7 @@ const NewTripDetails: React.FC = () => {
         onSkip={locationConfirmQueue.handleSkip}
         onRetry={locationConfirmQueue.handleRetry}
       />
-      </div>
-    </div>
+    </>
   );
 };
 

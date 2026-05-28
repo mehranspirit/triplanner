@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { Bell, CalendarDays, CheckSquare, ClipboardList, CreditCard, FileText, MapIcon, MapPin, Plus, Sparkles, Users, Wand2 } from 'lucide-react';
+import { Bell, CalendarDays, CheckSquare, ClipboardList, CreditCard, FileText, LayoutList, Map as MapIconLucide, MapIcon, MapPin, Plus, Sparkles, Users, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -37,6 +37,8 @@ interface TripDetailsToolbarProps {
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
   onCondensedViewChange: (value: boolean) => void;
+  isMapView?: boolean;
+  onMapViewChange?: (isMapView: boolean) => void;
 }
 
 const eventIconForType = (type: EventType) => {
@@ -68,6 +70,8 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   onOpenPanel,
   onOpenNotifications,
   onCondensedViewChange,
+  isMapView = false,
+  onMapViewChange,
 }) => {
   const navigate = useNavigate();
 
@@ -211,6 +215,33 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {onMapViewChange && (
+          <div className="inline-flex w-full rounded-full border border-slate-200 bg-slate-50 p-1 sm:w-auto">
+            <button
+              type="button"
+              className={cn(
+                'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm',
+                !isMapView ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+              )}
+              onClick={() => onMapViewChange(false)}
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+              Standard
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm',
+                isMapView ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+              )}
+              onClick={() => onMapViewChange(true)}
+            >
+              <MapIconLucide className="h-3.5 w-3.5" />
+              Map
+            </button>
+          </div>
+        )}
 
         <div className="hidden items-center justify-between gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 lg:flex lg:justify-end">
           <Label htmlFor="condensed-view" className="cursor-pointer text-sm font-medium text-slate-700">

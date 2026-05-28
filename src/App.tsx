@@ -26,6 +26,7 @@ import NewTripDetails from './components/TripDetails/NewTripDetails';
 import TripInviteAccept from './components/TripInviteAccept';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { networkAwareApi } from './services/networkAwareApi';
+import { MapViewChromeProvider, useMapViewChromeOptional } from './context/MapViewChromeContext';
 
 // Import the registry first
 import './eventTypes/registry';
@@ -42,10 +43,12 @@ import './eventTypes/arrivalSpec';
 import './eventTypes/departureSpec';
 
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const mapChrome = useMapViewChromeOptional();
+
   return (
     <div className="min-h-screen bg-gray-100">
-      <Header />
-      <main className="max-w-7xl mx-auto py-4 px-4 sm:py-6 sm:px-6 lg:px-8">
+      {!mapChrome?.hideAppChrome && <Header />}
+      <main className={mapChrome?.hideAppChrome ? 'min-h-screen' : 'max-w-7xl mx-auto py-4 px-4 sm:py-6 sm:px-6 lg:px-8'}>
         {children}
       </main>
     </div>
@@ -154,6 +157,7 @@ const App: React.FC = () => {
   return (
     <Router>
       <AuthProvider>
+        <MapViewChromeProvider>
         <TripProvider>
           <OfflineIndicator />
           <Routes>
@@ -271,6 +275,7 @@ const App: React.FC = () => {
             <Route path="/" element={<Navigate to="/trips" replace />} />
           </Routes>
         </TripProvider>
+        </MapViewChromeProvider>
       </AuthProvider>
     </Router>
   );

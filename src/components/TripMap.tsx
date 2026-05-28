@@ -113,6 +113,7 @@ interface GroupedMapMarker {
 
 interface TripMapProps {
   trip: Trip;
+  className?: string;
 }
 
 interface Location {
@@ -456,7 +457,7 @@ const fetchWithRetry = async (url: string, retries = MAX_RETRIES, delay = RATE_L
   }
 };
 
-const TripMap: React.FC<TripMapProps> = ({ trip }) => {
+const TripMap: React.FC<TripMapProps> = ({ trip, className }) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [unmappedEvents, setUnmappedEvents] = useState<{ eventId: string; label: string; reason: string }[]>([]);
@@ -890,7 +891,7 @@ const TripMap: React.FC<TripMapProps> = ({ trip }) => {
   };
 
   return (
-    <div className="h-full rounded-lg overflow-hidden [&_.leaflet-pane]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-top]:!z-[2] [&_.leaflet-bottom]:!z-[2]">
+    <div className={className ?? 'h-full rounded-lg overflow-hidden [&_.leaflet-pane]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-top]:!z-[2] [&_.leaflet-bottom]:!z-[2]'}>
       <MapContainer
         key={`map-container-${trip._id}-${Date.now()}`}
         center={[groupedMarkers[0]?.lat || locations[0]?.lat || 0, groupedMarkers[0]?.lon || locations[0]?.lon || 0]}
