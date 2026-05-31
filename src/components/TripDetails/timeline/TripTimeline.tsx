@@ -31,6 +31,9 @@ import {
   UNSCHEDULED_FILTER_KEY,
 } from '@/utils/timelineDates';
 import { MultidayEndpointCard, MultidaySpanChip } from '@/components/TripDetails/timeline/MultidayTimelineCards';
+import TimelineLegConnector from '@/components/TripDetails/timeline/TimelineLegConnector';
+import { buildTimelineLegKey, TimelineTransferLeg } from '@/types/timelineTransferLegTypes';
+import { resolveTimelineTransferLeg } from '@/utils/transferAnalysis';
 
 export interface TripTimelineHandle {
   scrollToEvent: (eventId: string) => void;
@@ -63,6 +66,7 @@ interface TripTimelineProps {
   onAddEvent?: () => void;
   dayFilterKey?: string;
   selectedEventId?: string | null;
+  timelineTransferLegs?: TimelineTransferLeg[];
 }
 
 const formatWeatherForecast = (forecast: WeatherDay) => {
@@ -407,11 +411,21 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
   onAddEvent,
   dayFilterKey = ALL_DAYS_FILTER_KEY,
   selectedEventId,
+  timelineTransferLegs = [],
 }, ref) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const eventSectionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const timelineSectionRef = useRef<HTMLElement>(null);
+
+  const timelineTransferLegsByKey = useMemo(() => (
+    new Map(
+      timelineTransferLegs.map((leg) => [
+        buildTimelineLegKey(leg.fromEventId, leg.toEventId, leg.dayKey),
+        leg,
+      ]),
+    )
+  ), [timelineTransferLegs]);
 
   const selectableEventIds = useMemo(() => {
     if (!trip) return new Set<string>();
@@ -691,7 +705,22 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                 </div>
 
                 <div className="space-y-4">
-                  {sortEventsByStart(dateEvents).map((event) => {
+                  {sortEventsByStart(dateEvents).map((event, eventIndex, dayEvents) => {
+                    const resolvedLeg = resolveTimelineTransferLeg(
+                      sortedEvents,
+                      dayEvents,
+                      eventIndex,
+                      event,
+                      dateKey,
+                      weatherSnapshots,
+                    );
+                    const previousEvent = resolvedLeg?.previousEvent ?? null;
+                    const transferLeg = resolvedLeg?.transfer ?? null;
+                    const cachedDrivingLeg = previousEvent && transferLeg
+                      ? timelineTransferLegsByKey.get(
+                        buildTimelineLegKey(previousEvent.id, event.id, dateKey),
+                      )
+                      : undefined;
                     const registryItem = EVENT_TYPES[event.type];
                     if (!registryItem) return <div key={event.id}>Unknown event type: {event.type}</div>;
                     const EventCardComponent = registryItem.cardComponent;
@@ -719,10 +748,9 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                       : undefined;
                     const isEventActive = isEventCurrentlyActive(event);
                     const multidayRole = getMultidayEventDayRole(event, dateKey);
-                    const showMultidayMiddle = isDayFiltered && multidayRole === 'middle';
-                    const showMultidayEnd = isDayFiltered && multidayRole === 'end';
-                    const useFullMultidayStartCard = isDayFiltered
-                      && (multidayRole === 'start' || multidayRole === 'single');
+                    const showMultidayMiddle = multidayRole === 'middle';
+                    const showMultidayEnd = multidayRole === 'end';
+                    const useFullMultidayStartCard = multidayRole === 'start' || multidayRole === 'single';
                     const useCompactMultidayDisplay = showMultidayMiddle || showMultidayEnd;
                     const openEventDetails = canEdit ? () => onEditEvent(event) : undefined;
 
@@ -808,23 +836,29 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                     );
 
                     return (
-                      <div
-                        key={event.id}
-                        ref={(element) => {
-                          if (element) {
-                            eventSectionRefs.current.set(event.id, element);
-                          } else {
-                            eventSectionRefs.current.delete(event.id);
-                          }
-                        }}
-                        data-timeline-event={event.id}
-                        className={cn(
-                          'relative transition-all duration-300',
-                          isDeleting && 'animate-fade-out opacity-0',
-                          selectedEventId === event.id
-                            && 'rounded-2xl ring-2 ring-blue-400 ring-offset-2 ring-offset-white',
+                      <React.Fragment key={event.id}>
+                        {transferLeg && (
+                          <TimelineLegConnector
+                            transfer={transferLeg}
+                            drivingLeg={cachedDrivingLeg}
+                          />
                         )}
-                      >
+                        <div
+                          ref={(element) => {
+                            if (element) {
+                              eventSectionRefs.current.set(event.id, element);
+                            } else {
+                              eventSectionRefs.current.delete(event.id);
+                            }
+                          }}
+                          data-timeline-event={event.id}
+                          className={cn(
+                            'relative transition-all duration-300',
+                            isDeleting && 'animate-fade-out opacity-0',
+                            selectedEventId === event.id
+                              && 'rounded-2xl ring-2 ring-blue-400 ring-offset-2 ring-offset-white',
+                          )}
+                        >
                         <div className={cn(
                           'absolute -left-[1.45rem] top-6 h-3 w-3 rounded-full',
                           isEventActive
@@ -877,6 +911,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                           </>
                         )}
                       </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>

@@ -13,6 +13,7 @@ import {
   UpdateNotificationRequest
 } from '../types/notificationTypes';
 import { TripWeatherResponse } from '../types/weatherTypes';
+import { TripTimelineLegsResponse } from '../types/timelineTransferLegTypes';
 import { TripFlightStatusesResponse } from '../types/flightStatusTypes';
 import {
   AssistantSuggestionFeedback,
@@ -168,6 +169,7 @@ interface API {
   ) => Promise<import('@/types/geocodingTypes').PlaceAutocompleteResult[]>;
   placeDetails: (placeId: string) => Promise<import('@/types/geocodingTypes').PlaceDetailsResult>;
   getTripWeather: (tripId: string, options?: { refresh?: boolean }) => Promise<TripWeatherResponse>;
+  getTripTimelineLegs: (tripId: string, options?: { refresh?: boolean }) => Promise<TripTimelineLegsResponse>;
   getTripFlightStatuses: (tripId: string, options?: { refresh?: boolean }) => Promise<TripFlightStatusesResponse>;
   generateTripAssistantBriefing: (tripId: string) => Promise<TripAssistantBriefingResponse>;
   generateTripTodayBriefing: (tripId: string) => Promise<TripTodayBriefingResponse>;
@@ -1490,6 +1492,20 @@ export const api: API = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.message || 'Failed to fetch trip weather');
+    }
+    return response.json();
+  },
+
+  getTripTimelineLegs: async (tripId: string, options = {}): Promise<TripTimelineLegsResponse> => {
+    const params = new URLSearchParams();
+    if (options.refresh) params.set('refresh', 'true');
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${API_URL}/api/trips/${tripId}/timeline-legs${query}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.message || 'Failed to fetch timeline transfer legs');
     }
     return response.json();
   },

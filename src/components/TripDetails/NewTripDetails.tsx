@@ -50,6 +50,7 @@ import { hashText } from '@/utils/hash';
 import { NotificationPreference, TripNotification } from '@/types/notificationTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { WeatherSnapshot } from '@/types/weatherTypes';
+import { TimelineTransferLeg } from '@/types/timelineTransferLegTypes';
 import { ExpenseSummary } from '@/types/expenseTypes';
 import { TravelImport, TravelImportStatus } from '@/types/travelImportTypes';
 import {
@@ -163,6 +164,9 @@ const NewTripDetails: React.FC = () => {
   const [isCondensedView, setIsCondensedView] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
   );
+  const [isMobileLayout, setIsMobileLayout] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
+  );
   const { activePanel, panelOptions, openPanel, closePanel } = useTripPanelManager();
   const { isMapView, isHydrated, setMapView } = useMapView(trip?._id);
   const { activeTab: detailsTab, setActiveTab: setDetailsTab } = useTripDetailsTab(trip?._id);
@@ -180,9 +184,26 @@ const NewTripDetails: React.FC = () => {
       handleSetMapView(true);
       return;
     }
+    if (view === 'calendar' && isMobileLayout) {
+      return;
+    }
     handleSetMapView(false);
     setDetailsTab(view);
-  }, [handleSetMapView, setDetailsTab]);
+  }, [handleSetMapView, isMobileLayout, setDetailsTab]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const syncMobileLayout = () => setIsMobileLayout(media.matches);
+    syncMobileLayout();
+    media.addEventListener('change', syncMobileLayout);
+    return () => media.removeEventListener('change', syncMobileLayout);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileLayout && detailsTab === 'calendar') {
+      setDetailsTab('itinerary');
+    }
+  }, [detailsTab, isMobileLayout, setDetailsTab]);
 
   const [showMapSuggest, setShowMapSuggest] = useState(false);
   const [notifications, setNotifications] = useState<TripNotification[]>([]);
@@ -190,6 +211,7 @@ const NewTripDetails: React.FC = () => {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [weatherSnapshots, setWeatherSnapshots] = useState<WeatherSnapshot[]>([]);
+  const [timelineTransferLegs, setTimelineTransferLegs] = useState<TimelineTransferLeg[]>([]);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [flightStatusSnapshots, setFlightStatusSnapshots] = useState<FlightStatusSnapshot[]>([]);
   const [flightStatusError, setFlightStatusError] = useState<string | null>(null);
@@ -687,6 +709,22 @@ const NewTripDetails: React.FC = () => {
     };
 
     fetchWeather();
+  }, [trip?._id, trip?.updatedAt]);
+
+  useEffect(() => {
+    if (!trip?._id) return;
+
+    const fetchTimelineLegs = async () => {
+      try {
+        const data = await api.getTripTimelineLegs(trip._id);
+        setTimelineTransferLegs(data.legs || []);
+      } catch (error) {
+        console.error('Error loading timeline transfer legs:', error);
+        setTimelineTransferLegs([]);
+      }
+    };
+
+    fetchTimelineLegs();
   }, [trip?._id, trip?.updatedAt]);
 
   useEffect(() => {
@@ -1416,6 +1454,7 @@ const NewTripDetails: React.FC = () => {
       onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
       dayFilterKey={activeDayKey}
       selectedEventId={selectedEventId}
+      timelineTransferLegs={timelineTransferLegs}
     />
   );
 
@@ -1552,6 +1591,7 @@ const NewTripDetails: React.FC = () => {
         onCondensedViewChange={setIsCondensedView}
         activeView={detailsTab}
         onViewChange={handleDetailsViewChange}
+        showCalendarTab={!isMobileLayout}
       />
 
       {showMapSuggest && (
@@ -1570,7 +1610,7 @@ const NewTripDetails: React.FC = () => {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
         <main className="min-w-0 space-y-3">
-          {detailsTab === 'calendar' && (
+          {detailsTab === 'calendar' && !isMobileLayout && (
             <TripCalendarView
               events={trip.events}
               tripStartDate={trip.startDate}

@@ -51,6 +51,57 @@ const fetchMatrixRow = async (origin, destinations, mode) => {
   return payload.rows?.[0]?.elements || [];
 };
 
+const parseDrivingElement = (element) => {
+  if (!element || element.status !== 'OK') {
+    return { status: 'unavailable' };
+  }
+
+  return {
+    status: 'ok',
+    driveDistanceMeters: element.distance?.value ?? null,
+    driveDurationSeconds: element.duration?.value ?? null,
+    driveDistanceLabel: element.distance?.text || formatDistanceMeters(element.distance?.value),
+    driveDurationLabel: element.duration?.text || formatDuration(element.duration?.value),
+  };
+};
+
+/** Batch driving lookups grouped by origin (max 25 destinations per request). */
+const getDrivingLegsForPairs = async (pairs) => {
+  if (!GOOGLE_MAPS_API_KEY || pairs.length === 0) {
+    return new Map();
+  }
+
+  const byOrigin = new Map();
+  pairs.forEach((pair) => {
+    const origin = `${pair.fromPoint.lat},${pair.fromPoint.lng}`;
+    if (!byOrigin.has(origin)) byOrigin.set(origin, []);
+    byOrigin.get(origin).push(pair);
+  });
+
+  const results = new Map();
+
+  for (const [origin, entries] of byOrigin.entries()) {
+    for (let index = 0; index < entries.length; index += 25) {
+      const chunk = entries.slice(index, index + 25);
+      const destinations = chunk.map((entry) => `${entry.toPoint.lat},${entry.toPoint.lng}`);
+
+      try {
+        const elements = await fetchMatrixRow(origin, destinations, 'driving');
+        chunk.forEach((entry, elementIndex) => {
+          results.set(entry.legId, parseDrivingElement(elements?.[elementIndex]));
+        });
+      } catch (error) {
+        logger.warn('Driving distance matrix batch failed:', error.message);
+        chunk.forEach((entry) => {
+          results.set(entry.legId, { status: 'unavailable' });
+        });
+      }
+    }
+  }
+
+  return results;
+};
+
 const getTravelTimesFromReference = async (referencePoint, destinations) => {
   const origin = formatLocation(referencePoint?.coords, referencePoint?.mapsQuery);
   const destinationEntries = destinations
@@ -138,9 +189,11 @@ const buildStaticMapUrl = (referencePoint, optionMarkers) => {
 
 module.exports = {
   getTravelTimesFromReference,
+  getDrivingLegsForPairs,
   buildStaticMapUrl,
   __test: {
     formatDuration,
     formatDistanceMeters,
+    parseDrivingElement,
   },
 };

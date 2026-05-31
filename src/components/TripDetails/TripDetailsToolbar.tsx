@@ -41,6 +41,7 @@ interface TripDetailsToolbarProps {
   onOpenNotifications: () => void;
   onCondensedViewChange: (value: boolean) => void;
   onViewChange: (view: TripDetailsView) => void;
+  showCalendarTab?: boolean;
 }
 
 const VIEW_OPTIONS: Array<{
@@ -85,8 +86,12 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   onOpenNotifications,
   onCondensedViewChange,
   onViewChange,
+  showCalendarTab = true,
 }) => {
   const navigate = useNavigate();
+  const viewOptions = showCalendarTab
+    ? VIEW_OPTIONS
+    : VIEW_OPTIONS.filter((view) => view.id !== 'calendar');
   const showLocationProgress = mapLocationProgress
     && mapLocationProgress.total > 0
     && mapLocationProgress.geocoded < mapLocationProgress.total;
@@ -260,7 +265,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
           aria-label="Trip views"
           className={cn('flex w-full', tripSurfaces.segmentTrack)}
         >
-          {VIEW_OPTIONS.map((view) => (
+          {viewOptions.map((view) => (
             <button
               key={view.id}
               type="button"

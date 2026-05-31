@@ -22,6 +22,7 @@ const notificationRoutes = require('./routes/notifications');
 const geocodingRoutes = require('./routes/geocoding');
 const placesRoutes = require('./routes/places');
 const weatherRoutes = require('./routes/weather');
+const timelineLegsRoutes = require('./routes/timelineLegs');
 const flightStatusRoutes = require('./routes/flightStatus');
 const assistantBriefingRoutes = require('./routes/assistantBriefing');
 const tripHealthRoutes = require('./routes/tripHealth');
@@ -235,6 +236,7 @@ app.use('/api', placesRoutes);
 
 // Mount server-side weather context routes
 app.use('/api', weatherRoutes);
+app.use('/api', timelineLegsRoutes);
 
 // Mount server-side flight status routes
 app.use('/api', flightStatusRoutes);
