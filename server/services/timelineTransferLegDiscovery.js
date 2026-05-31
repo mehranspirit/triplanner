@@ -1,4 +1,3 @@
-const { eachDayOfInterval, format, startOfDay } = require('date-fns');
 const { geocodeLocation } = require('./geocoding');
 const {
   getEventStart,
@@ -6,6 +5,32 @@ const {
   sortEventsByStart,
   isSameLocalDay,
 } = require('../utils/eventTime');
+
+const formatDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const startOfDay = (date) => {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+};
+
+const eachDayOfInterval = ({ start, end }) => {
+  const days = [];
+  const cursor = startOfDay(start);
+  const rangeEnd = startOfDay(end);
+
+  while (cursor <= rangeEnd) {
+    days.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return days;
+};
 
 const MIN_TRANSFER_DISTANCE_KM = 2;
 const MULTIDAY_EVENT_TYPES = new Set(['stay', 'rental_car']);
@@ -25,19 +50,19 @@ const getEventTimelineDateKeys = (event) => {
   if (!start) return [];
 
   if (!eventSpansMultipleDays(event)) {
-    return [format(startOfDay(start), 'yyyy-MM-dd')];
+    return [formatDateKey(startOfDay(start))];
   }
 
   const end = getEventEnd(event);
   if (!end) {
-    return [format(startOfDay(start), 'yyyy-MM-dd')];
+    return [formatDateKey(startOfDay(start))];
   }
 
   const rangeStart = startOfDay(start <= end ? start : end);
   const rangeEnd = startOfDay(start <= end ? end : start);
 
   return eachDayOfInterval({ start: rangeStart, end: rangeEnd }).map(
-    (date) => format(date, 'yyyy-MM-dd'),
+    (date) => formatDateKey(date),
   );
 };
 
