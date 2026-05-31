@@ -41,6 +41,7 @@ interface InTripAssistantProps {
   replanBriefingError?: string | null;
   isGeneratingReplanBriefing?: boolean;
   onClose: () => void;
+  showCloseButton?: boolean;
   onOpenChecklist: () => void;
   onEditEvent: (event: Event) => void;
   onGenerateTodayBriefing?: () => void;
@@ -422,6 +423,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   replanBriefingError,
   isGeneratingReplanBriefing,
   onClose,
+  showCloseButton = true,
   onOpenChecklist,
   onEditEvent,
   onGenerateTodayBriefing,
@@ -477,9 +479,11 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
           <h2 className="mt-1 text-lg font-semibold">In-trip assistant</h2>
           <p className="mt-1 text-sm text-gray-600">Critical details for what is happening now and next.</p>
         </div>
-        <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-100" aria-label="Close Today">
-          <X size={20} />
-        </button>
+        {showCloseButton && (
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-100" aria-label="Close Today">
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">

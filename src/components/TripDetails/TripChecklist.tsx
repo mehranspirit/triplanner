@@ -30,6 +30,7 @@ interface TripChecklistProps {
   trip: Trip;
   canEdit: boolean;
   onClose: () => void;
+  showCloseButton?: boolean;
 }
 
 const initialBins: Checklist = [
@@ -54,7 +55,7 @@ const checklistCache: ChecklistCache = {};
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const CACHE_VERSION = 1;
 
-const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, trip, canEdit, onClose }) => {
+const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, trip, canEdit, onClose, showCloseButton = true }) => {
   const [bins, setBins] = useState<Checklist>(initialBins);
   const [input, setInput] = useState('');
   const [newBinTitle, setNewBinTitle] = useState('');
@@ -365,12 +366,15 @@ const TripChecklist: React.FC<TripChecklistProps> = ({ tripId, trip, canEdit, on
           >
             <RefreshCw size={16} />
           </button>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <X size={20} />
-          </button>
+          {showCloseButton && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Close checklist"
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
       </div>
 

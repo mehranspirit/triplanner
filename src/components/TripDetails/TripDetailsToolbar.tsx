@@ -99,6 +99,10 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                   <Sparkles className="mr-2 h-4 w-4 text-blue-500" />
                   Import booking with AI
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={onOpenExploreSuggestions} className="font-medium">
+                  <Sparkles className="mr-2 h-4 w-4 text-amber-500" />
+                  Suggest activities with AI
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>

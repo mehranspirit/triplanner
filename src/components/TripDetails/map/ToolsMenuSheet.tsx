@@ -128,6 +128,11 @@ const ToolsMenuSheet: React.FC<ToolsMenuSheetProps> = ({
                 label="Import booking with AI"
                 onClick={() => closeAndRun(onOpenAIImport)}
               />
+              <MenuItem
+                icon={<Sparkles className="h-4 w-4 text-amber-500" />}
+                label="Suggest activities with AI"
+                onClick={() => closeAndRun(onOpenExploreSuggestions)}
+              />
               {addableEventTypes.map((type) => {
                 const eventType = EVENT_TYPES[type];
                 if (!eventType) return null;

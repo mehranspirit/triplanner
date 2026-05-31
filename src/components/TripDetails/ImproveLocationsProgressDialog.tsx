@@ -23,7 +23,8 @@ const ImproveLocationsProgressDialog: React.FC<ImproveLocationsProgressDialogPro
 }) => (
   <Dialog open={open}>
     <DialogContent
-      className="sm:max-w-md [&>button]:hidden"
+      showCloseButton={false}
+      className="sm:max-w-md"
       onInteractOutside={(event) => event.preventDefault()}
       onEscapeKeyDown={(event) => event.preventDefault()}
     >

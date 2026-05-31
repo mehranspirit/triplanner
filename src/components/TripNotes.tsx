@@ -16,6 +16,7 @@ interface TripNotesProps {
   tripId: string;
   canEdit: boolean;
   onClose: () => void;
+  showCloseButton?: boolean;
 }
 
 // Cache structure with metadata
@@ -123,7 +124,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
   );
 };
 
-const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit, onClose }) => {
+const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit, onClose, showCloseButton = true }) => {
   const { user } = useAuth();
   const [note, setNote] = useState<TripNote | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -258,12 +259,15 @@ const TripNotes: React.FC<TripNotesProps> = ({ tripId, canEdit, onClose }) => {
     <div className="flex flex-col h-full bg-white">
       <div className="flex justify-between items-center p-4 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900">Trip Notes</h2>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
-        >
-          <X size={20} />
-        </button>
+        {showCloseButton && (
+          <button
+            onClick={onClose}
+            className="p-1 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+            aria-label="Close notes"
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
       {canEdit && <MenuBar editor={editor} />}
       <div className="flex-grow overflow-y-auto p-4">

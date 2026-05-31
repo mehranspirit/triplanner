@@ -11,6 +11,7 @@ interface TripNotificationsProps {
   loading: boolean;
   error: string | null;
   onClose: () => void;
+  showCloseButton?: boolean;
   onRefresh: () => void;
   onMarkRead: (notification: TripNotification) => void;
   onDismiss: (notification: TripNotification) => void;
@@ -30,6 +31,7 @@ const TripNotifications: React.FC<TripNotificationsProps> = ({
   loading,
   error,
   onClose,
+  showCloseButton = true,
   onRefresh,
   onMarkRead,
   onDismiss,
@@ -61,9 +63,11 @@ const TripNotifications: React.FC<TripNotificationsProps> = ({
             {unreadCount} unread item{unreadCount === 1 ? '' : 's'} generated from your itinerary.
           </p>
         </div>
-        <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-100" aria-label="Close notifications">
-          <X size={20} />
-        </button>
+        {showCloseButton && (
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-100" aria-label="Close notifications">
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2">

@@ -102,6 +102,7 @@ const TripPanelContent: React.FC<TripPanelContentProps> = ({
         loading={isLoadingNotifications}
         error={notificationError}
         onClose={onClose}
+        showCloseButton={false}
         onRefresh={onRefreshNotifications}
         onMarkRead={onMarkNotificationRead}
         onDismiss={onDismissNotification}
@@ -130,6 +131,7 @@ const TripPanelContent: React.FC<TripPanelContentProps> = ({
         isGeneratingReplanBriefing={isGeneratingReplanBriefing}
         onGenerateReplanBriefing={onGenerateReplanBriefing}
         onClose={onClose}
+        showCloseButton={false}
         onOpenChecklist={() => onOpenPanel('checklist')}
         onEditEvent={(event) => {
           onClose();
@@ -147,6 +149,7 @@ const TripPanelContent: React.FC<TripPanelContentProps> = ({
         trip={trip}
         canEdit={canEdit}
         onClose={onClose}
+        showCloseButton={false}
       />
     );
   }
@@ -157,6 +160,7 @@ const TripPanelContent: React.FC<TripPanelContentProps> = ({
         tripId={trip._id}
         canEdit={canEdit}
         onClose={onClose}
+        showCloseButton={false}
       />
     );
   }
