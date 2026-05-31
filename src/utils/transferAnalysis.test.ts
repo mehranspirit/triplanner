@@ -79,13 +79,63 @@ const makeFlight = (
   },
 } as unknown as Event);
 
+const makeRental = (
+  id: string,
+  pickupDate: string,
+  dropoffDate: string,
+  lat: number,
+  lng: number,
+  dropoffLat: number,
+  dropoffLng: number,
+): Event => ({
+  id,
+  type: 'rental_car',
+  status: 'confirmed',
+  date: pickupDate,
+  pickupTime: '10:00',
+  dropoffDate,
+  dropoffTime: '09:00',
+  location: { lat, lng, address: 'Pickup location' },
+  departureLocation: {
+    lat,
+    lng,
+    address: 'Pickup location',
+    quality: 'exact',
+    source: 'google_places',
+  },
+  arrivalLocation: {
+    lat: dropoffLat,
+    lng: dropoffLng,
+    address: 'Drop-off location',
+    quality: 'exact',
+    source: 'google_places',
+  },
+} as unknown as Event);
+
 const resolveFirstLegOnDay = (events: Event[], dayKey: string) => {
   const itineraryEvents = events.filter((event) => event.status !== 'alternative');
   const sortedEvents = sortEventsByStart(itineraryEvents);
   const grouped = groupEventsByTimelineDateKeys(itineraryEvents);
-  const dayEvents = grouped[dayKey] || [];
+  const dayEvents = sortEventsByStart(grouped[dayKey] || []);
 
   return resolveTimelineTransferLeg(sortedEvents, dayEvents, 0, dayEvents[0], dayKey);
+};
+
+const resolveLegOnDay = (events: Event[], dayKey: string, targetId: string) => {
+  const itineraryEvents = events.filter((event) => event.status !== 'alternative');
+  const sortedEvents = sortEventsByStart(itineraryEvents);
+  const grouped = groupEventsByTimelineDateKeys(itineraryEvents);
+  const dayEvents = sortEventsByStart(grouped[dayKey] || []);
+  const eventIndex = dayEvents.findIndex((event) => event.id === targetId);
+  if (eventIndex < 0) return null;
+
+  return resolveTimelineTransferLeg(
+    sortedEvents,
+    dayEvents,
+    eventIndex,
+    dayEvents[eventIndex],
+    dayKey,
+  );
 };
 
 describe('transferAnalysis timeline legs', () => {
@@ -268,6 +318,46 @@ describe('transferAnalysis timeline legs', () => {
     expect(leg).not.toBeNull();
     expect(leg?.flexibleDeparture).toBe(true);
     expect(leg?.severity).toBe('ok');
+  });
+
+  it('bridges checkout stay to rental drop-off on a busy departure day', () => {
+    const stay = {
+      ...makeStay('stay-1', '2026-06-24', '2026-06-26', 10.4312, -84.7043),
+      checkOutTime: '12:00',
+    } as Event;
+    const rental = makeRental(
+      'rental-1',
+      '2026-06-17',
+      '2026-06-27',
+      10.4312,
+      -84.7043,
+      9.9939,
+      -84.2088,
+    );
+    const flight = {
+      ...makeFlight(
+        'flight-1',
+        '2026-06-27T08:45:00',
+        '2026-06-27T14:30:00',
+        37.6213,
+        -122.3790,
+      ),
+      departureTime: '08:45',
+      departureLocation: {
+        lat: 10.0200,
+        lng: -84.2300,
+        address: 'SJO terminal',
+        quality: 'exact',
+        source: 'google_places',
+      },
+    } as Event;
+    const events = [stay, rental, flight];
+
+    expect(resolveFirstLegOnDay(events, '2026-06-27')).not.toBeNull();
+
+    const flightLeg = resolveLegOnDay(events, '2026-06-27', 'flight-1');
+    expect(flightLeg).not.toBeNull();
+    expect(flightLeg?.transfer.flexibleDeparture).toBe(true);
   });
 
   it('formats distance and travel time for timeline chips', () => {

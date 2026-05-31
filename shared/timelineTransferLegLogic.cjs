@@ -54,6 +54,37 @@ const createTimelineTransferLegLogic = ({
     return toRole !== 'middle';
   };
 
+  const resolveTransferLegToStart = (to, viewDayKey) => {
+    const dayDate = parseTimelineDateKey(viewDayKey);
+    if (!dayDate) return null;
+
+    const toStartRaw = getEventStart(to);
+    if (!toStartRaw) return null;
+
+    const toRole = getMultidayEventDayRole(to, viewDayKey);
+    if (toRole === 'end') return getEventEnd(to) ?? toStartRaw;
+    if (toRole === 'middle') return startOfDay(dayDate);
+    return toStartRaw;
+  };
+
+  const applyFlexibleOutboundEndRole = (
+    from,
+    fromRole,
+    fromEnd,
+    toStart,
+    dayDate,
+    flexibleDeparture,
+  ) => {
+    if (
+      (from.type === 'stay' || from.type === 'rental_car')
+      && fromRole === 'end'
+      && toStart.getTime() < fromEnd.getTime()
+    ) {
+      return { fromEnd: startOfDay(dayDate), flexibleDeparture: true };
+    }
+    return { fromEnd, flexibleDeparture };
+  };
+
   const getTimelineDayLegTimes = (from, to, dayKey) => {
     const dayDate = parseTimelineDateKey(dayKey);
     if (!dayDate) return null;
@@ -86,30 +117,16 @@ const createTimelineTransferLegLogic = ({
     if (!isSameLocalDay(fromEnd, toStart)) return null;
 
     let flexibleDeparture = isFlexibleOutboundMultidayLeg(from, to, dayKey);
-    // Activity before checkout time: traveler leaves the villa earlier, not at checkout.
-    if (
-      from.type === 'stay'
-      && fromRole === 'end'
-      && toStart.getTime() < fromEnd.getTime()
-    ) {
-      fromEnd = startOfDay(dayDate);
-      flexibleDeparture = true;
-    }
+    ({ fromEnd, flexibleDeparture } = applyFlexibleOutboundEndRole(
+      from,
+      fromRole,
+      fromEnd,
+      toStart,
+      dayDate,
+      flexibleDeparture,
+    ));
 
     return { fromEnd, toStart, flexibleDeparture };
-  };
-
-  const resolveTransferLegToStart = (to, viewDayKey) => {
-    const dayDate = parseTimelineDateKey(viewDayKey);
-    if (!dayDate) return null;
-
-    const toStartRaw = getEventStart(to);
-    if (!toStartRaw) return null;
-
-    const toRole = getMultidayEventDayRole(to, viewDayKey);
-    if (toRole === 'end') return getEventEnd(to) ?? toStartRaw;
-    if (toRole === 'middle') return startOfDay(dayDate);
-    return toStartRaw;
   };
 
   const getCrossDayLegTimes = (from, to, viewDayKey) => {
@@ -134,19 +151,25 @@ const createTimelineTransferLegLogic = ({
   const needsCrossDayInboundLeg = (dayEvents, event, dayKey, eventIndex) => {
     if (eventIndex > 0) return false;
 
+    const role = getMultidayEventDayRole(event, dayKey);
+    if (event.type === 'rental_car' && role === 'end') {
+      return true;
+    }
+
     const primaryEvents = dayEvents.filter((item) => isTimelinePrimaryEvent(item, dayKey));
     const isSparsePrimaryDay = primaryEvents.length === 1 && primaryEvents[0].id === event.id;
     if (!isSparsePrimaryDay) return false;
 
     if (TRANSPORT_INBOUND_TYPES.has(event.type)) return true;
 
-    const role = getMultidayEventDayRole(event, dayKey);
     return role === 'start'
       || (role === 'single' && MULTIDAY_EVENT_TYPES.has(event.type));
   };
 
-  const findClosestPriorItineraryEvent = (events, current) => {
-    const currentStart = getEventStart(current);
+  const findClosestPriorItineraryEvent = (events, current, dayKey) => {
+    const currentStart = dayKey
+      ? resolveTransferLegToStart(current, dayKey)
+      : getEventStart(current);
     if (!currentStart) return null;
 
     let bestMatch = null;
@@ -170,7 +193,7 @@ const createTimelineTransferLegLogic = ({
   const findPreviousItineraryEventForDay = (events, current, dayKey) => {
     if (!eventOccursOnDayKey(current, dayKey)) return null;
 
-    const currentStart = getEventStart(current);
+    const currentStart = resolveTransferLegToStart(current, dayKey);
     if (!currentStart) return null;
 
     let bestMatch = null;
@@ -211,7 +234,7 @@ const createTimelineTransferLegLogic = ({
       return null;
     }
 
-    previousEvent = findClosestPriorItineraryEvent(sortedEvents, event);
+    previousEvent = findClosestPriorItineraryEvent(sortedEvents, event, dayKey);
     if (!previousEvent) return null;
 
     const legTimes = getCrossDayLegTimes(previousEvent, event, dayKey);

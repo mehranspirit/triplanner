@@ -141,6 +141,38 @@ test('resolvePreviousTimelineEvent bridges sparse flight days', () => {
   assert.equal(resolved.previousEvent.id, 'dinner');
 });
 
+test('resolvePreviousTimelineEvent bridges checkout stay to rental drop-off', () => {
+  const stay = {
+    ...makeStay('stay-1', '2026-06-24', '2026-06-26', 10.4312, -84.7043),
+    checkOutTime: '12:00',
+  };
+  const rental = {
+    id: 'rental-1',
+    type: 'rental_car',
+    status: 'confirmed',
+    date: '2026-06-17',
+    pickupTime: '10:00',
+    dropoffDate: '2026-06-27',
+    dropoffTime: '09:00',
+    location: { lat: 10.4312, lng: -84.7043, address: 'Pickup' },
+    departureLocation: { lat: 10.4312, lng: -84.7043, address: 'Pickup' },
+    arrivalLocation: { lat: 9.9939, lng: -84.2088, address: 'SJO' },
+  };
+  const flight = makeFlight(
+    'flight-1',
+    '2026-06-27T08:45:00',
+    '2026-06-27T14:30:00',
+    37.6213,
+    -122.3790,
+  );
+  flight.departureTime = '08:45';
+  flight.departureLocation = { lat: 9.9939, lng: -84.2088, address: 'SJO' };
+
+  const resolved = resolveFirstLegOnDay([stay, rental, flight], '2026-06-27');
+  assert.ok(resolved);
+  assert.equal(resolved.previousEvent.id, 'stay-1');
+});
+
 test('getTimelineDayLegTimes handles checkout stay to pre-checkout activity', () => {
   const stay = makeStay('stay-1', '2026-06-18', '2026-06-21', 9.3919, -84.1420);
   const activity = makeActivity(

@@ -11,7 +11,7 @@ import {
   getTransportEndpointLocation,
   isDualEndpointTransportEvent,
 } from '@/utils/transportLocation';
-import { UNSCHEDULED_FILTER_KEY } from '@/utils/timelineDates';
+import { UNSCHEDULED_FILTER_KEY, getMultidayEventDayRole } from '@/utils/timelineDates';
 import {
   AVERAGE_URBAN_SPEED_KMH,
   DOMESTIC_CONNECTION_TIGHT_MINUTES,
@@ -154,6 +154,28 @@ export const getRoutePoint = (
   return getUsableEventLocation(event);
 };
 
+/** Day-aware route points for multiday rental pickup vs drop-off days. */
+export const getTimelineRoutePoint = (
+  event: Event,
+  side: 'from' | 'to',
+  dayKey: string,
+  weatherSnapshots: WeatherSnapshot[] = [],
+): RoutePoint | null => {
+  const role = getMultidayEventDayRole(event, dayKey);
+
+  if (event.type === 'rental_car' && role === 'end' && side === 'to') {
+    return getTransportEndpointRoutePoint(event, 'arrival')
+      ?? getRoutePoint(event, side, weatherSnapshots);
+  }
+
+  if (event.type === 'rental_car' && role === 'start' && side === 'from') {
+    return getTransportEndpointRoutePoint(event, 'departure')
+      ?? getRoutePoint(event, side, weatherSnapshots);
+  }
+
+  return getRoutePoint(event, side, weatherSnapshots);
+};
+
 export const getDistanceKm = (from: RoutePoint, to: RoutePoint): number => {
   const toRadians = (value: number) => (value * Math.PI) / 180;
   const earthRadiusKm = 6371;
@@ -200,12 +222,17 @@ const buildTransferSummary = (
   toStart: Date,
   weatherSnapshots: WeatherSnapshot[] = [],
   flexibleDeparture = false,
+  dayKey?: string,
 ): TransferSummary | null => {
   const gapMinutes = Math.round((toStart.getTime() - fromEnd.getTime()) / (60 * 1000));
   if (gapMinutes < 0) return null;
 
-  const fromPoint = getRoutePoint(from, 'from', weatherSnapshots);
-  const toPoint = getRoutePoint(to, 'to', weatherSnapshots);
+  const resolvePoint = dayKey
+    ? (event: Event, side: 'from' | 'to') => getTimelineRoutePoint(event, side, dayKey, weatherSnapshots)
+    : (event: Event, side: 'from' | 'to') => getRoutePoint(event, side, weatherSnapshots);
+
+  const fromPoint = resolvePoint(from, 'from');
+  const toPoint = resolvePoint(to, 'to');
   if (!fromPoint || !toPoint) return null;
 
   const distanceKm = getDistanceKm(fromPoint, toPoint);
@@ -287,6 +314,7 @@ export const resolveTimelineTransferLeg = (
     legTimes.toStart,
     weatherSnapshots,
     legTimes.flexibleDeparture,
+    dayKey,
   );
 
   return transfer ? { previousEvent, transfer } : null;
@@ -311,6 +339,7 @@ export const getTimelineDayTransferLeg = (
     legTimes.toStart,
     weatherSnapshots,
     legTimes.flexibleDeparture,
+    dayKey,
   );
 };
 

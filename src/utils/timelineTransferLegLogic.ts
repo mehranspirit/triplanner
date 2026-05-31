@@ -54,9 +54,11 @@ export const needsCrossDayInboundLeg = (
   eventIndex: number,
 ) => rawLogic.needsCrossDayInboundLeg(dayEvents, event, dayKey, eventIndex);
 
-export const findClosestPriorItineraryEvent = (events: Event[], current: Event) => (
-  rawLogic.findClosestPriorItineraryEvent(events, current)
-);
+export const findClosestPriorItineraryEvent = (
+  events: Event[],
+  current: Event,
+  dayKey?: string,
+) => rawLogic.findClosestPriorItineraryEvent(events, current, dayKey);
 
 export const findPreviousItineraryEventForDay = (
   events: Event[],

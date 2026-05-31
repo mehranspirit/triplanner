@@ -6,6 +6,7 @@ const {
   resolvePreviousTimelineEvent,
   shouldSkipInboundTimelineLeg,
   computeGapMinutes,
+  getMultidayEventDayRole,
 } = require('../utils/timelineTransferLegLogic');
 
 const DUAL_ENDPOINT_TYPES = new Set(['flight', 'train', 'bus', 'rental_car']);
@@ -36,9 +37,18 @@ const getFlightAirportQuery = (event, endpoint) => {
   return /^[A-Z]{3}$/i.test(trimmed) ? `${trimmed.toUpperCase()} Airport` : trimmed;
 };
 
-const getRoutePoint = async (event, side, geocodeCache) => {
+const getRoutePoint = async (event, side, geocodeCache, dayKey) => {
+  const role = dayKey ? getMultidayEventDayRole(event, dayKey) : null;
+
   if (DUAL_ENDPOINT_TYPES.has(event.type)) {
-    const endpoint = side === 'from' ? 'arrival' : 'departure';
+    let endpoint = side === 'from' ? 'arrival' : 'departure';
+    if (event.type === 'rental_car' && role === 'end' && side === 'to') {
+      endpoint = 'arrival';
+    }
+    if (event.type === 'rental_car' && role === 'start' && side === 'from') {
+      endpoint = 'departure';
+    }
+
     const stored = getTransportEndpointLocation(event, endpoint);
     if (endpointLocationHasCoordinates(stored)) {
       return { lat: stored.lat, lng: stored.lng };
@@ -106,8 +116,8 @@ const discoverTimelineTransferLegs = async (events) => {
 
       const { previousEvent, legTimes } = resolved;
 
-      const fromPoint = await getRoutePoint(previousEvent, 'from', geocodeCache);
-      const toPoint = await getRoutePoint(event, 'to', geocodeCache);
+      const fromPoint = await getRoutePoint(previousEvent, 'from', geocodeCache, dayKey);
+      const toPoint = await getRoutePoint(event, 'to', geocodeCache, dayKey);
       if (!fromPoint || !toPoint) continue;
 
       const distanceKm = getDistanceKm(fromPoint, toPoint);
