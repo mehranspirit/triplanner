@@ -353,6 +353,8 @@ const discoverTimelineTransferLegs = async (events) => {
 
     for (let eventIndex = 0; eventIndex < daySorted.length; eventIndex += 1) {
       const event = daySorted[eventIndex];
+      if (getMultidayEventDayRole(event, dayKey) === 'middle') continue;
+
       const resolved = resolvePreviousTimelineEvent(
         sortedEvents,
         daySorted,

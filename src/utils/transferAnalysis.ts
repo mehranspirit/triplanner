@@ -405,6 +405,12 @@ export const resolveTimelineTransferLeg = (
   dayKey: string,
   weatherSnapshots: WeatherSnapshot[] = [],
 ): ResolvedTimelineTransferLeg | null => {
+  // No inbound leg to a middle stay/rental day — the traveler is already there.
+  const destinationRole = getMultidayEventDayRole(event, dayKey);
+  if (destinationRole === 'middle') {
+    return null;
+  }
+
   let previousEvent = eventIndex > 0 ? dayEvents[eventIndex - 1] : null;
 
   if (!previousEvent) {

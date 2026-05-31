@@ -173,6 +173,20 @@ describe('transferAnalysis timeline legs', () => {
     expect(getTimelineDayTransferLeg(flight, checkIn, '2026-06-02')).not.toBeNull();
   });
 
+  it('skips inbound legs to a middle stay day', () => {
+    const priorActivity = makeActivity(
+      'dinner',
+      '2026-06-01T19:00:00',
+      '2026-06-01T21:00:00',
+      40.7128,
+      -74.006,
+    );
+    const stay = makeStay('stay-1', '2026-06-01', '2026-06-04', 40.758, -73.9855);
+    const events = [priorActivity, stay];
+
+    expect(resolveFirstLegOnDay(events, '2026-06-02')).toBeNull();
+  });
+
   it('shows a cross-day leg to a sparse check-in day', () => {
     const priorStay = makeStay('stay-old', '2026-05-30', '2026-06-01', 40.7128, -74.006);
     const checkIn = makeStay('stay-new', '2026-06-03', '2026-06-06', 40.758, -73.9855);

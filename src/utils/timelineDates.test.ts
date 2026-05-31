@@ -9,6 +9,7 @@ import {
   getMultidayEndpointDetails,
   getMultidayEventDayRole,
   getMultidaySpanLabel,
+  getStayNightDateKeys,
   getTimelineDateKey,
   isTimelineDateToday,
 } from '@/utils/timelineDates';
@@ -177,8 +178,33 @@ describe('timelineDates', () => {
 
     expect(getMultidaySpanLabel(stay, '2026-06-02')).toEqual({
       name: 'Hotel Roma',
+      progress: 'Night 2 of 2',
+      hint: 'Last night',
+    });
+  });
+
+  it('excludes checkout day from stay night counts', () => {
+    const stay = {
+      id: 'stay-1',
+      type: 'stay',
+      status: 'confirmed',
+      checkIn: '2026-06-01',
+      checkOut: '2026-06-04',
+      accommodationName: 'Hotel Roma',
+    } as unknown as Event;
+
+    expect(getStayNightDateKeys(stay)).toEqual([
+      '2026-06-01',
+      '2026-06-02',
+      '2026-06-03',
+    ]);
+    expect(getMultidaySpanLabel(stay, '2026-06-02')).toMatchObject({
       progress: 'Night 2 of 3',
       hint: 'Staying tonight',
+    });
+    expect(getMultidaySpanLabel(stay, '2026-06-03')).toMatchObject({
+      progress: 'Night 3 of 3',
+      hint: 'Last night',
     });
   });
 });

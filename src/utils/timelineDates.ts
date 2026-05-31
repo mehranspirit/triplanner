@@ -79,8 +79,17 @@ export const getMultidayEventDayRole = (
   return 'middle';
 };
 
-export const getMultidayDayPosition = (event: Event, dayKey: string) => {
+/** Overnight dates for a stay; checkout day is departure, not a counted night. */
+export const getStayNightDateKeys = (event: Event): string[] => {
   const keys = getEventTimelineDateKeys(event);
+  if (event.type !== 'stay' || keys.length <= 1) return keys;
+  return keys.slice(0, -1);
+};
+
+export const getMultidayDayPosition = (event: Event, dayKey: string) => {
+  const keys = event.type === 'stay'
+    ? getStayNightDateKeys(event)
+    : getEventTimelineDateKeys(event);
   const index = keys.indexOf(dayKey);
 
   return {
