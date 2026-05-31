@@ -1,5 +1,5 @@
 import { eachDayOfInterval, format, isValid, parseISO, startOfDay } from 'date-fns';
-import { Event } from '@/types/eventTypes';
+import { Event, RentalCarEvent, StayEvent } from '@/types/eventTypes';
 import { getEventEnd, getEventStart } from '@/utils/eventTime';
 
 const MULTIDAY_EVENT_TYPES = new Set<Event['type']>(['stay', 'rental_car']);
@@ -56,6 +56,132 @@ export const groupEventsByTimelineDateKeys = (events: Event[]): Record<string, E
     return groups;
   }, {} as Record<string, Event[]>)
 );
+
+export type MultidayEventDayRole = 'start' | 'end' | 'middle' | 'single';
+
+/** How a multiday stay or rental appears on a specific calendar day. */
+export const getMultidayEventDayRole = (
+  event: Event,
+  dayKey: string,
+): MultidayEventDayRole | null => {
+  if (!eventSpansMultipleDays(event)) return null;
+
+  const keys = getEventTimelineDateKeys(event);
+  if (!keys.includes(dayKey)) return null;
+  if (keys.length === 1) return 'single';
+
+  const startKey = keys[0];
+  const endKey = keys[keys.length - 1];
+
+  if (dayKey === startKey && dayKey === endKey) return 'single';
+  if (dayKey === startKey) return 'start';
+  if (dayKey === endKey) return 'end';
+  return 'middle';
+};
+
+export const getMultidayDayPosition = (event: Event, dayKey: string) => {
+  const keys = getEventTimelineDateKeys(event);
+  const index = keys.indexOf(dayKey);
+
+  return {
+    index: index === -1 ? 1 : index + 1,
+    total: keys.length,
+  };
+};
+
+export interface MultidayEndpointDetails {
+  heading: string;
+  time?: string;
+  location?: string;
+  secondaryHeading?: string;
+  secondaryTime?: string;
+}
+
+const formatTimeLabel = (time?: string) => {
+  if (!time?.trim()) return undefined;
+  const [hours, minutes] = time.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return time;
+  const date = new Date(2000, 0, 1, hours, minutes);
+  return format(date, 'h:mm a');
+};
+
+/** Role-specific check-in/out or pickup/dropoff copy for timeline cards. */
+export const getMultidayEndpointDetails = (
+  event: Event,
+  role: MultidayEventDayRole,
+): MultidayEndpointDetails | null => {
+  if (!eventSpansMultipleDays(event)) return null;
+
+  if (event.type === 'stay') {
+    const stay = event as StayEvent;
+    const checkInTime = formatTimeLabel(stay.checkInTime);
+    const checkOutTime = formatTimeLabel(stay.checkOutTime);
+    const location = stay.address?.trim() || event.location?.address?.trim();
+
+    if (role === 'start') {
+      return { heading: 'Check-in', time: checkInTime, location };
+    }
+    if (role === 'end') {
+      return { heading: 'Check-out', time: checkOutTime, location };
+    }
+    return {
+      heading: 'Check-in',
+      time: checkInTime,
+      secondaryHeading: 'Check-out',
+      secondaryTime: checkOutTime,
+      location,
+    };
+  }
+
+  if (event.type === 'rental_car') {
+    const rental = event as RentalCarEvent;
+    const pickupTime = formatTimeLabel(rental.pickupTime);
+    const dropoffTime = formatTimeLabel(rental.dropoffTime);
+    const pickupLocation = rental.pickupLocation?.trim();
+    const dropoffLocation = rental.dropoffLocation?.trim();
+
+    if (role === 'start') {
+      return { heading: 'Pick up', time: pickupTime, location: pickupLocation };
+    }
+    if (role === 'end') {
+      return { heading: 'Drop off', time: dropoffTime, location: dropoffLocation };
+    }
+    return {
+      heading: 'Pick up',
+      time: pickupTime,
+      location: pickupLocation,
+      secondaryHeading: 'Drop off',
+      secondaryTime: dropoffTime,
+    };
+  }
+
+  return null;
+};
+
+export const getMultidaySpanLabel = (event: Event, dayKey: string) => {
+  const { index, total } = getMultidayDayPosition(event, dayKey);
+  const name = event.type === 'stay'
+    ? (event as StayEvent).accommodationName || 'Stay'
+    : event.type === 'rental_car'
+      ? (event as RentalCarEvent).carCompany
+        ? `${(event as RentalCarEvent).carCompany} rental`
+        : 'Rental car'
+      : 'Booking';
+
+  if (event.type === 'stay') {
+    return {
+      name,
+      progress: total > 1 ? `Night ${index} of ${total}` : 'Staying',
+      hint: index === total ? 'Last night' : 'Staying tonight',
+    };
+  }
+
+  return {
+    name,
+    progress: `Day ${index} of ${total}`,
+    hint: 'Car reserved',
+  };
+};
 
 export const getTodayTimelineDateKey = () => format(new Date(), 'yyyy-MM-dd');
 

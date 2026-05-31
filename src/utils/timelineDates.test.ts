@@ -6,6 +6,9 @@ import {
   eventOccursOnDayKey,
   filterEventsByDayKey,
   getEventTimelineDateKeys,
+  getMultidayEndpointDetails,
+  getMultidayEventDayRole,
+  getMultidaySpanLabel,
   getTimelineDateKey,
   isTimelineDateToday,
 } from '@/utils/timelineDates';
@@ -118,5 +121,64 @@ describe('timelineDates', () => {
     );
 
     expect(items.find((item) => item.dateKey === '2026-06-02')?.hasEvents).toBe(true);
+  });
+
+  it('assigns start, middle, and end roles for multiday stays', () => {
+    const stay = {
+      id: 'stay-1',
+      type: 'stay',
+      status: 'confirmed',
+      checkIn: '2026-06-01',
+      checkOut: '2026-06-03',
+      checkInTime: '15:00',
+      checkOutTime: '11:00',
+      accommodationName: 'Hotel Roma',
+    } as unknown as Event;
+
+    expect(getMultidayEventDayRole(stay, '2026-06-01')).toBe('start');
+    expect(getMultidayEventDayRole(stay, '2026-06-02')).toBe('middle');
+    expect(getMultidayEventDayRole(stay, '2026-06-03')).toBe('end');
+    expect(getMultidayEventDayRole(stay, '2026-06-04')).toBeNull();
+    expect(getMultidayEventDayRole(makeEvent('a', '2026-06-01'), '2026-06-01')).toBeNull();
+  });
+
+  it('returns endpoint copy for check-in and check-out days', () => {
+    const stay = {
+      id: 'stay-1',
+      type: 'stay',
+      status: 'confirmed',
+      checkIn: '2026-06-01',
+      checkOut: '2026-06-03',
+      checkInTime: '15:00',
+      checkOutTime: '11:00',
+      address: 'Via Roma 1',
+    } as unknown as Event;
+
+    expect(getMultidayEndpointDetails(stay, 'start')).toMatchObject({
+      heading: 'Check-in',
+      time: '3:00 PM',
+      location: 'Via Roma 1',
+    });
+    expect(getMultidayEndpointDetails(stay, 'end')).toMatchObject({
+      heading: 'Check-out',
+      time: '11:00 AM',
+    });
+  });
+
+  it('returns span labels for middle days', () => {
+    const stay = {
+      id: 'stay-1',
+      type: 'stay',
+      status: 'confirmed',
+      checkIn: '2026-06-01',
+      checkOut: '2026-06-03',
+      accommodationName: 'Hotel Roma',
+    } as unknown as Event;
+
+    expect(getMultidaySpanLabel(stay, '2026-06-02')).toEqual({
+      name: 'Hotel Roma',
+      progress: 'Night 2 of 3',
+      hint: 'Staying tonight',
+    });
   });
 });

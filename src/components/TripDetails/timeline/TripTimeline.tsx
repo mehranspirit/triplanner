@@ -23,12 +23,14 @@ import {
   ALL_DAYS_FILTER_KEY,
   filterEventsByDayKey,
   formatTimelineDate,
+  getMultidayEventDayRole,
   getTimelineDateKey,
   groupEventsByTimelineDateKeys,
   isTimelineDateToday,
   parseTimelineDateKey,
   UNSCHEDULED_FILTER_KEY,
 } from '@/utils/timelineDates';
+import { MultidayEndpointCard, MultidaySpanChip } from '@/components/TripDetails/timeline/MultidayTimelineCards';
 
 export interface TripTimelineHandle {
   scrollToEvent: (eventId: string) => void;
@@ -716,6 +718,94 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                       ? getDecisionForEvent(trip.decisions, event.id)
                       : undefined;
                     const isEventActive = isEventCurrentlyActive(event);
+                    const multidayRole = getMultidayEventDayRole(event, dateKey);
+                    const showMultidayMiddle = isDayFiltered && multidayRole === 'middle';
+                    const showMultidayEnd = isDayFiltered && multidayRole === 'end';
+                    const useFullMultidayStartCard = isDayFiltered
+                      && (multidayRole === 'start' || multidayRole === 'single');
+                    const useCompactMultidayDisplay = showMultidayMiddle || showMultidayEnd;
+                    const openEventDetails = canEdit ? () => onEditEvent(event) : undefined;
+
+                    const eventBody = showMultidayMiddle ? (
+                      <MultidaySpanChip
+                        event={event}
+                        viewDateKey={dateKey}
+                        onOpen={openEventDetails}
+                      />
+                    ) : showMultidayEnd ? (
+                      <MultidayEndpointCard
+                        event={event}
+                        role={multidayRole!}
+                        viewDateKey={dateKey}
+                        thumbnail={thumbnail}
+                        onOpen={openEventDetails}
+                      />
+                    ) : !isCondensedView || useFullMultidayStartCard ? (
+                      <div
+                        className={cn(
+                          'relative',
+                          isSelectionMode && isEventSelectionEligible(event) && 'cursor-pointer',
+                          isSelectionMode && selectedEventIds.has(event.id) && 'rounded-2xl ring-2 ring-violet-100',
+                          isSelectionMode
+                            && selectableEventIds.has(event.id)
+                            && !isEventSelectionEligible(event)
+                            && 'opacity-50',
+                        )}
+                        onClick={
+                          isSelectionMode && isEventSelectionEligible(event)
+                            ? () => toggleSelectedEvent(event.id)
+                            : undefined
+                        }
+                      >
+                        {isSelectionMode && isEventSelectionEligible(event) && (
+                          <div className="absolute left-3 top-3 z-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedEventIds.has(event.id)}
+                              onChange={() => toggleSelectedEvent(event.id)}
+                              onClick={(eventClick) => eventClick.stopPropagation()}
+                              className="h-4 w-4 rounded border-slate-300"
+                            />
+                          </div>
+                        )}
+                        <EventCardComponent
+                          event={event}
+                          thumbnail={thumbnail}
+                          onEdit={canEdit ? () => onEditEvent(event) : undefined}
+                          onDelete={canEdit ? () => onDeleteEvent(event.id) : undefined}
+                          onStatusChange={canEdit ? (newStatus) => onStatusChange(event, newStatus) : undefined}
+                          {...(hasLocationSearch && canEdit && tripId && onLocationApplied ? {
+                            tripId,
+                            onLocationApplied,
+                          } : {})}
+                          {...(voteableEvent && trip && onVote ? {
+                            trip,
+                            currentUserId,
+                            onVote,
+                            canVote: canEdit,
+                          } : {})}
+                        />
+                      </div>
+                    ) : (
+                      <CondensedEventCard
+                        event={event}
+                        thumbnail={thumbnail}
+                        trip={trip}
+                        currentUserId={currentUserId}
+                        onVote={onVote}
+                        onEdit={canEdit ? () => onEditEvent(event) : undefined}
+                        onReviewLocation={
+                          canEdit && onReviewEventLocation
+                            ? () => onReviewEventLocation(event)
+                            : undefined
+                        }
+                        isSelectionMode={isSelectionMode}
+                        isSelected={selectedEventIds.has(event.id)}
+                        isSelectable={isEventSelectionEligible(event)}
+                        onToggleSelected={() => toggleSelectedEvent(event.id)}
+                        canEdit={canEdit}
+                      />
+                    );
 
                     return (
                       <div
@@ -743,73 +833,8 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                               ? tripSurfaces.timelineDotToday
                               : tripSurfaces.timelineDot,
                         )} />
-                        {isCondensedView ? (
-                          <CondensedEventCard
-                            event={event}
-                            thumbnail={thumbnail}
-                            trip={trip}
-                            currentUserId={currentUserId}
-                            onVote={onVote}
-                            onEdit={canEdit ? () => onEditEvent(event) : undefined}
-                            onReviewLocation={
-                              canEdit && onReviewEventLocation
-                                ? () => onReviewEventLocation(event)
-                                : undefined
-                            }
-                            isSelectionMode={isSelectionMode}
-                            isSelected={selectedEventIds.has(event.id)}
-                            isSelectable={isEventSelectionEligible(event)}
-                            onToggleSelected={() => toggleSelectedEvent(event.id)}
-                            canEdit={canEdit}
-                          />
-                        ) : (
-                          <div
-                            className={cn(
-                              'relative',
-                              isSelectionMode && isEventSelectionEligible(event) && 'cursor-pointer',
-                              isSelectionMode && selectedEventIds.has(event.id) && 'rounded-2xl ring-2 ring-violet-100',
-                              isSelectionMode
-                                && selectableEventIds.has(event.id)
-                                && !isEventSelectionEligible(event)
-                                && 'opacity-50',
-                            )}
-                            onClick={
-                              isSelectionMode && isEventSelectionEligible(event)
-                                ? () => toggleSelectedEvent(event.id)
-                                : undefined
-                            }
-                          >
-                            {isSelectionMode && isEventSelectionEligible(event) && (
-                              <div className="absolute left-3 top-3 z-10">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedEventIds.has(event.id)}
-                                  onChange={() => toggleSelectedEvent(event.id)}
-                                  onClick={(eventClick) => eventClick.stopPropagation()}
-                                  className="h-4 w-4 rounded border-slate-300"
-                                />
-                              </div>
-                            )}
-                            <EventCardComponent
-                            event={event}
-                            thumbnail={thumbnail}
-                            onEdit={canEdit ? () => onEditEvent(event) : undefined}
-                            onDelete={canEdit ? () => onDeleteEvent(event.id) : undefined}
-                            onStatusChange={canEdit ? (newStatus) => onStatusChange(event, newStatus) : undefined}
-                            {...(hasLocationSearch && canEdit && tripId && onLocationApplied ? {
-                              tripId,
-                              onLocationApplied,
-                            } : {})}
-                            {...(voteableEvent && trip && onVote ? {
-                              trip,
-                              currentUserId,
-                              onVote,
-                              canVote: canEdit,
-                            } : {})}
-                          />
-                          </div>
-                        )}
-                        {(eventAlerts.length > 0 || hasLocationIssue || hasFlightStatus || activeDecision) && (
+                        {eventBody}
+                        {!useCompactMultidayDisplay && (eventAlerts.length > 0 || hasLocationIssue || hasFlightStatus || activeDecision) && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {activeDecision && onOpenDecision && (
                               <ContextChip
@@ -845,8 +870,12 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                             )}
                           </div>
                         )}
-                        <FlightStatusSummary event={event} flightStatusSnapshots={flightStatusSnapshots} />
-                        <EventWeatherForecast event={event} weatherSnapshots={weatherSnapshots} />
+                        {!useCompactMultidayDisplay && (
+                          <>
+                            <FlightStatusSummary event={event} flightStatusSnapshots={flightStatusSnapshots} />
+                            <EventWeatherForecast event={event} weatherSnapshots={weatherSnapshots} />
+                          </>
+                        )}
                       </div>
                     );
                   })}
