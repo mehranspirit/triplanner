@@ -430,10 +430,10 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                   }
                 }}
                 data-timeline-day={dateKey}
-                className="relative scroll-mt-[calc(var(--trip-details-toolbar-height,7rem)+0.5rem)]"
+                className="relative scroll-mt-[calc(var(--trip-timeline-sticky-top,var(--trip-details-toolbar-height,7rem))+0.5rem)]"
               >
                 <div className={cn(
-                  'sticky z-30 mb-1.5 py-0.5',
+                  'sticky z-20 mb-1.5 py-0.5',
                   isMapSheet
                     ? 'top-0'
                     : 'top-[var(--trip-timeline-sticky-top,var(--trip-details-toolbar-height,7rem))] mb-2 md:mb-3',

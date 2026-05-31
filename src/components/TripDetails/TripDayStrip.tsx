@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { forwardRef, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { tripSurfaces } from '@/styles/tripSurfaces';
 import {
@@ -12,11 +12,11 @@ interface TripDayStripProps {
   onDaySelect: (dateKey: string) => void;
 }
 
-const TripDayStrip: React.FC<TripDayStripProps> = ({
+const TripDayStrip = forwardRef<HTMLElement, TripDayStripProps>(function TripDayStrip({
   days,
   activeDayKey,
   onDaySelect,
-}) => {
+}, ref) {
   const stripRef = useRef<HTMLDivElement>(null);
   const pillRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const stripDays = [ALL_DAYS_STRIP_ITEM, ...days.filter((day) => !day.isAllDays)];
@@ -36,8 +36,12 @@ const TripDayStrip: React.FC<TripDayStripProps> = ({
 
   return (
     <nav
+      ref={ref}
       aria-label="Trip days"
-      className={cn(tripSurfaces.float, 'rounded-none border-x-0 px-3 py-2 lg:rounded-3xl lg:border-x lg:px-2')}
+      className={cn(
+        tripSurfaces.float,
+        'sticky z-30 top-[var(--trip-details-toolbar-height,0px)] rounded-none border-x-0 bg-white px-3 py-2 shadow-sm lg:static lg:top-auto lg:z-auto lg:rounded-3xl lg:border-x lg:px-2 lg:shadow-none',
+      )}
     >
       <div
         ref={stripRef}
@@ -85,6 +89,6 @@ const TripDayStrip: React.FC<TripDayStripProps> = ({
       </div>
     </nav>
   );
-};
+});
 
 export default TripDayStrip;

@@ -32,6 +32,7 @@ import { HealthDismissalReason, ResolutionAction } from '@/types/tripHealthTypes
 import { buildEventDraftFromPrefill } from '@/utils/eventFormPrefill';
 import { useEventVotes } from '@/components/TripDetails/hooks/useEventVotes';
 import { useElementHeight } from '@/components/TripDetails/hooks/useElementHeight';
+import { useStickyChromeOffsets } from '@/components/TripDetails/hooks/useTimelineStickyTop';
 import { useDecisions } from '@/components/TripDetails/hooks/useDecisions';
 import DecisionComparisonView from '@/components/TripDetails/decisions/DecisionComparisonView';
 import CreateDecisionDialog from '@/components/TripDetails/decisions/CreateDecisionDialog';
@@ -181,6 +182,7 @@ const NewTripDetails: React.FC = () => {
   const { activeTab: detailsTab, setActiveTab: setDetailsTab } = useTripDetailsTab(trip?._id);
   const timelineRef = useRef<TripTimelineHandle>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const dayStripRef = useRef<HTMLElement>(null);
   const [activeDayKey, setActiveDayKey] = useState(ALL_DAYS_FILTER_KEY);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [detailEventId, setDetailEventId] = useState<string | null>(null);
@@ -393,6 +395,27 @@ const NewTripDetails: React.FC = () => {
     () => buildTripDayStripItems(trip?.events ?? [], trip?.startDate, trip?.endDate, simulatedDate.referenceNow),
     [trip?.endDate, trip?.events, trip?.startDate, simulatedDate.referenceNow],
   );
+  const stickyChromeOffsets = useStickyChromeOffsets(
+    toolbarRef,
+    dayStripRef,
+    !isMapView && isMobileLayout && detailsTab === 'itinerary',
+    [
+      toolbarHeight,
+      detailsTab,
+      dayStripItems.length,
+      simulatedDate.isUiTestTrip,
+      simulatedDate.isSimulating,
+    ],
+  );
+  const mobileToolbarStickyTop = stickyChromeOffsets.toolbarBottom > 0
+    ? stickyChromeOffsets.toolbarBottom
+    : (toolbarHeight ?? 0);
+  const resolvedTimelineStickyTop = stickyChromeOffsets.timelineStickyTop > 0
+    ? stickyChromeOffsets.timelineStickyTop
+    : (toolbarHeight ?? 112);
+  const resolvedToolbarHeight = isMobileLayout && !isMapView
+    ? mobileToolbarStickyTop
+    : (toolbarHeight ?? 112);
 
   useEffect(() => {
     setActiveDayKey(ALL_DAYS_FILTER_KEY);
@@ -1729,7 +1752,10 @@ const NewTripDetails: React.FC = () => {
       ) : (
     <div
       className={cn('min-h-screen', tripSurfaces.canvas)}
-      style={{ '--trip-details-toolbar-height': `${toolbarHeight ?? 112}px` } as React.CSSProperties}
+      style={{
+        '--trip-details-toolbar-height': `${resolvedToolbarHeight}px`,
+        '--trip-timeline-sticky-top': `${resolvedTimelineStickyTop}px`,
+      } as React.CSSProperties}
     >
       <div className="mx-auto max-w-7xl space-y-3 px-0 py-3 lg:space-y-6 lg:px-4 lg:py-6">
       <TripDetailsHero
@@ -1795,7 +1821,10 @@ const NewTripDetails: React.FC = () => {
         />
       )}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
+      <div className={cn(
+        'grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6',
+        isMobileLayout && !showMapSuggest && '-mt-3',
+      )}>
         <main className="min-w-0 space-y-3 pb-24 lg:pb-0">
           {detailsTab === 'calendar' && !isMobileLayout && (
             <TripCalendarView
@@ -1810,6 +1839,7 @@ const NewTripDetails: React.FC = () => {
           {detailsTab === 'itinerary' && (
             <>
               <TripDayStrip
+                ref={dayStripRef}
                 days={dayStripItems}
                 activeDayKey={activeDayKey}
                 onDaySelect={handleDaySelect}
