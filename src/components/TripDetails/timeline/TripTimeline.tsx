@@ -379,7 +379,9 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
           </p>
         </div>
       ) : (
-        <div className="space-y-6 md:space-y-8">
+        <div className="relative pl-7 pr-3 md:pr-0">
+          <div className={cn('pointer-events-none absolute bottom-0 left-3 top-0 z-0 w-px', tripSurfaces.timelineSpine)} />
+          <div className="relative space-y-6 md:space-y-8">
           {Object.entries(groupedEvents)
             .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
             .map(([dateKey, dateEvents]) => {
@@ -396,12 +398,9 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                 className="relative"
               >
                 <div className={cn(
-                  'sticky top-[var(--trip-timeline-sticky-top,var(--trip-details-toolbar-height,7rem))] z-30 mb-2 border-b px-3 py-1 md:mb-3 md:px-0',
-                  isToday
-                    ? 'border-blue-200 bg-blue-50 shadow-sm shadow-blue-900/5'
-                    : 'border-slate-200 bg-slate-100 shadow-sm shadow-slate-900/5',
+                  'sticky top-[var(--trip-timeline-sticky-top,var(--trip-details-toolbar-height,7rem))] z-30 mb-2 py-1 md:mb-3',
                 )}>
-                  <div className="pl-7">
+                  <div>
                     <div className={cn(
                       'inline-flex w-full max-w-full items-center gap-2 rounded-lg border px-2.5 py-1 sm:w-auto',
                       isToday || hasActiveEvent
@@ -465,8 +464,6 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                   </div>
                 </div>
 
-                <div className="relative pl-7 pr-3 md:pr-0">
-                <div className={cn('absolute bottom-0 left-3 top-0 w-px', tripSurfaces.timelineSpine)} />
                 <div className="space-y-4">
                   {sortEventsByStart(dateEvents).map((event, eventIndex, dayEvents) => {
                     const resolvedLeg = resolveTimelineTransferLeg(
@@ -600,10 +597,10 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                     );
                   })}
                 </div>
-                </div>
               </div>
             );
           })}
+          </div>
         </div>
       )}
 
