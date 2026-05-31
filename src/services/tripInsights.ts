@@ -12,6 +12,8 @@ import {
 import {
   eventHasLocationAttention,
 } from '@/utils/eventLocation';
+import { getTransferSummary } from '@/utils/transferAnalysis';
+import { LONG_TRANSFER_DISTANCE_KM, LONG_TRANSFER_EXTRA_BUFFER_MINUTES } from '@/constants/tripHealthThresholds';
 
 interface TripInsightInput {
   trip: Trip;
@@ -203,103 +205,6 @@ const enumerateTripDateKeys = (trip: Trip) => {
   return keys;
 };
 
-interface RoutePoint {
-  lat: number;
-  lng: number;
-}
-
-const getUsableEventLocation = (event: Event): RoutePoint | null => {
-  if (
-    !event.location ||
-    !event.location.lat ||
-    !event.location.lng ||
-    event.location.lat === 0 ||
-    event.location.lng === 0
-  ) {
-    return null;
-  }
-
-  return {
-    lat: event.location.lat,
-    lng: event.location.lng,
-  };
-};
-
-const getFlightEndpointPoint = (
-  event: Event,
-  role: 'departure' | 'arrival',
-  weatherSnapshots: WeatherSnapshot[]
-): RoutePoint | null => {
-  if (event.type !== 'flight') return null;
-
-  const snapshot = weatherSnapshots.find((item) => (
-    (item.originalEventId || item.eventId) === event.id &&
-    item.locationRole === role &&
-    item.lat &&
-    item.lng
-  ));
-
-  if (!snapshot) return null;
-
-  return {
-    lat: snapshot.lat,
-    lng: snapshot.lng,
-  };
-};
-
-const getRoutePoint = (
-  event: Event,
-  side: 'from' | 'to',
-  weatherSnapshots: WeatherSnapshot[]
-): RoutePoint | null => {
-  if (event.type === 'flight') {
-    return getFlightEndpointPoint(event, side === 'from' ? 'arrival' : 'departure', weatherSnapshots);
-  }
-
-  return getUsableEventLocation(event);
-};
-
-const getDistanceKm = (from: RoutePoint, to: RoutePoint) => {
-  const fromLocation = from;
-  const toLocation = to;
-
-  if (
-    !fromLocation ||
-    !toLocation ||
-    !fromLocation.lat ||
-    !fromLocation.lng ||
-    !toLocation.lat ||
-    !toLocation.lng ||
-    fromLocation.lat === 0 ||
-    fromLocation.lng === 0 ||
-    toLocation.lat === 0 ||
-    toLocation.lng === 0
-  ) {
-    return null;
-  }
-
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const earthRadiusKm = 6371;
-  const dLat = toRadians(toLocation.lat - fromLocation.lat);
-  const dLng = toRadians(toLocation.lng - fromLocation.lng);
-  const lat1 = toRadians(fromLocation.lat);
-  const lat2 = toRadians(toLocation.lat);
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return earthRadiusKm * c;
-};
-
-const estimateTravelMinutes = (distanceKm: number) => {
-  const averageUrbanSpeedKmh = 40;
-  const bufferMinutes = 15;
-  return Math.ceil((distanceKm / averageUrbanSpeedKmh) * 60 + bufferMinutes);
-};
-
 const getRouteTimingInsights = (events: Event[], weatherSnapshots: WeatherSnapshot[] = []): TripInsight[] => {
   const scheduledEvents = sortEventsByStart(events)
     .map((event) => ({
@@ -319,27 +224,14 @@ const getRouteTimingInsights = (events: Event[], weatherSnapshots: WeatherSnapsh
       continue;
     }
 
-    const fromPoint = getRoutePoint(current.event, 'from', weatherSnapshots);
-    const toPoint = getRoutePoint(next.event, 'to', weatherSnapshots);
-
-    if (!fromPoint || !toPoint) {
+    const transfer = getTransferSummary(current.event, next.event, weatherSnapshots);
+    if (!transfer) {
       continue;
     }
 
-    const distanceKm = getDistanceKm(fromPoint, toPoint);
-    if (!distanceKm || distanceKm < 2) {
-      continue;
-    }
+    const { gapMinutes, estimatedTravelMinutes, distanceKm, distanceMiles } = transfer;
 
-    const gapMinutes = Math.round((next.start.getTime() - current.end.getTime()) / (60 * 1000));
-    if (gapMinutes < 0) {
-      continue;
-    }
-
-    const estimatedTravelMinutes = estimateTravelMinutes(distanceKm);
-    const distanceMiles = Math.round(distanceKm * 0.621371);
-
-    if (gapMinutes < estimatedTravelMinutes) {
+    if (transfer.severity === 'tight' || gapMinutes < estimatedTravelMinutes) {
       insights.push(createInsight({
         id: `tight-transfer-${current.event.id}-${next.event.id}`,
         type: 'conflict',
@@ -354,7 +246,10 @@ const getRouteTimingInsights = (events: Event[], weatherSnapshots: WeatherSnapsh
       continue;
     }
 
-    if (distanceKm >= 50 && gapMinutes < estimatedTravelMinutes + 45) {
+    if (
+      distanceKm >= LONG_TRANSFER_DISTANCE_KM
+      && gapMinutes < estimatedTravelMinutes + LONG_TRANSFER_EXTRA_BUFFER_MINUTES
+    ) {
       insights.push(createInsight({
         id: `long-transfer-${current.event.id}-${next.event.id}`,
         type: 'suggestion',

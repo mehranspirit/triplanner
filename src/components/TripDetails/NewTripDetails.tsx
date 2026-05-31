@@ -212,6 +212,34 @@ const NewTripDetails: React.FC = () => {
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [weatherSnapshots, setWeatherSnapshots] = useState<WeatherSnapshot[]>([]);
   const [timelineTransferLegs, setTimelineTransferLegs] = useState<TimelineTransferLeg[]>([]);
+  const eventLocationSignature = useMemo(() => {
+    if (!trip?.events) return '';
+
+    return trip.events.map((event) => {
+      const transport = event as Event & {
+        departureLocation?: { lat?: number; lng?: number };
+        arrivalLocation?: { lat?: number; lng?: number };
+      };
+      const loc = event.location;
+
+      return [
+        event.id,
+        loc?.lat,
+        loc?.lng,
+        transport.departureLocation?.lat,
+        transport.departureLocation?.lng,
+        transport.arrivalLocation?.lat,
+        transport.arrivalLocation?.lng,
+      ].join(':');
+    }).join('|');
+  }, [trip?.events]);
+  const weatherLocationSignature = useMemo(
+    () => weatherSnapshots.map((snapshot) => (
+      `${snapshot.eventId}:${snapshot.originalEventId ?? ''}:${snapshot.locationRole}:${snapshot.lat}:${snapshot.lng}`
+    )).join('|'),
+    [weatherSnapshots],
+  );
+  const prevEventLocationSignatureRef = useRef<string | null>(null);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [flightStatusSnapshots, setFlightStatusSnapshots] = useState<FlightStatusSnapshot[]>([]);
   const [flightStatusError, setFlightStatusError] = useState<string | null>(null);
@@ -715,8 +743,12 @@ const NewTripDetails: React.FC = () => {
     if (!trip?._id) return;
 
     const fetchTimelineLegs = async () => {
+      const refresh = prevEventLocationSignatureRef.current !== null
+        && prevEventLocationSignatureRef.current !== eventLocationSignature;
+      prevEventLocationSignatureRef.current = eventLocationSignature;
+
       try {
-        const data = await api.getTripTimelineLegs(trip._id);
+        const data = await api.getTripTimelineLegs(trip._id, { refresh });
         setTimelineTransferLegs(data.legs || []);
       } catch (error) {
         console.error('Error loading timeline transfer legs:', error);
@@ -725,7 +757,7 @@ const NewTripDetails: React.FC = () => {
     };
 
     fetchTimelineLegs();
-  }, [trip?._id, trip?.updatedAt]);
+  }, [trip?._id, trip?.updatedAt, eventLocationSignature, weatherLocationSignature]);
 
   useEffect(() => {
     if (!trip?._id) return;

@@ -8,6 +8,10 @@ import {
   getDirectionsUrl,
   TransferSummary,
 } from '@/utils/transferAnalysis';
+import {
+  LONG_TRANSFER_DISTANCE_KM,
+  LONG_TRANSFER_EXTRA_BUFFER_MINUTES,
+} from '@/constants/tripHealthThresholds';
 
 interface TimelineLegConnectorProps {
   transfer: TransferSummary;
@@ -25,6 +29,10 @@ const getDisplaySeverity = (
   transfer: TransferSummary,
   drivingLeg?: TimelineTransferLeg | null,
 ): TransferSummary['severity'] => {
+  if (transfer.flexibleDeparture) {
+    return 'ok';
+  }
+
   if (drivingLeg?.status !== 'ok' || !drivingLeg.driveDurationSeconds) {
     return transfer.severity;
   }
@@ -38,8 +46,8 @@ const getDisplaySeverity = (
   }
 
   if (
-    transfer.distanceKm >= 50
-    && transfer.gapMinutes < driveMinutes + 45
+    transfer.distanceKm >= LONG_TRANSFER_DISTANCE_KM
+    && transfer.gapMinutes < driveMinutes + LONG_TRANSFER_EXTRA_BUFFER_MINUTES
   ) {
     return 'long';
   }

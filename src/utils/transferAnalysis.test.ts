@@ -123,7 +123,11 @@ describe('transferAnalysis timeline legs', () => {
     );
 
     expect(getTransferSummary(stay, activity)).toBeNull();
-    expect(getTimelineDayTransferLeg(stay, activity, '2026-06-02')).not.toBeNull();
+    const leg = getTimelineDayTransferLeg(stay, activity, '2026-06-02');
+    expect(leg).not.toBeNull();
+    expect(leg?.flexibleDeparture).toBe(true);
+    expect(leg?.severity).toBe('ok');
+    expect(leg?.gapMinutes).toBeGreaterThan(60);
   });
 
   it('shows a leg from a same-day activity to a check-in stay', () => {
@@ -185,6 +189,20 @@ describe('transferAnalysis timeline legs', () => {
     const events = [priorActivity, stay];
 
     expect(resolveFirstLegOnDay(events, '2026-06-02')).toBeNull();
+  });
+
+  it('skips inbound legs to a checkout stay day', () => {
+    const priorActivity = makeActivity(
+      'dinner',
+      '2026-06-03T19:00:00',
+      '2026-06-03T21:00:00',
+      40.7128,
+      -74.006,
+    );
+    const stay = makeStay('stay-1', '2026-06-01', '2026-06-04', 40.758, -73.9855);
+    const events = [priorActivity, stay];
+
+    expect(resolveFirstLegOnDay(events, '2026-06-04')).toBeNull();
   });
 
   it('shows a cross-day leg to a sparse check-in day', () => {

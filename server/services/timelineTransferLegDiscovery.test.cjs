@@ -1,0 +1,148 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { sortEventsByStart } = require('../utils/eventTime');
+const {
+  shouldSkipInboundTimelineLeg,
+  resolvePreviousTimelineEvent,
+  getTimelineDayLegTimes,
+  groupEventsByTimelineDateKeys,
+  getMultidayEventDayRole,
+} = require('../utils/timelineTransferLegLogic');
+const { __test: discoveryTest } = require('./timelineTransferLegDiscovery');
+
+const makeActivity = (id, startDate, endDate, lat, lng) => ({
+  id,
+  type: 'activity',
+  status: 'confirmed',
+  title: id,
+  startDate,
+  endDate,
+  location: { lat, lng, address: `${id} address` },
+});
+
+const makeStay = (id, checkIn, checkOut, lat, lng) => ({
+  id,
+  type: 'stay',
+  status: 'confirmed',
+  accommodationName: 'Hotel Example',
+  checkIn,
+  checkInTime: '15:00',
+  checkOut,
+  checkOutTime: '11:00',
+  location: { lat, lng, address: 'Hotel address' },
+});
+
+const makeFlight = (id, startDate, endDate, arrivalLat, arrivalLng) => ({
+  id,
+  type: 'flight',
+  status: 'confirmed',
+  airline: 'Example Air',
+  flightNumber: 'EX123',
+  departureAirport: 'JFK',
+  arrivalAirport: 'LAX',
+  startDate,
+  endDate,
+  departureTime: '08:00',
+  arrivalTime: '11:00',
+  arrivalLocation: {
+    lat: arrivalLat,
+    lng: arrivalLng,
+    address: 'LAX',
+  },
+  departureLocation: {
+    lat: 40.6413,
+    lng: -73.7781,
+    address: 'JFK',
+  },
+});
+
+const resolveFirstLegOnDay = (events, dayKey) => {
+  const itineraryEvents = events.filter((event) => event.status !== 'alternative');
+  const sortedEvents = sortEventsByStart(itineraryEvents);
+  const grouped = groupEventsByTimelineDateKeys(itineraryEvents);
+  const dayEvents = grouped[dayKey] || [];
+
+  if (dayEvents.length === 0) return null;
+
+  return resolvePreviousTimelineEvent(
+    sortedEvents,
+    sortEventsByStart(dayEvents),
+    0,
+    sortEventsByStart(dayEvents)[0],
+    dayKey,
+  );
+};
+
+test('shouldSkipInboundTimelineLeg skips middle and checkout stay days', () => {
+  const stay = makeStay('stay-1', '2026-06-01', '2026-06-04', 40.7128, -74.006);
+
+  assert.equal(getMultidayEventDayRole(stay, '2026-06-02'), 'middle');
+  assert.equal(shouldSkipInboundTimelineLeg(stay, '2026-06-02'), true);
+  assert.equal(shouldSkipInboundTimelineLeg(stay, '2026-06-04'), true);
+  assert.equal(shouldSkipInboundTimelineLeg(stay, '2026-06-01'), false);
+});
+
+test('getTimelineDayLegTimes marks middle-day hotel departures as flexible', () => {
+  const stay = makeStay('stay-1', '2026-06-01', '2026-06-04', 40.7128, -74.006);
+  const activity = makeActivity(
+    'museum',
+    '2026-06-02T11:00:00',
+    '2026-06-02T13:00:00',
+    40.758,
+    -73.9855,
+  );
+
+  const legTimes = getTimelineDayLegTimes(stay, activity, '2026-06-02');
+  assert.ok(legTimes);
+  assert.equal(legTimes.flexibleDeparture, true);
+});
+
+test('resolvePreviousTimelineEvent skips inbound legs to middle stay days', () => {
+  const priorActivity = makeActivity(
+    'dinner',
+    '2026-06-01T19:00:00',
+    '2026-06-01T21:00:00',
+    40.7128,
+    -74.006,
+  );
+  const stay = makeStay('stay-1', '2026-06-01', '2026-06-04', 40.758, -73.9855);
+
+  assert.equal(resolveFirstLegOnDay([priorActivity, stay], '2026-06-02'), null);
+  assert.equal(resolveFirstLegOnDay([priorActivity, stay], '2026-06-04'), null);
+});
+
+test('resolvePreviousTimelineEvent bridges sparse check-in days', () => {
+  const priorStay = makeStay('stay-old', '2026-05-30', '2026-06-01', 40.7128, -74.006);
+  const checkIn = makeStay('stay-new', '2026-06-03', '2026-06-06', 40.758, -73.9855);
+
+  const resolved = resolveFirstLegOnDay([priorStay, checkIn], '2026-06-03');
+  assert.ok(resolved);
+  assert.equal(resolved.previousEvent.id, 'stay-old');
+});
+
+test('resolvePreviousTimelineEvent bridges sparse flight days', () => {
+  const priorActivity = makeActivity(
+    'dinner',
+    '2026-06-01T19:00:00',
+    '2026-06-01T21:00:00',
+    40.7128,
+    -74.006,
+  );
+  const flight = makeFlight(
+    'outbound',
+    '2026-06-03T09:00:00',
+    '2026-06-03T12:00:00',
+    33.9416,
+    -118.4085,
+  );
+
+  const resolved = resolveFirstLegOnDay([priorActivity, flight], '2026-06-03');
+  assert.ok(resolved);
+  assert.equal(resolved.previousEvent.id, 'dinner');
+});
+
+test('getDistanceKm filters short hops', () => {
+  const nearA = { lat: 40.7128, lng: -74.006 };
+  const nearB = { lat: 40.7138, lng: -74.005 };
+  assert.ok(discoveryTest.getDistanceKm(nearA, nearB) < 2);
+});
