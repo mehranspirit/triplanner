@@ -1,30 +1,29 @@
-import React from 'react';
-import { AlertCircle, CalendarDays, CheckSquare, Clock, CloudSun, Copy, ExternalLink, MapPin, Sparkles, X } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Event, Trip } from '@/types/eventTypes';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { TripInsight } from '@/types/insightTypes';
-import {
-  formatEventDateTime,
-  getCurrentEvent,
-  getEventBookingReference,
-  getEventDisplayName,
-  getEventEnd,
-  getEventLocationLabel,
-  getEventStart,
-  getNextEvent,
-  sortEventsByStart,
-} from '@/utils/eventTime';
-import { cn } from '@/lib/utils';
-import { getGoogleMapsSearchUrl } from '@/utils/eventLocation';
-import { getTripStatusSummary } from '@/services/tripStatus';
-import {
-  getDirectionsUrl,
-  getTransferSummary,
-  TransferSummary,
-} from '@/utils/transferAnalysis';
-import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
+import { WeatherSnapshot } from '@/types/weatherTypes';
 import { TripReplanBriefing, TripTodayBriefing } from '@/types/assistantBriefingTypes';
+import { cn } from '@/lib/utils';
+import {
+  buildInTripAssistantContent,
+  hasReplanBriefingContent,
+  hasTodayBriefingContent,
+  InTripActionTarget,
+  InTripAttentionItem,
+  InTripHandyGroup,
+  InTripHeroAction,
+} from '@/utils/inTripAssistantContent';
 
 interface InTripAssistantProps {
   trip: Trip;
@@ -47,370 +46,368 @@ interface InTripAssistantProps {
   onGenerateTodayBriefing?: () => void;
   onGenerateReplanBriefing?: () => void;
   onDismissInsight?: (insightId: string) => void;
+  variant?: 'panel' | 'embedded';
 }
 
-const isSameLocalDay = (a: Date, b: Date) => {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-};
+const severityStyles = {
+  critical: 'border-red-200 bg-red-50 text-red-900',
+  warning: 'border-amber-200 bg-amber-50 text-amber-900',
+  info: 'border-blue-200 bg-blue-50 text-blue-900',
+} as const;
+
+const heroStyles = {
+  ai: 'border-violet-200 bg-violet-50 text-violet-950',
+  computed: 'border-blue-200 bg-blue-50 text-blue-950',
+  on_track: 'border-emerald-200 bg-emerald-50 text-emerald-950',
+  empty: 'border-slate-200 bg-slate-50 text-slate-800',
+} as const;
 
 const copyText = async (text: string) => {
   if (!navigator.clipboard) return;
   await navigator.clipboard.writeText(text);
 };
 
-const formatWeatherForecast = (forecast: WeatherDay) => {
-  const parts = [
-    forecast.condition,
-    typeof forecast.temperatureMax === 'number' && typeof forecast.temperatureMin === 'number'
-      ? `${Math.round(forecast.temperatureMax)}/${Math.round(forecast.temperatureMin)} deg F`
-      : null,
-    typeof forecast.precipitationProbabilityMax === 'number'
-      ? `${forecast.precipitationProbabilityMax}% rain`
-      : null,
-    typeof forecast.windSpeedMax === 'number' && forecast.windSpeedMax >= 15
-      ? `${Math.round(forecast.windSpeedMax)} mph wind`
-      : null,
-  ].filter(Boolean);
-
-  return parts.join(', ');
+const useActionHandler = (
+  onOpenChecklist: () => void,
+  onOpenEventDetailById: (eventId: string) => void,
+) => (target: InTripActionTarget | undefined, eventId?: string, directionsUrl?: string) => {
+  if (target === 'checklist') {
+    onOpenChecklist();
+    return;
+  }
+  if (target === 'directions' && directionsUrl) {
+    window.open(directionsUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  if (target === 'event' && eventId) {
+    onOpenEventDetailById(eventId);
+  }
 };
 
-const getSnapshotLabel = (snapshot: WeatherSnapshot) => {
-  if (snapshot.locationRole === 'departure') return 'Departure weather';
-  if (snapshot.locationRole === 'arrival') return 'Arrival weather';
-  return 'Weather forecast';
-};
-
-const EventWeatherRows: React.FC<{ snapshots: WeatherSnapshot[] }> = ({ snapshots }) => {
-  const visibleSnapshots = snapshots.filter(snapshot => snapshot.daily?.[0]);
-  if (visibleSnapshots.length === 0) return null;
-
-  return (
-    <div className="mt-2 space-y-1 rounded-md border border-sky-100 bg-sky-50 px-2 py-2 text-xs text-sky-900">
-      {visibleSnapshots.map((snapshot) => (
-        <div key={snapshot._id || `${snapshot.eventId}-${snapshot.date}`} className="flex items-center gap-2">
-          <CloudSun className="h-3.5 w-3.5 flex-shrink-0 text-sky-600" />
-          <span>
-            <span className="font-medium">{getSnapshotLabel(snapshot)}:</span> {formatWeatherForecast(snapshot.daily[0])}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const FlightStatusRows: React.FC<{ snapshots: FlightStatusSnapshot[] }> = ({ snapshots }) => {
-  if (snapshots.length === 0) return null;
-
-  return (
-    <div className="mt-2 space-y-1 rounded-md border border-violet-100 bg-violet-50 px-2 py-2 text-xs text-violet-900">
-      {snapshots.map((snapshot) => {
-        const departureParts = [
-          snapshot.departure?.terminal ? `Terminal ${snapshot.departure.terminal}` : null,
-          snapshot.departure?.gate ? `Gate ${snapshot.departure.gate}` : null,
-          typeof snapshot.departure?.delayMinutes === 'number' && snapshot.departure.delayMinutes > 0
-            ? `${snapshot.departure.delayMinutes} min departure delay`
-            : null,
-        ].filter(Boolean);
-        const arrivalDelay = typeof snapshot.arrival?.delayMinutes === 'number' && snapshot.arrival.delayMinutes > 0
-          ? `${snapshot.arrival.delayMinutes} min arrival delay`
-          : null;
-        const details = [snapshot.status, ...departureParts, arrivalDelay].filter(Boolean).join(' | ');
-
-        return (
-          <div key={snapshot._id || `${snapshot.eventId}-${snapshot.dateLocal}`} className="flex items-center gap-2">
-            <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-violet-600" />
-            <span>
-              <span className="font-medium">Flight status:</span> {details || 'No status details available yet'}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-const TransferRow: React.FC<{ transfer: TransferSummary; onOpenEventDetail: (event: Event) => void }> = ({
-  transfer,
-  onOpenEventDetail,
-}) => {
-  return (
-    <div className={cn(
-      'rounded-lg border px-3 py-2 text-xs',
-      transfer.severity === 'tight' && 'border-red-200 bg-red-50 text-red-900',
-      transfer.severity === 'long' && 'border-amber-200 bg-amber-50 text-amber-900',
-      transfer.severity === 'ok' && 'border-gray-200 bg-gray-50 text-gray-700'
-    )}>
-      <div className="flex items-start gap-2">
-        <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">
-            Transfer buffer: {transfer.gapMinutes} min available, about {transfer.estimatedTravelMinutes} min estimated
-          </p>
-          <p className="mt-0.5 opacity-90">
-            Roughly {transfer.distanceMiles} miles from {getEventDisplayName(transfer.from)} to {getEventDisplayName(transfer.to)}.
-          </p>
-        </div>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <a
-          href={getDirectionsUrl(transfer.fromPoint, transfer.toPoint)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-md border border-current/20 px-2 py-1 font-medium hover:bg-white/60"
-        >
-          Directions
-        </a>
-        {transfer.severity !== 'ok' && (
-          <button
-            type="button"
-            onClick={() => onOpenEventDetail(transfer.to)}
-            className="rounded-md border border-current/20 px-2 py-1 font-medium hover:bg-white/60"
-          >
-            View next event
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const severityStyles: Record<'info' | 'warning' | 'critical', string> = {
-  critical: 'border-red-200 bg-red-50 text-red-900',
-  warning: 'border-amber-200 bg-amber-50 text-amber-900',
-  info: 'border-blue-200 bg-blue-50 text-blue-900',
-};
-
-const TodayBriefingCard: React.FC<{
-  briefing?: TripTodayBriefing | null;
-  generatedAt?: string | null;
-  error?: string | null;
-  isGenerating?: boolean;
-  onGenerate?: () => void;
-  onOpenChecklist: () => void;
-  onOpenEventDetailById: (eventId: string) => void;
-}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onOpenEventDetailById }) => (
-  <section className="rounded-lg border border-blue-100 bg-blue-50 p-3">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
-          <Sparkles className="h-4 w-4" />
-          AI Today briefing
-        </div>
-        <p className="mt-1 text-sm text-blue-900/80">
-          Summarize what matters now from today&apos;s timeline, weather, flights, and alerts.
-        </p>
-      </div>
-      {onGenerate && (
-        <Button variant="outline" size="sm" onClick={onGenerate} disabled={isGenerating}>
-          {isGenerating ? 'Generating...' : briefing ? 'Refresh' : 'Generate'}
-        </Button>
-      )}
-    </div>
-
-    {error && <p className="mt-3 rounded-md bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-
-    {briefing && (
-      <div className="mt-3 space-y-3">
-        <p className="text-sm text-blue-950">{briefing.summary}</p>
-        {briefing.nextAction && (
-          <div className="rounded-md border border-blue-200 bg-white p-2 text-sm">
-            <p className="font-medium text-gray-900">{briefing.nextAction.title}</p>
-            <p className="mt-1 text-gray-600">{briefing.nextAction.reason}</p>
-            <div className="mt-2">
-              {briefing.nextAction.actionTarget === 'checklist' ? (
-                <Button variant="outline" size="sm" onClick={onOpenChecklist}>
-                  {briefing.nextAction.actionLabel}
-                </Button>
-              ) : briefing.nextAction.eventId ? (
-                <Button variant="outline" size="sm" onClick={() => onOpenEventDetailById(briefing.nextAction!.eventId!)}>
-                  {briefing.nextAction.actionLabel}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        )}
-        {briefing.watchItems.length > 0 && (
-          <div className="space-y-2">
-            {briefing.watchItems.slice(0, 3).map((item, index) => (
-              <div key={`${item.title}-${index}`} className={cn('rounded-md border p-2 text-sm', severityStyles[item.severity || 'info'])}>
-                <p className="font-medium">{item.title}</p>
-                <p className="mt-1 opacity-90">{item.reason}</p>
-              </div>
-            ))}
-          </div>
-        )}
-        {briefing.collaboratorMessage && (
-          <p className="rounded-md border border-blue-200 bg-white p-2 text-xs text-gray-600">
-            <span className="font-medium text-gray-800">Shareable update:</span> {briefing.collaboratorMessage}
-          </p>
-        )}
-        {generatedAt && <p className="text-xs text-blue-900/60">Generated {new Date(generatedAt).toLocaleString()}</p>}
-      </div>
+const HeroSection: React.FC<{
+  hero: InTripHeroAction;
+  onAction: ReturnType<typeof useActionHandler>;
+}> = ({ hero, onAction }) => (
+  <section className={cn('rounded-xl border p-4', heroStyles[hero.source])}>
+    <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Do this next</p>
+    <p className="mt-1 text-base font-semibold">{hero.title}</p>
+    {hero.subtitle && <p className="mt-1 text-sm opacity-90">{hero.subtitle}</p>}
+    {hero.actionLabel && hero.actionTarget !== 'none' && (
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-3 h-8 bg-white/70"
+        onClick={() => onAction(hero.actionTarget, hero.eventId, hero.directionsUrl)}
+      >
+        {hero.actionLabel}
+      </Button>
     )}
   </section>
 );
 
-const ReplanDayCard: React.FC<{
-  briefing?: TripReplanBriefing | null;
-  generatedAt?: string | null;
-  error?: string | null;
-  isGenerating?: boolean;
-  onGenerate?: () => void;
-  onOpenChecklist: () => void;
-  onOpenEventDetailById: (eventId: string) => void;
-}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onOpenEventDetailById }) => (
-  <section className="rounded-lg border border-amber-100 bg-amber-50 p-3">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-          <Sparkles className="h-4 w-4" />
-          Replan My Day
-        </div>
-        <p className="mt-1 text-sm text-amber-900/80">
-          Review weather, flights, transfer risks, and alerts for changes worth considering.
-        </p>
-      </div>
-      {onGenerate && (
-        <Button variant="outline" size="sm" onClick={onGenerate} disabled={isGenerating}>
-          {isGenerating ? 'Reviewing...' : briefing ? 'Refresh' : 'Review'}
-        </Button>
-      )}
-    </div>
+const AttentionSection: React.FC<{
+  items: InTripAttentionItem[];
+  onAction: ReturnType<typeof useActionHandler>;
+  onDismissInsight?: (insightId: string) => void;
+}> = ({ items, onAction, onDismissInsight }) => {
+  if (items.length === 0) return null;
 
-    {error && <p className="mt-3 rounded-md bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-
-    {briefing && (
-      <div className="mt-3 space-y-3">
-        <p className="text-sm text-amber-950">{briefing.summary}</p>
-        {briefing.suggestions.length > 0 && (
-          <div className="space-y-2">
-            {briefing.suggestions.slice(0, 4).map((suggestion, index) => (
-              <div key={`${suggestion.title}-${index}`} className={cn('rounded-md border p-2 text-sm', severityStyles[suggestion.severity || 'info'])}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{suggestion.title}</p>
-                  <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium">{suggestion.suggestionType}</span>
-                </div>
-                <p className="mt-1 opacity-90">{suggestion.reason}</p>
-                {suggestion.actionLabel && suggestion.actionTarget && (
-                  <div className="mt-2">
-                    {suggestion.actionTarget === 'checklist' ? (
-                      <Button variant="outline" size="sm" onClick={onOpenChecklist}>
-                        {suggestion.actionLabel}
-                      </Button>
-                    ) : suggestion.eventId ? (
-                      <Button variant="outline" size="sm" onClick={() => onOpenEventDetailById(suggestion.eventId!)}>
-                        {suggestion.actionLabel}
-                      </Button>
-                    ) : null}
-                  </div>
+  return (
+    <section>
+      <h3 className="mb-2 text-sm font-semibold text-gray-900">Needs attention</h3>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className={cn('rounded-lg border p-3 text-sm', severityStyles[item.severity])}
+          >
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{item.title}</p>
+                <p className="mt-1 opacity-90">{item.reason}</p>
+                {item.actionLabel && item.actionTarget && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 h-8 bg-white/70"
+                    onClick={() => onAction(item.actionTarget, item.eventId, item.directionsUrl)}
+                  >
+                    {item.actionLabel}
+                  </Button>
                 )}
               </div>
-            ))}
+              {onDismissInsight && item.dismissible && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 flex-shrink-0"
+                  onClick={() => onDismissInsight(item.id)}
+                  aria-label={`Dismiss ${item.title}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
-        )}
-        {briefing.fallbackIdeas.length > 0 && (
-          <div className="rounded-md border border-amber-200 bg-white p-2 text-sm">
-            <p className="font-medium text-gray-900">Fallback ideas</p>
-            <ul className="mt-1 list-disc space-y-1 pl-4 text-gray-700">
-              {briefing.fallbackIdeas.slice(0, 3).map((idea, index) => (
-                <li key={`${idea.title}-${index}`}><span className="font-medium">{idea.title}:</span> {idea.reason}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {briefing.suggestedChecklistItems.length > 0 && (
-          <div className="rounded-md border border-amber-200 bg-white p-2 text-sm">
-            <p className="font-medium text-gray-900">Checklist ideas</p>
-            <ul className="mt-1 list-disc space-y-1 pl-4 text-gray-700">
-              {briefing.suggestedChecklistItems.slice(0, 3).map((item, index) => (
-                <li key={`${item.text}-${index}`}><span className="font-medium">{item.text}:</span> {item.reason}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {briefing.caveat && <p className="rounded-md bg-white p-2 text-xs text-amber-900">{briefing.caveat}</p>}
-        {generatedAt && <p className="text-xs text-amber-900/60">Generated {new Date(generatedAt).toLocaleString()}</p>}
+        ))}
       </div>
-    )}
-  </section>
-);
+    </section>
+  );
+};
 
-const EventCard: React.FC<{
-  label: string;
-  event: Event | null;
-  weatherSnapshots: WeatherSnapshot[];
-  flightStatusSnapshots: FlightStatusSnapshot[];
-  onOpenEventDetail: (event: Event) => void;
-}> = ({ label, event, weatherSnapshots, flightStatusSnapshots, onOpenEventDetail }) => {
-  if (!event) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-        <p className="mt-2 text-sm text-gray-500">Nothing scheduled.</p>
-      </div>
-    );
-  }
+const handyRoleStyles = {
+  now: 'border-emerald-200 bg-emerald-50/50',
+  next: 'border-blue-200 bg-blue-50/40',
+} as const;
 
-  const start = getEventStart(event);
-  const location = getEventLocationLabel(event);
-  const mapsUrl = getGoogleMapsSearchUrl(event);
-  const bookingReference = getEventBookingReference(event);
+const HandySection: React.FC<{
+  groups: InTripHandyGroup[];
+  onOpenEventDetailById: (eventId: string) => void;
+}> = ({ groups, onOpenEventDetailById }) => {
+  if (groups.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-          <p className="mt-1 font-semibold text-gray-900">{getEventDisplayName(event)}</p>
-        </div>
-        {event && (
-          <Button variant="outline" size="sm" onClick={() => onOpenEventDetail(event)}>
-            View
-          </Button>
-        )}
-      </div>
-      <div className="mt-3 space-y-2 text-sm text-gray-600">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4" />
-          <span>{formatEventDateTime(start)}</span>
-        </div>
-        {mapsUrl && (
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4" />
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="truncate text-blue-700 hover:underline"
+    <section>
+      <h3 className="mb-2 text-sm font-semibold text-gray-900">Handy right now</h3>
+      <div className="space-y-2">
+        {groups.map((group) => (
+          <div
+            key={group.eventId}
+            className={cn('rounded-lg border p-3', handyRoleStyles[group.eventRole])}
+          >
+            <button
+              type="button"
+              className="w-full text-left"
+              onClick={() => onOpenEventDetailById(group.eventId)}
             >
-              {location || 'View on map'}
-            </a>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                {group.eventRole === 'now' ? 'Now' : 'Next up'}
+              </p>
+              <p className="mt-0.5 text-sm font-semibold text-slate-900">{group.eventName}</p>
+              {group.eventTimeLabel && (
+                <p className="mt-0.5 text-xs text-slate-600">{group.eventTimeLabel}</p>
+              )}
+            </button>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {group.items.map((item) => {
+                if (item.href) {
+                  return (
+                    <a
+                      key={item.id}
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {item.label}
+                      <ChevronRight className="h-3 w-3" />
+                    </a>
+                  );
+                }
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (item.copyable) {
+                        copyText(item.value);
+                        return;
+                      }
+                      onOpenEventDetailById(group.eventId);
+                    }}
+                  >
+                    <span className="text-slate-500">{item.label}:</span>
+                    <span className="max-w-[8rem] truncate">{item.value}</span>
+                    {item.copyable && <Copy className="h-3 w-3 text-slate-400" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
-        {bookingReference && (
-          <div className="flex items-center justify-between gap-2 rounded-md bg-gray-50 px-2 py-1">
-            <span className="truncate">Confirmation: {bookingReference}</span>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyText(bookingReference)}>
-              <Copy className="h-3.5 w-3.5" />
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const AssistantSection: React.FC<{
+  todayBriefing?: TripTodayBriefing | null;
+  todayBriefingGeneratedAt?: string | null;
+  todayBriefingError?: string | null;
+  isGeneratingTodayBriefing?: boolean;
+  replanBriefing?: TripReplanBriefing | null;
+  replanBriefingGeneratedAt?: string | null;
+  replanBriefingError?: string | null;
+  isGeneratingReplanBriefing?: boolean;
+  onGenerateTodayBriefing?: () => void;
+  onGenerateReplanBriefing?: () => void;
+  onOpenChecklist: () => void;
+  onOpenEventDetailById: (eventId: string) => void;
+}> = ({
+  todayBriefing,
+  todayBriefingGeneratedAt,
+  todayBriefingError,
+  isGeneratingTodayBriefing,
+  replanBriefing,
+  replanBriefingGeneratedAt,
+  replanBriefingError,
+  isGeneratingReplanBriefing,
+  onGenerateTodayBriefing,
+  onGenerateReplanBriefing,
+  onOpenChecklist,
+  onOpenEventDetailById,
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const [mode, setMode] = useState<'summary' | 'replan'>('summary');
+  const hasToday = hasTodayBriefingContent(todayBriefing);
+  const hasReplan = hasReplanBriefingContent(replanBriefing);
+  const activeError = mode === 'summary' ? todayBriefingError : replanBriefingError;
+  const activeGeneratedAt = mode === 'summary' ? todayBriefingGeneratedAt : replanBriefingGeneratedAt;
+  const isGenerating = mode === 'summary' ? isGeneratingTodayBriefing : isGeneratingReplanBriefing;
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-slate-50/70">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-violet-600" />
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Assistant</p>
+            <p className="text-xs text-slate-500">Summaries and replan suggestions on demand</p>
+          </div>
+        </div>
+        <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', expanded && 'rotate-180')} />
+      </button>
+
+      {expanded && (
+        <div className="space-y-3 border-t border-slate-200 px-4 pb-4 pt-3">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={mode === 'summary' ? 'default' : 'outline'}
+              size="sm"
+              className="h-8"
+              onClick={() => setMode('summary')}
+            >
+              Summarize today
+            </Button>
+            <Button
+              type="button"
+              variant={mode === 'replan' ? 'default' : 'outline'}
+              size="sm"
+              className="h-8"
+              onClick={() => setMode('replan')}
+            >
+              Review changes
             </Button>
           </div>
-        )}
-        <FlightStatusRows snapshots={flightStatusSnapshots} />
-        <EventWeatherRows snapshots={weatherSnapshots} />
-      </div>
-    </div>
+
+          <div className="flex flex-wrap gap-2">
+            {mode === 'summary' && onGenerateTodayBriefing && (
+              <Button variant="outline" size="sm" onClick={onGenerateTodayBriefing} disabled={isGeneratingTodayBriefing}>
+                {isGeneratingTodayBriefing ? 'Generating...' : hasToday ? 'Refresh summary' : 'Generate summary'}
+              </Button>
+            )}
+            {mode === 'replan' && onGenerateReplanBriefing && (
+              <Button variant="outline" size="sm" onClick={onGenerateReplanBriefing} disabled={isGeneratingReplanBriefing}>
+                {isGeneratingReplanBriefing ? 'Reviewing...' : hasReplan ? 'Refresh review' : 'Run review'}
+              </Button>
+            )}
+          </div>
+
+          {activeError && (
+            <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{activeError}</p>
+          )}
+
+          {mode === 'summary' && hasToday && todayBriefing && (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+              <p className="text-slate-800">{todayBriefing.summary}</p>
+              {todayBriefing.watchItems.length > 0 && (
+                <div className="space-y-2">
+                  {todayBriefing.watchItems.slice(0, 3).map((item, index) => (
+                    <div key={`${item.title}-${index}`} className={cn('rounded-md border p-2', severityStyles[item.severity || 'info'])}>
+                      <p className="font-medium">{item.title}</p>
+                      <p className="mt-1 opacity-90">{item.reason}</p>
+                      {item.eventId && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 h-8"
+                          onClick={() => onOpenEventDetailById(item.eventId!)}
+                        >
+                          View event
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {todayBriefing.collaboratorMessage && (
+                <p className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
+                  <span className="font-medium text-slate-800">Shareable update:</span> {todayBriefing.collaboratorMessage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {mode === 'replan' && hasReplan && replanBriefing && (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+              <p className="text-slate-800">{replanBriefing.summary}</p>
+              {replanBriefing.suggestions.slice(0, 4).map((suggestion, index) => (
+                <div key={`${suggestion.title}-${index}`} className={cn('rounded-md border p-2', severityStyles[suggestion.severity || 'info'])}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{suggestion.title}</p>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium">{suggestion.suggestionType}</span>
+                  </div>
+                  <p className="mt-1 opacity-90">{suggestion.reason}</p>
+                  {suggestion.actionLabel && suggestion.actionTarget && (
+                    <div className="mt-2">
+                      {suggestion.actionTarget === 'checklist' ? (
+                        <Button variant="outline" size="sm" onClick={onOpenChecklist}>
+                          {suggestion.actionLabel}
+                        </Button>
+                      ) : suggestion.eventId ? (
+                        <Button variant="outline" size="sm" onClick={() => onOpenEventDetailById(suggestion.eventId!)}>
+                          {suggestion.actionLabel}
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {replanBriefing.caveat && (
+                <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">{replanBriefing.caveat}</p>
+              )}
+            </div>
+          )}
+
+          {!isGenerating && mode === 'summary' && !hasToday && !activeError && (
+            <p className="text-sm text-slate-500">Generate a summary when you want a second opinion on today.</p>
+          )}
+          {!isGenerating && mode === 'replan' && !hasReplan && !activeError && (
+            <p className="text-sm text-slate-500">Run a review when conditions change and you want replan ideas.</p>
+          )}
+
+          {activeGeneratedAt && (
+            <p className="text-xs text-slate-400">Generated {new Date(activeGeneratedAt).toLocaleString()}</p>
+          )}
+        </div>
+      )}
+    </section>
   );
 };
 
 const InTripAssistant: React.FC<InTripAssistantProps> = ({
   trip,
   insights,
-  canEdit,
   weatherSnapshots = [],
   flightStatusSnapshots = [],
   todayBriefing,
@@ -428,55 +425,52 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   onGenerateTodayBriefing,
   onGenerateReplanBriefing,
   onDismissInsight,
+  variant = 'panel',
 }) => {
-  const now = new Date();
-  const currentEvent = getCurrentEvent(trip.events, now);
-  const nextEvent = getNextEvent(trip.events, now);
-  const tripStatus = getTripStatusSummary(trip, now);
-  const todaysEvents = sortEventsByStart(trip.events || []).filter((event) => {
-    const start = getEventStart(event);
-    return start ? isSameLocalDay(start, now) : false;
-  });
-  const getEventWeatherSnapshots = (eventId: string) => weatherSnapshots.filter(snapshot => (
-    (snapshot.originalEventId || snapshot.eventId) === eventId && snapshot.daily?.length > 0
-  ));
-  const getEventFlightStatusSnapshots = (eventId: string) => flightStatusSnapshots.filter(snapshot => (
-    snapshot.eventId === eventId
-  ));
-  const weatherBriefingEventIds = Array.from(new Set([
-    currentEvent?.id,
-    nextEvent?.id,
-    ...todaysEvents.map(event => event.id),
-  ].filter((id): id is string => Boolean(id))));
-  const weatherBriefingSnapshots = weatherBriefingEventIds.flatMap(getEventWeatherSnapshots);
-  const flightBriefingSnapshots = weatherBriefingEventIds.flatMap(getEventFlightStatusSnapshots);
-  const priorityInsights = [...insights]
-    .sort((a, b) => {
-      const rank = { critical: 0, warning: 1, info: 2 };
-      return rank[a.severity] - rank[b.severity];
-    })
-    .slice(0, 3);
+  const content = useMemo(
+    () => buildInTripAssistantContent({
+      trip,
+      insights,
+      weatherSnapshots,
+      flightStatusSnapshots,
+      todayBriefing,
+    }),
+    [trip, insights, weatherSnapshots, flightStatusSnapshots, todayBriefing],
+  );
+
   const handleOpenEventDetailById = (eventId: string) => {
     const event = trip.events.find((tripEvent) => tripEvent.id === eventId);
     if (event) onOpenEventDetail(event);
   };
 
-  const handleInsightAction = (insight: TripInsight) => {
-    if (insight.actionTarget === 'event' && insight.source?.kind === 'event' && insight.source.id) {
-      handleOpenEventDetailById(insight.source.id);
-    }
-  };
+  const handleAction = useActionHandler(onOpenChecklist, handleOpenEventDetailById);
+
+  const isEmbedded = variant === 'embedded';
 
   return (
-    <div className="flex h-full flex-col bg-white text-gray-900">
-      <div className="flex items-start justify-between border-b border-gray-200 p-4">
+    <div className={cn(
+      'flex h-full min-h-0 flex-col overflow-hidden bg-white text-gray-900',
+    )}>
+      <div className={cn(
+        'flex shrink-0 items-start justify-between border-b border-gray-200',
+        isEmbedded ? 'px-3 py-2' : 'p-4',
+      )}>
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
-            <CalendarDays className="h-4 w-4" />
-            Today
-          </div>
-          <h2 className="mt-1 text-lg font-semibold">In-trip assistant</h2>
-          <p className="mt-1 text-sm text-gray-600">Critical details for what is happening now and next.</p>
+          {!isEmbedded && (
+            <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+              <CalendarDays className="h-4 w-4" />
+              Today
+            </div>
+          )}
+          <h2 className={cn(
+            'font-semibold',
+            isEmbedded ? 'text-sm text-slate-900' : 'mt-1 text-lg',
+          )}>
+            Actions & live updates
+          </h2>
+          {!isEmbedded && (
+            <p className="mt-1 text-sm text-gray-600">What to do or watch for in the next few hours.</p>
+          )}
         </div>
         {showCloseButton && (
           <button onClick={onClose} className="rounded-full p-1 hover:bg-gray-100" aria-label="Close Today">
@@ -485,174 +479,53 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
         )}
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        <div className={cn(
-          'rounded-lg border p-3 text-sm',
-          tripStatus.status === 'active' && 'border-green-200 bg-green-50 text-green-900',
-          tripStatus.status === 'upcoming' && 'border-blue-200 bg-blue-50 text-blue-900',
-          tripStatus.status === 'completed' && 'border-gray-200 bg-gray-50 text-gray-800',
-          tripStatus.status === 'unscheduled' && 'border-amber-200 bg-amber-50 text-amber-900'
-        )}>
-          <p className="font-semibold">{tripStatus.label}</p>
-          <p className="mt-1 opacity-90">{tripStatus.description}</p>
-        </div>
+      <div className={cn(
+        'min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain',
+        isEmbedded ? 'p-3' : 'p-4',
+      )}>
+        <HeroSection hero={content.hero} onAction={handleAction} />
 
-        <TodayBriefingCard
-          briefing={todayBriefing}
-          generatedAt={todayBriefingGeneratedAt}
-          error={todayBriefingError}
-          isGenerating={isGeneratingTodayBriefing}
-          onGenerate={onGenerateTodayBriefing}
+        <AttentionSection
+          items={content.attentionItems}
+          onAction={handleAction}
+          onDismissInsight={onDismissInsight}
+        />
+
+        <HandySection
+          groups={content.handyGroups}
+          onOpenEventDetailById={handleOpenEventDetailById}
+        />
+
+        <AssistantSection
+          todayBriefing={todayBriefing}
+          todayBriefingGeneratedAt={todayBriefingGeneratedAt}
+          todayBriefingError={todayBriefingError}
+          isGeneratingTodayBriefing={isGeneratingTodayBriefing}
+          replanBriefing={replanBriefing}
+          replanBriefingGeneratedAt={replanBriefingGeneratedAt}
+          replanBriefingError={replanBriefingError}
+          isGeneratingReplanBriefing={isGeneratingReplanBriefing}
+          onGenerateTodayBriefing={onGenerateTodayBriefing}
+          onGenerateReplanBriefing={onGenerateReplanBriefing}
           onOpenChecklist={onOpenChecklist}
           onOpenEventDetailById={handleOpenEventDetailById}
         />
 
-        <ReplanDayCard
-          briefing={replanBriefing}
-          generatedAt={replanBriefingGeneratedAt}
-          error={replanBriefingError}
-          isGenerating={isGeneratingReplanBriefing}
-          onGenerate={onGenerateReplanBriefing}
-          onOpenChecklist={onOpenChecklist}
-          onOpenEventDetailById={handleOpenEventDetailById}
-        />
-
-        <div className="grid gap-3">
-          <EventCard
-            label="Now"
-            event={currentEvent}
-            weatherSnapshots={currentEvent ? getEventWeatherSnapshots(currentEvent.id) : []}
-            flightStatusSnapshots={currentEvent ? getEventFlightStatusSnapshots(currentEvent.id) : []}
-            onOpenEventDetail={onOpenEventDetail}
-          />
-          <EventCard
-            label="Next"
-            event={nextEvent}
-            weatherSnapshots={nextEvent ? getEventWeatherSnapshots(nextEvent.id) : []}
-            flightStatusSnapshots={nextEvent ? getEventFlightStatusSnapshots(nextEvent.id) : []}
-            onOpenEventDetail={onOpenEventDetail}
-          />
-        </div>
-
-        {flightBriefingSnapshots.length > 0 && (
-          <section>
-            <h3 className="mb-2 text-sm font-semibold text-gray-900">Flight briefing</h3>
-            <FlightStatusRows snapshots={flightBriefingSnapshots.slice(0, 4)} />
-          </section>
-        )}
-
-        {weatherBriefingSnapshots.length > 0 && (
-          <section>
-            <h3 className="mb-2 text-sm font-semibold text-gray-900">Weather briefing</h3>
-            <EventWeatherRows snapshots={weatherBriefingSnapshots.slice(0, 4)} />
-          </section>
-        )}
-
-        <section>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-gray-900">Need before you go</h3>
-            <Button variant="outline" size="sm" onClick={onOpenChecklist}>
-              <CheckSquare className="mr-1 h-4 w-4" />
-              Checklist
+        {content.tomorrowPreview && (
+          <section className="rounded-xl border border-slate-200 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tomorrow</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{content.tomorrowPreview.title}</p>
+            <p className="mt-0.5 text-sm text-slate-600">{content.tomorrowPreview.subtitle}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-8 px-0 text-blue-700 hover:bg-transparent hover:text-blue-800"
+              onClick={() => handleOpenEventDetailById(content.tomorrowPreview!.eventId)}
+            >
+              View details
             </Button>
-          </div>
-          {priorityInsights.length > 0 ? (
-            <div className="space-y-2">
-              {priorityInsights.map((insight) => (
-                <div
-                  key={insight.id}
-                  className={cn(
-                    'rounded-lg border p-3 text-sm',
-                    insight.severity === 'critical' && 'border-red-200 bg-red-50 text-red-900',
-                    insight.severity === 'warning' && 'border-amber-200 bg-amber-50 text-amber-900',
-                    insight.severity === 'info' && 'border-blue-200 bg-blue-50 text-blue-900'
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{insight.title}</p>
-                      <p className="mt-1 opacity-90">{insight.message}</p>
-                      {insight.actionLabel && insight.actionTarget === 'event' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2 h-8"
-                          onClick={() => handleInsightAction(insight)}
-                        >
-                          {insight.actionLabel}
-                        </Button>
-                      )}
-                    </div>
-                    {insight.dismissible && onDismissInsight && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 flex-shrink-0"
-                        onClick={() => onDismissInsight(insight.id)}
-                        aria-label={`Dismiss ${insight.title}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-              No urgent itinerary issues found.
-            </p>
-          )}
-        </section>
-
-        <section>
-          <h3 className="mb-2 text-sm font-semibold text-gray-900">Today&apos;s timeline</h3>
-          {todaysEvents.length > 0 ? (
-            <div className="space-y-2">
-              {todaysEvents.map((event, index) => {
-                const location = getEventLocationLabel(event);
-                const mapsUrl = getGoogleMapsSearchUrl(event);
-                const transfer = index > 0
-                  ? getTransferSummary(todaysEvents[index - 1], event, weatherSnapshots)
-                  : null;
-                return (
-                  <React.Fragment key={event.id}>
-                    {transfer && (
-                      <TransferRow transfer={transfer} onOpenEventDetail={onOpenEventDetail} />
-                    )}
-                    <div className="rounded-lg border border-gray-200 p-3 text-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-medium text-gray-900">{getEventDisplayName(event)}</p>
-                          <p className="mt-1 text-gray-600">{formatEventDateTime(getEventStart(event))}</p>
-                          {location && <p className="mt-1 truncate text-gray-500">{location}</p>}
-                          <FlightStatusRows snapshots={getEventFlightStatusSnapshots(event.id)} />
-                          <EventWeatherRows snapshots={getEventWeatherSnapshots(event.id)} />
-                        </div>
-                        {mapsUrl && (
-                          <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-md p-1 text-blue-700 hover:bg-blue-50"
-                            aria-label={`Open map for ${getEventDisplayName(event)}`}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-              No events scheduled for today.
-            </p>
-          )}
-        </section>
+          </section>
+        )}
       </div>
     </div>
   );

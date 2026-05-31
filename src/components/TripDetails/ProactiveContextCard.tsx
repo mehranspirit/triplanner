@@ -1,6 +1,8 @@
 import React from 'react';
 import { AlertTriangle, Bell, CalendarDays, CheckCircle2, ChevronRight, Clock3, CloudSun, HeartPulse, MapPin, Sparkles, X } from 'lucide-react';
 import { ProactiveContextCard as ProactiveContextCardData } from './context/tripContextTypes';
+import TripHealthScoreRing from './panels/TripHealthScoreRing';
+import EventTypeSymbol from './EventCards/EventTypeSymbol';
 import { cn } from '@/lib/utils';
 
 const iconByType: Record<ProactiveContextCardData['type'], React.ReactNode> = {
@@ -10,7 +12,6 @@ const iconByType: Record<ProactiveContextCardData['type'], React.ReactNode> = {
   pending_imports: <Sparkles className="h-4 w-4" />,
   location_issues: <MapPin className="h-4 w-4" />,
   urgent_insights: <AlertTriangle className="h-4 w-4" />,
-  travel_status: <CloudSun className="h-4 w-4" />,
   trip_health: <HeartPulse className="h-4 w-4" />,
 };
 
@@ -21,7 +22,6 @@ const toneByType: Record<ProactiveContextCardData['type'], string> = {
   pending_imports: 'border-violet-100 bg-violet-50/90 text-violet-900',
   location_issues: 'border-teal-100 bg-teal-50/90 text-teal-900',
   urgent_insights: 'border-orange-100 bg-orange-50/90 text-orange-900',
-  travel_status: 'border-sky-100 bg-sky-50/90 text-sky-900',
   trip_health: 'border-rose-100 bg-rose-50/90 text-rose-900',
 };
 
@@ -34,12 +34,77 @@ interface ProactiveContextCardProps {
   card: ProactiveContextCardData;
   onAction: (card: ProactiveContextCardData) => void;
   onDismiss?: (card: ProactiveContextCardData) => void;
+  variant?: 'default' | 'compact';
 }
 
-const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAction, onDismiss }) => {
+const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({
+  card,
+  onAction,
+  onDismiss,
+  variant = 'default',
+}) => {
   const dismissible = DISMISSIBLE_CARD_TYPES.has(card.type) && !!onDismiss;
+  const isLiveTodayCard = card.type === 'travel_day' && card.hasLiveUpdates;
+  const cardIcon = isLiveTodayCard
+    ? <CloudSun className="h-4 w-4" />
+    : (iconByType[card.type] || <CheckCircle2 className="h-4 w-4" />);
+  const cardTone = isLiveTodayCard
+    ? 'border-sky-100 bg-sky-50/90 text-sky-900'
+    : toneByType[card.type];
 
   const handleOpen = () => onAction(card);
+
+  if (variant === 'compact') {
+    if (card.type === 'trip_health' && typeof card.healthScore === 'number') {
+      return (
+        <button
+          type="button"
+          className={cn(
+            'flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+            cardTone,
+          )}
+          onClick={handleOpen}
+        >
+          <span className="text-xs font-semibold leading-tight">{card.title}</span>
+          <TripHealthScoreRing score={card.healthScore} size="sm" />
+        </button>
+      );
+    }
+
+    if (card.type === 'next_up' && card.event) {
+      return (
+        <button
+          type="button"
+          className={cn(
+            'flex min-w-0 flex-1 flex-col gap-1.5 rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+            cardTone,
+          )}
+          onClick={handleOpen}
+        >
+          <span className="text-xs font-semibold leading-tight">{card.title}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm">
+              <EventTypeSymbol event={card.event} />
+            </span>
+            <span className="truncate text-xs font-medium leading-tight">{card.description}</span>
+          </span>
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        className={cn(
+          'flex min-w-0 flex-1 items-center rounded-xl border p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+          cardTone,
+        )}
+        onClick={handleOpen}
+      >
+        <span className="truncate text-xs font-semibold leading-tight">{card.title}</span>
+      </button>
+    );
+  }
 
   return (
     <div
@@ -47,7 +112,7 @@ const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAct
       tabIndex={0}
       className={cn(
         'rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer',
-        toneByType[card.type],
+        cardTone,
       )}
       onClick={handleOpen}
       onKeyDown={(event) => {
@@ -59,7 +124,7 @@ const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAct
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm">
-          {iconByType[card.type] || <CheckCircle2 className="h-4 w-4" />}
+          {cardIcon}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">

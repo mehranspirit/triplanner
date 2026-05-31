@@ -1534,9 +1534,10 @@ const NewTripDetails: React.FC = () => {
         if (card.event) handleOpenEventDetail(card.event);
         break;
       case 'travel_day':
-      case 'travel_status':
-      case 'urgent_insights':
         openPanel('today');
+        break;
+      case 'urgent_insights':
+        openPanel('planning');
         break;
       case 'alerts':
         openPanel('notifications');
@@ -1771,12 +1772,33 @@ const NewTripDetails: React.FC = () => {
         </main>
 
         <div className="hidden lg:block">
-          <div className="sticky top-[calc(var(--trip-details-toolbar-height,7rem)+0.75rem)] space-y-4">
-            {contextSignals && (
+          <div className="sticky top-[calc(var(--trip-details-toolbar-height,7rem)+0.75rem)] max-h-[calc(100vh-var(--trip-details-toolbar-height,7rem)-0.75rem)]">
+            {contextSignals && trip && (
               <ProactiveTripContext
                 signals={contextSignals}
                 onCardAction={handleProactiveCardAction}
                 onDismissCard={handleDismissContextCard}
+                todayAssistant={{
+                  trip,
+                  insights: visibleTripInsights,
+                  canEdit,
+                  weatherSnapshots,
+                  flightStatusSnapshots,
+                  todayBriefing: todayBriefing?.briefing,
+                  todayBriefingGeneratedAt: todayBriefing?.generatedAt,
+                  todayBriefingError,
+                  isGeneratingTodayBriefing,
+                  replanBriefing: replanBriefing?.briefing,
+                  replanBriefingGeneratedAt: replanBriefing?.generatedAt,
+                  replanBriefingError,
+                  isGeneratingReplanBriefing,
+                  onClose: closePanel,
+                  onOpenChecklist: () => openPanel('checklist'),
+                  onOpenEventDetail: handleNavigateToEventDetail,
+                  onGenerateTodayBriefing: handleGenerateTodayBriefing,
+                  onGenerateReplanBriefing: handleGenerateReplanBriefing,
+                  onDismissInsight: handleDismissInsight,
+                }}
               />
             )}
           </div>

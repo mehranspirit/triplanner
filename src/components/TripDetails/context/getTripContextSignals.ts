@@ -55,11 +55,31 @@ const getPendingImportCount = (travelImports: TravelImport[]) => (
 
 const getTravelStatusCount = (
   flightStatusSnapshots: FlightStatusSnapshot[],
-  weatherSnapshots: WeatherSnapshot[]
+  weatherSnapshots: WeatherSnapshot[],
 ) => (
   flightStatusSnapshots.length +
-  weatherSnapshots.filter(snapshot => snapshot.daily?.length > 0).length
+  weatherSnapshots.filter((snapshot) => snapshot.daily?.length > 0).length
 );
+
+const buildTodayCardDescription = (
+  todayEventsCount: number,
+  travelStatusCount: number,
+  phase: TripPhase,
+) => {
+  const parts: string[] = [];
+
+  if (todayEventsCount > 0) {
+    parts.push(`${todayEventsCount} event${todayEventsCount === 1 ? '' : 's'} today`);
+  } else if (phase === 'during') {
+    parts.push('Trip is active today');
+  }
+
+  if (travelStatusCount > 0) {
+    parts.push('live flight & weather updates');
+  }
+
+  return parts.join(' · ') || 'Actions and live updates for today';
+};
 
 const getPhaseWeight = (phase: TripPhase, type: ProactiveContextCard['type']) => {
   const weights: Record<TripPhase, Partial<Record<ProactiveContextCard['type'], number>>> = {
@@ -72,7 +92,6 @@ const getPhaseWeight = (phase: TripPhase, type: ProactiveContextCard['type']) =>
     during: {
       travel_day: -40,
       alerts: -35,
-      travel_status: -25,
       next_up: -20,
     },
     after: {
@@ -131,10 +150,10 @@ export const getTripContextSignals = ({
   const cards: ProactiveContextCard[] = [];
 
   if (
-    (phase === 'before' || phase === 'unscheduled')
-    && tripHealth
+    tripHealth
     && tripHealth.summary.openIssueCount > 0
     && !dismissedContextCardTypes.includes('trip_health')
+    && (phase === 'before' || phase === 'unscheduled' || phase === 'during')
   ) {
     cards.push({
       type: 'trip_health',
@@ -158,16 +177,18 @@ export const getTripContextSignals = ({
     });
   }
 
-  if (phase === 'during' || todayEvents.length > 0) {
+  const showEmbeddedToday = phase === 'during' || todayEvents.length > 0;
+
+  if (showEmbeddedToday) {
+    const hasLiveUpdates = travelStatusCount > 0;
     cards.push({
       type: 'travel_day',
-      title: 'Travel day',
-      description: todayEvents.length > 0
-        ? `${todayEvents.length} event${todayEvents.length === 1 ? '' : 's'} today`
-        : 'This trip is active now',
-      value: todayEvents.length || undefined,
+      title: 'Today',
+      description: buildTodayCardDescription(todayEvents.length, travelStatusCount, phase),
+      value: todayEvents.length > 0 ? todayEvents.length : (hasLiveUpdates ? travelStatusCount : undefined),
       actionLabel: 'Open today',
-      priority: 20,
+      priority: hasLiveUpdates ? 18 : 20,
+      hasLiveUpdates,
     });
   }
 
@@ -218,17 +239,6 @@ export const getTripContextSignals = ({
     }
   }
 
-  if ((phase === 'during' || todayEvents.length > 0) && travelStatusCount > 0) {
-    cards.push({
-      type: 'travel_status',
-      title: 'Live travel context',
-      description: 'Weather or flight updates are available',
-      value: travelStatusCount,
-      actionLabel: 'Open today',
-      priority: 40,
-    });
-  }
-
   return {
     phase,
     todayEvents,
@@ -238,8 +248,9 @@ export const getTripContextSignals = ({
     locationIssueCount,
     urgentInsightCount,
     travelStatusCount,
+    showEmbeddedToday,
     cards: cards
-      .map(card => ({ ...card, priority: card.priority + getPhaseWeight(phase, card.type) }))
+      .map((card) => ({ ...card, priority: card.priority + getPhaseWeight(phase, card.type) }))
       .sort((left, right) => left.priority - right.priority),
   };
 };
