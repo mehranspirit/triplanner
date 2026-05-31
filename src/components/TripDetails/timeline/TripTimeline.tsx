@@ -34,6 +34,7 @@ import { resolveTimelineTransferLeg } from '@/utils/transferAnalysis';
 
 export interface TripTimelineHandle {
   scrollToEvent: (eventId: string) => void;
+  scrollToDay: (dateKey: string) => void;
 }
 
 interface TripTimelineProps {
@@ -93,7 +94,7 @@ const ContextChip = ({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium shadow-md shadow-slate-900/12 ring-1 ring-white/80',
         onClick && 'cursor-pointer transition-colors hover:opacity-90',
         className,
       )}
@@ -158,6 +159,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const eventSectionRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const daySectionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const timelineSectionRef = useRef<HTMLElement>(null);
 
   const timelineTransferLegsByKey = useMemo(() => (
@@ -279,6 +281,12 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
 
       section.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
+    scrollToDay: (dateKey: string) => {
+      const section = daySectionRefs.current.get(dateKey);
+      if (!section) return;
+
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
   }), []);
 
   return (
@@ -387,7 +395,6 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
             .map(([dateKey, dateEvents]) => {
             const dateParts = getDayHeaderParts(dateKey);
             const isToday = dateKey !== UNSCHEDULED_FILTER_KEY && isTimelineDateToday(dateKey);
-            const hasActiveEvent = dateEvents.some(event => isEventCurrentlyActive(event));
             const dayAlertCount = getDayNotificationCount(dateKey, notifications);
             const dayWeatherSummary = getDayWeatherSummary(dateKey, weatherSnapshots);
             const dayHealthChips = healthChipsByDate.get(dateKey) ?? [];
@@ -395,7 +402,15 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
             return (
               <div
                 key={dateKey}
-                className="relative"
+                ref={(element) => {
+                  if (element) {
+                    daySectionRefs.current.set(dateKey, element);
+                  } else {
+                    daySectionRefs.current.delete(dateKey);
+                  }
+                }}
+                data-timeline-day={dateKey}
+                className="relative scroll-mt-[calc(var(--trip-details-toolbar-height,7rem)+0.5rem)]"
               >
                 <div className={cn(
                   'sticky top-[var(--trip-timeline-sticky-top,var(--trip-details-toolbar-height,7rem))] z-30 mb-2 py-1 md:mb-3',
@@ -403,13 +418,14 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                   <div>
                     <div className={cn(
                       'inline-flex w-full max-w-full items-center gap-2 rounded-lg border px-2.5 py-1 sm:w-auto',
-                      isToday || hasActiveEvent
+                      isToday
                         ? tripSurfaces.dayHeaderToday
                         : tripSurfaces.dayHeaderDefault,
+                      'shadow-lg shadow-slate-900/20 ring-1 ring-white/60',
                     )}>
                       <span className={cn(
                         'h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30',
-                        isToday || hasActiveEvent ? 'animate-pulse bg-white' : 'bg-slate-300',
+                        isToday ? 'animate-pulse bg-white' : 'bg-slate-300',
                       )} />
                       <p className="min-w-0 truncate text-xs font-semibold leading-none text-white">
                         <span className="uppercase tracking-wide opacity-90">{dateParts.weekday}</span>
@@ -420,16 +436,10 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                           </>
                         )}
                       </p>
-                      {(isToday || hasActiveEvent) && (
-                        isToday ? (
+                      {isToday && (
                         <span className="ml-1 shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ring-1 ring-white/25">
                           Today
                         </span>
-                        ) : (
-                          <span className="ml-1 shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ring-1 ring-white/25">
-                            Now
-                          </span>
-                        )
                       )}
                     </div>
                     {(dayWeatherSummary || dayAlertCount > 0 || dayHealthChips.length > 0) && (

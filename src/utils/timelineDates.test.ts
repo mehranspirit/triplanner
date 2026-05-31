@@ -10,6 +10,7 @@ import {
   getMultidayEventDayRole,
   getMultidaySpanLabel,
   getStayNightDateKeys,
+  resolveActiveTimelineDayKey,
   getTimelineDateKey,
   isTimelineDateToday,
 } from '@/utils/timelineDates';
@@ -65,6 +66,44 @@ describe('timelineDates', () => {
   it('marks today using the local timeline date key', () => {
     const todayKey = getTimelineDateKey(makeEvent('today', new Date().toISOString()));
     expect(isTimelineDateToday(todayKey)).toBe(true);
+  });
+
+  it('resolves the active timeline day to today when today has events', () => {
+    const todayKey = getTimelineDateKey(makeEvent('today', new Date().toISOString()));
+    const activeDay = resolveActiveTimelineDayKey(
+      [
+        makeEvent('past', '2026-05-01T10:00:00.000Z'),
+        makeEvent('today', `${todayKey}T10:00:00.000Z`),
+        makeEvent('future', '2026-12-01T10:00:00.000Z'),
+      ],
+      '2026-05-01',
+      '2026-12-01',
+      new Date(`${todayKey}T12:00:00.000Z`),
+    );
+
+    expect(activeDay).toBe(todayKey);
+  });
+
+  it('resolves the active timeline day to the first trip day before the trip starts', () => {
+    const activeDay = resolveActiveTimelineDayKey(
+      [makeEvent('1', '2026-08-01T10:00:00.000Z')],
+      '2026-08-01',
+      '2026-08-05',
+      new Date('2026-07-01T12:00:00.000Z'),
+    );
+
+    expect(activeDay).toBe('2026-08-01');
+  });
+
+  it('resolves the active timeline day to the last trip day after the trip ends', () => {
+    const activeDay = resolveActiveTimelineDayKey(
+      [makeEvent('1', '2026-08-01T10:00:00.000Z')],
+      '2026-08-01',
+      '2026-08-05',
+      new Date('2026-09-01T12:00:00.000Z'),
+    );
+
+    expect(activeDay).toBe('2026-08-01');
   });
 
   it('includes multiday stays on every day in the range', () => {

@@ -21,7 +21,7 @@ export interface ResolutionContext {
   tripId: string;
   openPanel: (panel: TripPanel, options?: TripPanelOpenOptions) => void;
   onAddEvent: (type: EventType, prefill?: Record<string, unknown>) => void;
-  onEditEvent: (eventId: string) => void;
+  onOpenEventDetail: (eventId: string) => void;
   onOpenExplore?: (scope?: ExploreScope) => void;
   onReviewLocation?: (eventId: string) => void;
   onOpenImport?: () => void;
@@ -69,14 +69,14 @@ export async function executeResolution(
     case 'edit_event': {
       const eventId = payload?.eventId;
       if (typeof eventId === 'string') {
-        context.onEditEvent(eventId);
+        context.onOpenEventDetail(eventId);
       }
       break;
     }
     case 'extend_stay': {
       const eventId = payload?.eventId;
       if (typeof eventId === 'string') {
-        context.onEditEvent(eventId);
+        context.onOpenEventDetail(eventId);
       }
       break;
     }

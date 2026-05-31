@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock3, CloudSun, HeartPulse, MapPin, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, CheckCircle2, ChevronRight, Clock3, CloudSun, HeartPulse, MapPin, Sparkles, X } from 'lucide-react';
 import { ProactiveContextCard as ProactiveContextCardData } from './context/tripContextTypes';
 import { cn } from '@/lib/utils';
 
@@ -39,12 +39,23 @@ interface ProactiveContextCardProps {
 const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAction, onDismiss }) => {
   const dismissible = DISMISSIBLE_CARD_TYPES.has(card.type) && !!onDismiss;
 
+  const handleOpen = () => onAction(card);
+
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        'rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
-        toneByType[card.type]
+        'rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer',
+        toneByType[card.type],
       )}
+      onClick={handleOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handleOpen();
+        }
+      }}
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm">
@@ -63,7 +74,10 @@ const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAct
                 <button
                   type="button"
                   className="rounded-full p-1 opacity-70 transition hover:bg-white/80 hover:opacity-100"
-                  onClick={() => onDismiss?.(card)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDismiss?.(card);
+                  }}
                   aria-label={`Dismiss ${card.title}`}
                 >
                   <X className="h-4 w-4" />
@@ -72,13 +86,10 @@ const ProactiveContextCard: React.FC<ProactiveContextCardProps> = ({ card, onAct
             </div>
           </div>
           <p className="mt-1 text-sm opacity-80">{card.description}</p>
-          <button
-            type="button"
-            className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-70 transition hover:opacity-100"
-            onClick={() => onAction(card)}
-          >
+          <p className="mt-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide opacity-70">
             {card.actionLabel}
-          </button>
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          </p>
         </div>
       </div>
     </div>

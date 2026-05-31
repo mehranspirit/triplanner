@@ -43,7 +43,7 @@ interface InTripAssistantProps {
   onClose: () => void;
   showCloseButton?: boolean;
   onOpenChecklist: () => void;
-  onEditEvent: (event: Event) => void;
+  onOpenEventDetail: (event: Event) => void;
   onGenerateTodayBriefing?: () => void;
   onGenerateReplanBriefing?: () => void;
   onDismissInsight?: (insightId: string) => void;
@@ -134,9 +134,9 @@ const FlightStatusRows: React.FC<{ snapshots: FlightStatusSnapshot[] }> = ({ sna
   );
 };
 
-const TransferRow: React.FC<{ transfer: TransferSummary; onEditEvent: (event: Event) => void }> = ({
+const TransferRow: React.FC<{ transfer: TransferSummary; onOpenEventDetail: (event: Event) => void }> = ({
   transfer,
-  onEditEvent,
+  onOpenEventDetail,
 }) => {
   return (
     <div className={cn(
@@ -168,10 +168,10 @@ const TransferRow: React.FC<{ transfer: TransferSummary; onEditEvent: (event: Ev
         {transfer.severity !== 'ok' && (
           <button
             type="button"
-            onClick={() => onEditEvent(transfer.to)}
+            onClick={() => onOpenEventDetail(transfer.to)}
             className="rounded-md border border-current/20 px-2 py-1 font-medium hover:bg-white/60"
           >
-            Edit next event
+            View next event
           </button>
         )}
       </div>
@@ -192,8 +192,8 @@ const TodayBriefingCard: React.FC<{
   isGenerating?: boolean;
   onGenerate?: () => void;
   onOpenChecklist: () => void;
-  onEditEventById: (eventId: string) => void;
-}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onEditEventById }) => (
+  onOpenEventDetailById: (eventId: string) => void;
+}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onOpenEventDetailById }) => (
   <section className="rounded-lg border border-blue-100 bg-blue-50 p-3">
     <div className="flex items-start justify-between gap-3">
       <div>
@@ -227,7 +227,7 @@ const TodayBriefingCard: React.FC<{
                   {briefing.nextAction.actionLabel}
                 </Button>
               ) : briefing.nextAction.eventId ? (
-                <Button variant="outline" size="sm" onClick={() => onEditEventById(briefing.nextAction!.eventId!)}>
+                <Button variant="outline" size="sm" onClick={() => onOpenEventDetailById(briefing.nextAction!.eventId!)}>
                   {briefing.nextAction.actionLabel}
                 </Button>
               ) : null}
@@ -262,8 +262,8 @@ const ReplanDayCard: React.FC<{
   isGenerating?: boolean;
   onGenerate?: () => void;
   onOpenChecklist: () => void;
-  onEditEventById: (eventId: string) => void;
-}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onEditEventById }) => (
+  onOpenEventDetailById: (eventId: string) => void;
+}> = ({ briefing, generatedAt, error, isGenerating, onGenerate, onOpenChecklist, onOpenEventDetailById }) => (
   <section className="rounded-lg border border-amber-100 bg-amber-50 p-3">
     <div className="flex items-start justify-between gap-3">
       <div>
@@ -303,7 +303,7 @@ const ReplanDayCard: React.FC<{
                         {suggestion.actionLabel}
                       </Button>
                     ) : suggestion.eventId ? (
-                      <Button variant="outline" size="sm" onClick={() => onEditEventById(suggestion.eventId!)}>
+                      <Button variant="outline" size="sm" onClick={() => onOpenEventDetailById(suggestion.eventId!)}>
                         {suggestion.actionLabel}
                       </Button>
                     ) : null}
@@ -343,11 +343,10 @@ const ReplanDayCard: React.FC<{
 const EventCard: React.FC<{
   label: string;
   event: Event | null;
-  canEdit: boolean;
   weatherSnapshots: WeatherSnapshot[];
   flightStatusSnapshots: FlightStatusSnapshot[];
-  onEditEvent: (event: Event) => void;
-}> = ({ label, event, canEdit, weatherSnapshots, flightStatusSnapshots, onEditEvent }) => {
+  onOpenEventDetail: (event: Event) => void;
+}> = ({ label, event, weatherSnapshots, flightStatusSnapshots, onOpenEventDetail }) => {
   if (!event) {
     return (
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -369,9 +368,9 @@ const EventCard: React.FC<{
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
           <p className="mt-1 font-semibold text-gray-900">{getEventDisplayName(event)}</p>
         </div>
-        {canEdit && (
-          <Button variant="outline" size="sm" onClick={() => onEditEvent(event)}>
-            Edit
+        {event && (
+          <Button variant="outline" size="sm" onClick={() => onOpenEventDetail(event)}>
+            View
           </Button>
         )}
       </div>
@@ -425,7 +424,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   onClose,
   showCloseButton = true,
   onOpenChecklist,
-  onEditEvent,
+  onOpenEventDetail,
   onGenerateTodayBriefing,
   onGenerateReplanBriefing,
   onDismissInsight,
@@ -457,14 +456,14 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
       return rank[a.severity] - rank[b.severity];
     })
     .slice(0, 3);
-  const handleEditEventById = (eventId: string) => {
+  const handleOpenEventDetailById = (eventId: string) => {
     const event = trip.events.find((tripEvent) => tripEvent.id === eventId);
-    if (event) onEditEvent(event);
+    if (event) onOpenEventDetail(event);
   };
 
   const handleInsightAction = (insight: TripInsight) => {
     if (insight.actionTarget === 'event' && insight.source?.kind === 'event' && insight.source.id) {
-      handleEditEventById(insight.source.id);
+      handleOpenEventDetailById(insight.source.id);
     }
   };
 
@@ -505,7 +504,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
           isGenerating={isGeneratingTodayBriefing}
           onGenerate={onGenerateTodayBriefing}
           onOpenChecklist={onOpenChecklist}
-          onEditEventById={handleEditEventById}
+          onOpenEventDetailById={handleOpenEventDetailById}
         />
 
         <ReplanDayCard
@@ -515,25 +514,23 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
           isGenerating={isGeneratingReplanBriefing}
           onGenerate={onGenerateReplanBriefing}
           onOpenChecklist={onOpenChecklist}
-          onEditEventById={handleEditEventById}
+          onOpenEventDetailById={handleOpenEventDetailById}
         />
 
         <div className="grid gap-3">
           <EventCard
             label="Now"
             event={currentEvent}
-            canEdit={canEdit}
             weatherSnapshots={currentEvent ? getEventWeatherSnapshots(currentEvent.id) : []}
             flightStatusSnapshots={currentEvent ? getEventFlightStatusSnapshots(currentEvent.id) : []}
-            onEditEvent={onEditEvent}
+            onOpenEventDetail={onOpenEventDetail}
           />
           <EventCard
             label="Next"
             event={nextEvent}
-            canEdit={canEdit}
             weatherSnapshots={nextEvent ? getEventWeatherSnapshots(nextEvent.id) : []}
             flightStatusSnapshots={nextEvent ? getEventFlightStatusSnapshots(nextEvent.id) : []}
-            onEditEvent={onEditEvent}
+            onOpenEventDetail={onOpenEventDetail}
           />
         </div>
 
@@ -576,7 +573,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold">{insight.title}</p>
                       <p className="mt-1 opacity-90">{insight.message}</p>
-                      {canEdit && insight.actionLabel && insight.actionTarget === 'event' && (
+                      {insight.actionLabel && insight.actionTarget === 'event' && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -622,7 +619,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
                 return (
                   <React.Fragment key={event.id}>
                     {transfer && (
-                      <TransferRow transfer={transfer} onEditEvent={onEditEvent} />
+                      <TransferRow transfer={transfer} onOpenEventDetail={onOpenEventDetail} />
                     )}
                     <div className="rounded-lg border border-gray-200 p-3 text-sm">
                       <div className="flex items-start justify-between gap-2">

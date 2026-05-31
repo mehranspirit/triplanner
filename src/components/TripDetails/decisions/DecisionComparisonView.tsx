@@ -32,7 +32,7 @@ interface DecisionComparisonViewProps {
   currentUserId?: string;
   canEdit: boolean;
   onVote: (eventId: string, voteType: EventVoteAction) => void;
-  onEditEvent: (event: Event) => void;
+  onOpenEventDetail: (event: Event) => void;
   onRemoveOption: (decisionId: string, eventId: string) => Promise<void>;
   onDeferDecision: (decisionId: string) => Promise<void>;
   onDeleteDecision?: (decisionId: string) => Promise<void>;
@@ -53,7 +53,7 @@ const DecisionComparisonView: React.FC<DecisionComparisonViewProps> = ({
   currentUserId,
   canEdit,
   onVote,
-  onEditEvent,
+  onOpenEventDetail,
   onRemoveOption,
   onDeferDecision,
   onDeleteDecision,
@@ -299,7 +299,7 @@ const DecisionComparisonView: React.FC<DecisionComparisonViewProps> = ({
                     isTied={isTied}
                     isLeading={isLeading}
                     onVote={onVote}
-                    onEdit={canEdit ? onEditEvent : undefined}
+                    onEdit={canEdit ? onOpenEventDetail : undefined}
                     onRemove={canEdit ? (eventId) => onRemoveOption(decision.id, eventId) : undefined}
                     onConfirmWinner={canEdit ? setConfirmWinnerId : undefined}
                   />

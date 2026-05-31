@@ -196,6 +196,61 @@ export const getTodayTimelineDateKey = () => format(new Date(), 'yyyy-MM-dd');
 
 export const isTimelineDateToday = (dateKey: string) => dateKey === getTodayTimelineDateKey();
 
+/** Best day to focus in the timeline: today when relevant, otherwise trip-relative anchor. */
+export const resolveActiveTimelineDayKey = (
+  events: Event[],
+  tripStartDate?: string,
+  tripEndDate?: string,
+  now = new Date(),
+): string | null => {
+  const stripDays = buildTripDayStripItems(events, tripStartDate, tripEndDate).filter(
+    (day) => !day.isAllDays,
+  );
+
+  if (stripDays.length === 0) return null;
+
+  const unscheduledDay = stripDays.find((day) => day.isUnscheduled);
+  const datedDays = stripDays.filter((day) => !day.isUnscheduled);
+
+  if (datedDays.length === 0) {
+    return unscheduledDay?.dateKey ?? null;
+  }
+
+  const today = startOfDay(now);
+  const todayKey = format(today, 'yyyy-MM-dd');
+  const todayDay = datedDays.find((day) => day.dateKey === todayKey);
+  if (todayDay?.hasEvents) {
+    return todayKey;
+  }
+
+  const firstDated = datedDays[0];
+  const lastDated = datedDays[datedDays.length - 1];
+  const firstDate = parseTimelineDateKey(firstDated.dateKey);
+  const lastDate = parseTimelineDateKey(lastDated.dateKey);
+
+  if (firstDate && today < startOfDay(firstDate)) {
+    return firstDated.dateKey;
+  }
+
+  if (lastDate && today > startOfDay(lastDate)) {
+    const lastWithEvents = [...datedDays].reverse().find((day) => day.hasEvents);
+    return lastWithEvents?.dateKey ?? lastDated.dateKey;
+  }
+
+  const upcoming = datedDays.find((day) => {
+    const date = parseTimelineDateKey(day.dateKey);
+    return date && startOfDay(date) >= today && day.hasEvents;
+  });
+  if (upcoming) return upcoming.dateKey;
+
+  const previous = [...datedDays].reverse().find((day) => {
+    const date = parseTimelineDateKey(day.dateKey);
+    return date && startOfDay(date) <= today && day.hasEvents;
+  });
+
+  return previous?.dateKey ?? firstDated.dateKey;
+};
+
 export const formatTimelineDate = (dateKey: string) => {
   try {
     const date = parseTimelineDateKey(dateKey);

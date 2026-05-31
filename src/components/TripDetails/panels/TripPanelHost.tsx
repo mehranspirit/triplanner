@@ -45,7 +45,7 @@ interface TripPanelHostProps {
   onUpdateNotificationPreferences: (preferences: Partial<NotificationPreference>) => Promise<void>;
   onGenerateTodayBriefing: () => void;
   onGenerateReplanBriefing: () => void;
-  onEditEvent: (event: Trip['events'][number]) => void;
+  onOpenEventDetail: (event: Trip['events'][number]) => void;
   onDismissInsight?: (insightId: string) => void;
   tripHealthSummary: TripHealthSummary;
   tripHealthIssues: TripHealthIssue[];

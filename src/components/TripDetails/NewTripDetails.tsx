@@ -79,7 +79,7 @@ import {
   saveMapViewSuggestDismissed,
 } from '@/utils/mapViewPreferences';
 import { tripSurfaces } from '@/styles/tripSurfaces';
-import { buildTripDayStripItems, ALL_DAYS_FILTER_KEY, getTimelineDateKey } from '@/utils/timelineDates';
+import { buildTripDayStripItems, ALL_DAYS_FILTER_KEY, getTimelineDateKey, resolveActiveTimelineDayKey } from '@/utils/timelineDates';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -390,6 +390,33 @@ const NewTripDetails: React.FC = () => {
     setActiveDayKey(ALL_DAYS_FILTER_KEY);
   }, [trip?._id]);
 
+  useEffect(() => {
+    if (!trip?._id || !isHydrated || isMapView || detailsTab !== 'itinerary') return;
+
+    const activeDayKey = resolveActiveTimelineDayKey(
+      trip.events ?? [],
+      trip.startDate,
+      trip.endDate,
+    );
+    if (!activeDayKey) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        timelineRef.current?.scrollToDay(activeDayKey);
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [
+    trip?._id,
+    trip?.events,
+    trip?.startDate,
+    trip?.endDate,
+    detailsTab,
+    isHydrated,
+    isMapView,
+  ]);
+
   const handleDaySelect = useCallback((dateKey: string) => {
     setActiveDayKey(dateKey);
   }, []);
@@ -585,7 +612,7 @@ const NewTripDetails: React.FC = () => {
       case 'event': {
         const event = trip.events.find(tripEvent => tripEvent.id === eventId);
         if (event) {
-          handleEditEventClick(event);
+          handleNavigateToEventDetail(event);
         }
         break;
       }
@@ -869,8 +896,7 @@ const NewTripDetails: React.FC = () => {
       case 'event': {
         const event = trip.events.find(tripEvent => tripEvent.id === notification.eventId);
         if (event) {
-          closePanel();
-          handleEditEventClick(event);
+          handleNavigateToEventDetail(event);
         }
         break;
       }
@@ -1110,6 +1136,19 @@ const NewTripDetails: React.FC = () => {
     setDetailEventId(event.id);
   }, []);
 
+  const handleNavigateToEventDetail = useCallback((event: Event) => {
+    closePanel();
+    setDetailEventId(event.id);
+  }, [closePanel]);
+
+  const handleNavigateToEventDetailById = useCallback((eventId: string) => {
+    if (!trip) return;
+    const event = trip.events.find((candidate) => candidate.id === eventId);
+    if (event) {
+      handleNavigateToEventDetail(event);
+    }
+  }, [trip, handleNavigateToEventDetail]);
+
   const handleCloseEventDetail = useCallback(() => {
     setDetailEventId(null);
   }, []);
@@ -1147,12 +1186,7 @@ const NewTripDetails: React.FC = () => {
       tripId: trip._id,
       openPanel,
       onAddEvent: handleAddEventClick,
-      onEditEvent: (eventId) => {
-        const event = trip.events.find((candidate) => candidate.id === eventId);
-        if (event) {
-          handleEditEventClick(event);
-        }
-      },
+      onOpenEventDetail: handleNavigateToEventDetailById,
       onOpenExplore: (scope) => {
         setExploreScope(scope ?? null);
         setIsExploreSuggestionsOpen(true);
@@ -1186,6 +1220,7 @@ const NewTripDetails: React.FC = () => {
     handleDeferDecision,
     handleCreateDecisionClick,
     handleOpenAddDecisionOption,
+    handleNavigateToEventDetailById,
   ]);
 
   const handleCloseModal = () => {
@@ -1496,7 +1531,7 @@ const NewTripDetails: React.FC = () => {
   const handleProactiveCardAction = (card: ProactiveContextCardData) => {
     switch (card.type) {
       case 'next_up':
-        if (card.event) handleEditEventClick(card.event);
+        if (card.event) handleOpenEventDetail(card.event);
         break;
       case 'travel_day':
       case 'travel_status':
@@ -1593,7 +1628,7 @@ const NewTripDetails: React.FC = () => {
       onUpdateNotificationPreferences={handleUpdateNotificationPreferences}
       onGenerateTodayBriefing={handleGenerateTodayBriefing}
       onGenerateReplanBriefing={handleGenerateReplanBriefing}
-      onEditEvent={handleEditEventClick}
+      onOpenEventDetail={handleNavigateToEventDetail}
       onDismissInsight={handleDismissInsight}
       tripHealthSummary={tripHealth?.summary ?? {
         headlineScore: 100,
@@ -1622,7 +1657,7 @@ const NewTripDetails: React.FC = () => {
           unreadNotificationCount={unreadNotificationCount}
           onExitMapView={() => handleSetMapView(false)}
           onReviewLocations={handleImproveLocations}
-          onOpenEvent={handleEditEventClick}
+          onOpenEvent={handleNavigateToEventDetail}
           onClosePanel={closePanel}
           toolsMenuProps={{
             tripId: trip._id,
@@ -1781,7 +1816,7 @@ const NewTripDetails: React.FC = () => {
         onUpdateNotificationPreferences={handleUpdateNotificationPreferences}
         onGenerateTodayBriefing={handleGenerateTodayBriefing}
         onGenerateReplanBriefing={handleGenerateReplanBriefing}
-        onEditEvent={handleEditEventClick}
+        onOpenEventDetail={handleNavigateToEventDetail}
         onDismissInsight={handleDismissInsight}
         tripHealthSummary={tripHealth?.summary ?? {
           headlineScore: 100,
@@ -1914,7 +1949,7 @@ const NewTripDetails: React.FC = () => {
             currentUserId={user?._id}
             canEdit={canEdit}
             onVote={handleVote}
-            onEditEvent={handleEditEventClick}
+            onOpenEventDetail={handleNavigateToEventDetail}
             onRemoveOption={handleRemoveDecisionOption}
             onDeferDecision={handleDeferDecision}
             onDeleteDecision={canEdit ? handleDeleteDecision : undefined}

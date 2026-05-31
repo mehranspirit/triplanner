@@ -32,7 +32,7 @@ interface TripCommandCenterProps {
   onOpenChecklist: () => void;
   onOpenExpenses: () => void;
   onAddEvent: (eventType?: EventType) => void;
-  onEditEvent: (eventId: string) => void;
+  onOpenEventDetail: (eventId: string) => void;
   onDismissInsight: (insightId: string) => void;
   dismissedInsightCount: number;
   onRestoreDismissedInsights: () => void;
@@ -66,7 +66,7 @@ const severityIconStyles: Record<TripInsight['severity'], string> = {
 
 const getActionHandler = (
   insight: TripInsight,
-  handlers: Pick<TripCommandCenterProps, 'onOpenAIImport' | 'onOpenChecklist' | 'onOpenExpenses' | 'onAddEvent' | 'onEditEvent'>
+  handlers: Pick<TripCommandCenterProps, 'onOpenAIImport' | 'onOpenChecklist' | 'onOpenExpenses' | 'onAddEvent' | 'onOpenEventDetail'>
 ) => {
   switch (insight.actionTarget) {
     case 'ai_import':
@@ -78,7 +78,7 @@ const getActionHandler = (
     case 'add_event':
       return () => handlers.onAddEvent(insight.actionEventType);
     case 'event':
-      return insight.source.id ? () => handlers.onEditEvent(insight.source.id!) : undefined;
+      return insight.source.id ? () => handlers.onOpenEventDetail(insight.source.id!) : undefined;
     default:
       return undefined;
   }
@@ -457,7 +457,7 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
   onOpenChecklist,
   onOpenExpenses,
   onAddEvent,
-  onEditEvent,
+  onOpenEventDetail,
   onDismissInsight,
   dismissedInsightCount,
   onRestoreDismissedInsights,
@@ -579,7 +579,7 @@ const TripCommandCenter: React.FC<TripCommandCenterProps> = ({
                   key={insight.id}
                   insight={insight}
                   canEdit={canEdit}
-                  onAction={getActionHandler(insight, { onOpenAIImport, onOpenChecklist, onOpenExpenses, onAddEvent, onEditEvent })}
+                  onAction={getActionHandler(insight, { onOpenAIImport, onOpenChecklist, onOpenExpenses, onAddEvent, onOpenEventDetail })}
                   onDismiss={() => onDismissInsight(insight.id)}
                 />
               ))}

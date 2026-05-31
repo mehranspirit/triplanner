@@ -46,7 +46,7 @@ export interface TripPanelContentProps {
   onUpdateNotificationPreferences: (preferences: Partial<NotificationPreference>) => Promise<void>;
   onGenerateTodayBriefing: () => void;
   onGenerateReplanBriefing: () => void;
-  onEditEvent: (event: Trip['events'][number]) => void;
+  onOpenEventDetail: (event: Trip['events'][number]) => void;
   onDismissInsight?: (insightId: string) => void;
   tripHealthSummary: TripHealthSummary;
   tripHealthIssues: TripHealthIssue[];
@@ -85,7 +85,7 @@ const TripPanelContent: React.FC<TripPanelContentProps> = ({
   onUpdateNotificationPreferences,
   onGenerateTodayBriefing,
   onGenerateReplanBriefing,
-  onEditEvent,
+  onOpenEventDetail,
   onDismissInsight,
   tripHealthSummary,
   tripHealthIssues,
@@ -133,9 +133,9 @@ const TripPanelContent: React.FC<TripPanelContentProps> = ({
         onClose={onClose}
         showCloseButton={false}
         onOpenChecklist={() => onOpenPanel('checklist')}
-        onEditEvent={(event) => {
+        onOpenEventDetail={(event) => {
           onClose();
-          onEditEvent(event);
+          onOpenEventDetail(event);
         }}
         onDismissInsight={onDismissInsight}
       />
