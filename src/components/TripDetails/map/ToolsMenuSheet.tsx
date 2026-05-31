@@ -16,8 +16,6 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import { EventType } from '@/types/eventTypes';
 import { cn } from '@/lib/utils';
@@ -71,7 +69,6 @@ const ToolsMenuSheet: React.FC<ToolsMenuSheetProps> = ({
   canEdit,
   addableEventTypes,
   unreadNotificationCount,
-  isCondensedView,
   isImprovingLocations,
   improveLocationsLabel,
   onOpenChange,
@@ -81,7 +78,6 @@ const ToolsMenuSheet: React.FC<ToolsMenuSheetProps> = ({
   onImproveLocations,
   onOpenPanel,
   onOpenNotifications,
-  onCondensedViewChange,
 }) => {
   const navigate = useNavigate();
 
@@ -220,20 +216,6 @@ const ToolsMenuSheet: React.FC<ToolsMenuSheetProps> = ({
               label="Expenses and settlements"
               onClick={() => closeAndRun(() => navigate(`/trips/${tripId}/expenses`))}
             />
-          </MenuSection>
-
-          <MenuSection title="View">
-            <div className="flex items-center justify-between rounded-xl px-3 py-2.5">
-              <Label htmlFor="map-condensed-view" className="text-sm text-slate-800">
-                Condensed timeline
-              </Label>
-              <Switch
-                id="map-condensed-view"
-                checked={isCondensedView}
-                onCheckedChange={onCondensedViewChange}
-                aria-label="Condensed timeline"
-              />
-            </div>
           </MenuSection>
 
           <MenuSection title="Trip">

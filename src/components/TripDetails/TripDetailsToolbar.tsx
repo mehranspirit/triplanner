@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
 import { Bell, CalendarDays, CheckSquare, ClipboardList, CreditCard, FileText, LayoutList, Map as MapIconLucide, MapIcon, MapPin, Plus, Sparkles, Wand2 } from 'lucide-react';
@@ -14,7 +14,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import { EventType } from '@/types/eventTypes';
 import { TripDetailsView } from '@/types/tripDetailsViewTypes';
@@ -29,7 +28,6 @@ interface TripDetailsToolbarProps {
   activePanel: TripPanel | null;
   activeView: TripDetailsView;
   unreadNotificationCount: number;
-  isCondensedView: boolean;
   isImprovingLocations: boolean;
   improveLocationsLabel?: string;
   mapLocationProgress?: { geocoded: number; total: number };
@@ -39,7 +37,6 @@ interface TripDetailsToolbarProps {
   onImproveLocations: () => void;
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
-  onCondensedViewChange: (value: boolean) => void;
   onViewChange: (view: TripDetailsView) => void;
   showCalendarTab?: boolean;
 }
@@ -67,14 +64,13 @@ const eventIconForType = (type: EventType) => {
   return <Plus className="mr-2 h-4 w-4" />;
 };
 
-const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
+const TripDetailsToolbar = forwardRef<HTMLDivElement, TripDetailsToolbarProps>(function TripDetailsToolbar({
   tripId,
   canEdit,
   addableEventTypes,
   activePanel,
   activeView,
   unreadNotificationCount,
-  isCondensedView,
   isImprovingLocations,
   improveLocationsLabel,
   mapLocationProgress,
@@ -84,10 +80,9 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   onImproveLocations,
   onOpenPanel,
   onOpenNotifications,
-  onCondensedViewChange,
   onViewChange,
   showCalendarTab = true,
-}) => {
+}, ref) {
   const navigate = useNavigate();
   const viewOptions = showCalendarTab
     ? VIEW_OPTIONS
@@ -97,7 +92,11 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
     && mapLocationProgress.geocoded < mapLocationProgress.total;
 
   return (
-    <div className={cn(tripSurfaces.float, 'sticky top-0 z-40 p-2 lg:rounded-3xl lg:p-3')}>
+    <div
+      ref={ref}
+      data-trip-details-toolbar
+      className={cn(tripSurfaces.float, 'sticky top-0 z-40 rounded-none border-x-0 p-2 lg:rounded-3xl lg:border-x lg:p-3')}
+    >
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           {canEdit && (
@@ -219,19 +218,6 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                 Expenses and settlements
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>View</DropdownMenuLabel>
-              <DropdownMenuItem
-                className="flex items-center justify-between"
-                onSelect={(event) => event.preventDefault()}
-              >
-                <span>Condensed timeline</span>
-                <Switch
-                  checked={isCondensedView}
-                  onCheckedChange={onCondensedViewChange}
-                  aria-label="Condensed timeline"
-                />
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuLabel>Trip</DropdownMenuLabel>
               <DropdownMenuItem disabled>
                 Collaborators, export, and trip settings are in the header menu
@@ -286,6 +272,6 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default TripDetailsToolbar;

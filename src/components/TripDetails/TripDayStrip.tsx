@@ -37,7 +37,7 @@ const TripDayStrip: React.FC<TripDayStripProps> = ({
   return (
     <nav
       aria-label="Trip days"
-      className={cn(tripSurfaces.float, 'px-2 py-2 lg:rounded-3xl')}
+      className={cn(tripSurfaces.float, 'rounded-none border-x-0 px-3 py-2 lg:rounded-3xl lg:border-x lg:px-2')}
     >
       <div
         ref={stripRef}

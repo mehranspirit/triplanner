@@ -24,7 +24,7 @@ const ProactiveTripContext: React.FC<ProactiveTripContextProps> = ({
 }) => {
   if (signals.cards.length === 0) {
     return (
-      <aside className="hidden lg:block lg:sticky lg:top-24">
+      <aside>
         <section className={cn(tripSurfaces.content, 'rounded-[2rem] bg-white/80 p-4')}>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
             {getPhaseLabel(signals.phase)}
@@ -41,7 +41,7 @@ const ProactiveTripContext: React.FC<ProactiveTripContextProps> = ({
   }
 
   return (
-    <aside className="space-y-3 lg:sticky lg:top-24">
+    <aside className="space-y-3">
       <section className={cn(tripSurfaces.floatStrong, 'p-4')}>
         <div className="flex items-start justify-between gap-3">
           <div>

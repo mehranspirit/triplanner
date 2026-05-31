@@ -9,11 +9,8 @@ import { resolveMapTileStyleForTrip } from '@/config/mapTiles';
 import { cn } from '@/lib/utils';
 import { tripSurfaces } from '@/styles/tripSurfaces';
 import { TripPanel } from '../hooks/useTripPanelManager';
-import { getPanelSheetSnap } from '../panels/tripPanelMeta';
 import MapGeocodeBanner from './MapGeocodeBanner';
-import MapBottomSheet, { MapSheetSnap } from './MapBottomSheet';
 import MapSideRail from './MapSideRail';
-import TodayPeek from './TodayPeek';
 import EventMapPreview from './EventMapPreview';
 import ToolsMenuSheet from './ToolsMenuSheet';
 import type { ToolsMenuSheetProps } from './toolsMenuSheetTypes';
@@ -23,7 +20,6 @@ interface MapTripViewProps {
   canEdit: boolean;
   sheetBody: React.ReactNode;
   activePanel: TripPanel | null;
-  collapseSheet: boolean;
   unreadNotificationCount: number;
   onExitMapView: () => void;
   onReviewLocations?: () => void;
@@ -37,7 +33,6 @@ const MapTripView: React.FC<MapTripViewProps> = ({
   canEdit,
   sheetBody,
   activePanel,
-  collapseSheet,
   unreadNotificationCount,
   onExitMapView,
   onReviewLocations,
@@ -46,41 +41,15 @@ const MapTripView: React.FC<MapTripViewProps> = ({
   toolsMenuProps,
 }) => {
   const { setMapViewActive } = useMapViewChrome();
-  const [sheetSnap, setSheetSnap] = useState<MapSheetSnap>('peek');
   const [mapFilter, setMapFilter] = useState<TripMapFilter>('all');
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [navigableEvents, setNavigableEvents] = useState<Event[]>([]);
   const [isToolsOpen, setIsToolsOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
-  );
 
   useEffect(() => {
     setMapViewActive(true);
     return () => setMapViewActive(false);
   }, [setMapViewActive]);
-
-  useEffect(() => {
-    const media = window.matchMedia('(min-width: 1024px)');
-    const handleChange = () => setIsDesktop(media.matches);
-    handleChange();
-    media.addEventListener('change', handleChange);
-    return () => media.removeEventListener('change', handleChange);
-  }, []);
-
-  useEffect(() => {
-    if (collapseSheet) {
-      setSheetSnap('peek');
-    }
-  }, [collapseSheet]);
-
-  useEffect(() => {
-    if (!activePanel) {
-      setSheetSnap('peek');
-      return;
-    }
-    setSheetSnap(getPanelSheetSnap(activePanel));
-  }, [activePanel]);
 
   const geocodedCount = useMemo(
     () => (trip.events || []).filter(eventHasMapCoordinates).length,
@@ -97,7 +66,6 @@ const MapTripView: React.FC<MapTripViewProps> = ({
 
   const handleEventSelect = (event: Event) => {
     setSelectedEvent(event);
-    setSheetSnap('peek');
     onClosePanel();
   };
 
@@ -128,17 +96,6 @@ const MapTripView: React.FC<MapTripViewProps> = ({
 
     setSelectedEvent(navigableEvents[nextIndex]);
   };
-
-  const handleSnapChange = (snap: MapSheetSnap) => {
-    if (activePanel && snap === 'peek') {
-      onClosePanel();
-    }
-    setSheetSnap(snap);
-  };
-
-  const peekContent = activePanel && activePanel !== 'map'
-    ? null
-    : <TodayPeek trip={trip} />;
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-slate-950">
@@ -202,7 +159,7 @@ const MapTripView: React.FC<MapTripViewProps> = ({
         </div>
       </header>
 
-      <div className="relative grid min-h-0 flex-1 lg:grid-cols-[3fr_2fr]">
+      <div className="relative grid min-h-0 flex-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1">
         <div className="relative min-h-0">
           <div className="absolute inset-0 z-0">
             <TripMap
@@ -252,16 +209,6 @@ const MapTripView: React.FC<MapTripViewProps> = ({
             )}
           </div>
 
-          {!isDesktop && (
-            <MapBottomSheet
-              snap={sheetSnap}
-              onSnapChange={handleSnapChange}
-              peekContent={peekContent}
-            >
-              {sheetBody}
-            </MapBottomSheet>
-          )}
-
           {import.meta.env.VITE_MAPTILER_API_KEY && (
             <div className="pointer-events-none absolute bottom-3 left-3 z-[5] max-w-[calc(100%-1.5rem)] rounded-md bg-slate-950/75 px-2 py-1 text-[10px] text-white/80 backdrop-blur-sm lg:bottom-4">
               © MapTiler © OpenStreetMap contributors
@@ -276,11 +223,9 @@ const MapTripView: React.FC<MapTripViewProps> = ({
           />
         </div>
 
-        {isDesktop && (
-          <MapSideRail activePanel={activePanel}>
-            {sheetBody}
-          </MapSideRail>
-        )}
+        <MapSideRail activePanel={activePanel}>
+          {sheetBody}
+        </MapSideRail>
       </div>
     </div>
   );

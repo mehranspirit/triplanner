@@ -15,9 +15,9 @@ export const tripSurfaces = {
   primaryCta:
     'shadow-md shadow-blue-600/20 hover:shadow-lg hover:shadow-blue-600/25',
   dayHeaderToday:
-    'border-blue-200 bg-blue-50/95 text-blue-950 shadow-md shadow-blue-900/10 ring-1 ring-blue-100',
+    'border border-blue-300 bg-blue-600 text-white shadow-lg shadow-blue-900/20 ring-2 ring-blue-200/80',
   dayHeaderDefault:
-    'border-slate-200 bg-white/95 text-slate-950 shadow-lg shadow-slate-900/[0.08] backdrop-blur-md',
+    'border border-slate-300 bg-slate-800 text-white shadow-lg shadow-slate-900/25 ring-2 ring-white/80',
   timelineSpine: 'bg-gradient-to-b from-blue-300 via-slate-200 to-transparent',
   timelineDot: 'border-2 border-white bg-slate-300 shadow-sm ring-2 ring-slate-100',
   timelineDotToday:

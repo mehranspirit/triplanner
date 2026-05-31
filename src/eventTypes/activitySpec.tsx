@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { registerEvent, EventSpec } from './registry';
 import { ActivityEvent } from '@/types/eventTypes';
-import ActivityEventCard from '../components/TripDetails/EventCards/ActivityEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { format, setHours, setMinutes, setSeconds, parse } from 'date-fns';
@@ -385,7 +384,6 @@ const activitySpec: EventSpec<ActivityEvent> = {
     ['Description', event.description || 'N/A'],
     ['Status', event.status],
   ],
-  cardComponent: ActivityEventCard,
 };
 
 // Register the specification

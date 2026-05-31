@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { BusEvent } from '@/types/eventTypes';
-import BusEventCard from '../components/TripDetails/EventCards/BusEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { format, parse, setHours, setMinutes, setSeconds } from 'date-fns';
@@ -448,7 +447,6 @@ const busSpec: EventSpec<BusEvent> = {
     ['Booking Ref', event.bookingReference || 'N/A'],
     ['Status', event.status],
   ],
-  cardComponent: BusEventCard,
 };
 
 // Register the specification

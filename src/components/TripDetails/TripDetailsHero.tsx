@@ -121,7 +121,7 @@ const TripDetailsHero: React.FC<TripDetailsHeroProps> = ({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-900/10 md:rounded-[2rem] md:shadow-2xl">
+    <section className="overflow-hidden rounded-none border border-x-0 border-slate-200 bg-white shadow-lg shadow-slate-900/10 md:rounded-[2rem] md:border-x md:shadow-2xl">
       <div className="relative h-[132px] w-full overflow-hidden sm:h-[190px] md:h-[220px]">
         <img
           src={trip.thumbnailUrl || tripThumbnail}

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { TrainEvent } from '@/types/eventTypes';
-import TrainEventCard from '../components/TripDetails/EventCards/TrainEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { format, parse, setHours, setMinutes, setSeconds } from 'date-fns';
@@ -464,7 +463,6 @@ const trainSpec: EventSpec<TrainEvent> = {
     ['Booking Ref', event.bookingReference || 'N/A'],
     ['Status', event.status],
   ],
-  cardComponent: TrainEventCard,
 };
 
 // Register the specification

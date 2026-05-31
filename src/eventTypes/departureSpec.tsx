@@ -2,7 +2,6 @@ import * as z from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { ArrivalDepartureEvent } from '@/types/eventTypes'; // Use common type
-import DepartureEventCard from '../components/TripDetails/EventCards/DepartureEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { format, setHours, setMinutes, setSeconds, parse } from 'date-fns';
@@ -360,7 +359,6 @@ const departureSpec: EventSpec<ArrivalDepartureEvent> = {
     ['Booking Ref', event.bookingReference || 'N/A'],
     ['Status', event.status],
   ],
-  cardComponent: DepartureEventCard,
 };
 
 // Register the specification

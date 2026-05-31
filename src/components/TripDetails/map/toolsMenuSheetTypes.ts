@@ -7,7 +7,6 @@ export interface ToolsMenuSheetProps {
   canEdit: boolean;
   addableEventTypes: EventType[];
   unreadNotificationCount: number;
-  isCondensedView: boolean;
   isImprovingLocations: boolean;
   improveLocationsLabel?: string;
   onOpenChange: (open: boolean) => void;
@@ -17,5 +16,4 @@ export interface ToolsMenuSheetProps {
   onImproveLocations: () => void;
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
-  onCondensedViewChange: (value: boolean) => void;
 }

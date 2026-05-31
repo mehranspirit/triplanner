@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { DestinationEvent } from '@/types/eventTypes';
-import DestinationEventCard from '../components/TripDetails/EventCards/DestinationEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { format, setHours, setMinutes, setSeconds, parse } from 'date-fns';
@@ -329,7 +328,6 @@ const destinationSpec: EventSpec<DestinationEvent> = {
     ];
     return rows;
   },
-  cardComponent: DestinationEventCard,
 };
 
 // Register the specification

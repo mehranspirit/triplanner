@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { StayEvent } from '@/types/eventTypes';
-import StayEventCard from '../components/TripDetails/EventCards/StayEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { format, setHours, setMinutes, setSeconds, parse } from 'date-fns';
@@ -398,7 +397,6 @@ const staySpec: EventSpec<StayEvent> = {
     ['Contact', event.contactInfo || 'N/A'],
     ['Status', event.status],
   ],
-  cardComponent: StayEventCard,
 };
 
 // Register the specification

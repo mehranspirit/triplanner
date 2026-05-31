@@ -16,6 +16,8 @@ import {
 interface TimelineLegConnectorProps {
   transfer: TransferSummary;
   drivingLeg?: TimelineTransferLeg | null;
+  variant?: 'rail' | 'inline';
+  className?: string;
 }
 
 const severityStyles: Record<TransferSummary['severity'], string> = {
@@ -55,7 +57,12 @@ const getDisplaySeverity = (
   return 'ok';
 };
 
-const TimelineLegConnector: React.FC<TimelineLegConnectorProps> = ({ transfer, drivingLeg }) => {
+const TimelineLegConnector: React.FC<TimelineLegConnectorProps> = ({
+  transfer,
+  drivingLeg,
+  variant = 'rail',
+  className,
+}) => {
   const severity = getDisplaySeverity(transfer, drivingLeg);
   const label = drivingLeg?.status === 'ok'
     && drivingLeg.driveDistanceLabel
@@ -69,21 +76,36 @@ const TimelineLegConnector: React.FC<TimelineLegConnectorProps> = ({ transfer, d
       ? ' · long leg'
       : '';
 
+  const link = (
+    <a
+      href={getDirectionsUrl(transfer.fromPoint, transfer.toPoint)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        'inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+        severityStyles[severity],
+      )}
+      title="Open driving directions in Google Maps"
+    >
+      <Navigation className="h-3 w-3 shrink-0 opacity-70" />
+      <span className="truncate">{label}{hint}</span>
+    </a>
+  );
+
+  if (variant === 'inline') {
+    return (
+      <div className={cn('min-w-0 flex-1', className)}>
+        {link}
+      </div>
+    );
+  }
+
   return (
-    <div className="relative py-1 pl-1">
-      <a
-        href={getDirectionsUrl(transfer.fromPoint, transfer.toPoint)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-          severityStyles[severity],
-        )}
-        title="Open driving directions in Google Maps"
-      >
-        <Navigation className="h-3 w-3 shrink-0 opacity-70" />
-        <span>{label}{hint}</span>
-      </a>
+    <div className={cn('flex min-w-0 gap-3 py-1', className)}>
+      <div className="w-14 shrink-0" aria-hidden />
+      <div className="min-w-0 flex-1">
+        {link}
+      </div>
     </div>
   );
 };

@@ -31,6 +31,7 @@ import { executeResolution, ExploreScope } from '@/services/resolutionDispatcher
 import { HealthDismissalReason, ResolutionAction } from '@/types/tripHealthTypes';
 import { buildEventDraftFromPrefill } from '@/utils/eventFormPrefill';
 import { useEventVotes } from '@/components/TripDetails/hooks/useEventVotes';
+import { useElementHeight } from '@/components/TripDetails/hooks/useElementHeight';
 import { useDecisions } from '@/components/TripDetails/hooks/useDecisions';
 import DecisionComparisonView from '@/components/TripDetails/decisions/DecisionComparisonView';
 import CreateDecisionDialog from '@/components/TripDetails/decisions/CreateDecisionDialog';
@@ -64,6 +65,12 @@ import {
 } from '@/types/assistantBriefingTypes';
 import { networkAwareApi } from '@/services/networkAwareApi';
 import EventFormModalRouter from './EventFormModalRouter';
+import EventDetailSheet from '@/components/TripDetails/EventCards/EventDetailSheet';
+import {
+  getEventDetailWeatherLabel,
+  resolveOutboundTransferForEvent,
+} from '@/utils/eventDetailContent';
+import { EVENT_TYPES } from '@/eventTypes/registry';
 import TripLoading from '@/components/ui/trip-loading';
 import { getTripStatusSummary } from '@/services/tripStatus';
 import {
@@ -161,9 +168,6 @@ const NewTripDetails: React.FC = () => {
   const [modalType, setModalType] = useState<EventType | null>(null); // State to track which modal to show
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [eventFormDraft, setEventFormDraft] = useState<Partial<Event> | null>(null);
-  const [isCondensedView, setIsCondensedView] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
-  );
   const [isMobileLayout, setIsMobileLayout] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
   );
@@ -171,8 +175,10 @@ const NewTripDetails: React.FC = () => {
   const { isMapView, isHydrated, setMapView } = useMapView(trip?._id);
   const { activeTab: detailsTab, setActiveTab: setDetailsTab } = useTripDetailsTab(trip?._id);
   const timelineRef = useRef<TripTimelineHandle>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const [activeDayKey, setActiveDayKey] = useState(ALL_DAYS_FILTER_KEY);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [detailEventId, setDetailEventId] = useState<string | null>(null);
 
   const handleSetMapView = useCallback((next: boolean) => {
     if (next) closePanel();
@@ -367,6 +373,14 @@ const NewTripDetails: React.FC = () => {
     () => getTripMapLocationProgress(trip?.events ?? []),
     [trip?.events],
   );
+  const toolbarHeight = useElementHeight(toolbarRef, [
+    canEdit,
+    detailsTab,
+    isMobileLayout,
+    mapLocationProgress.geocoded,
+    mapLocationProgress.total,
+    locationConfirmQueue.open,
+  ]);
   const dayStripItems = useMemo(
     () => buildTripDayStripItems(trip?.events ?? [], trip?.startDate, trip?.endDate),
     [trip?.endDate, trip?.events, trip?.startDate],
@@ -1052,6 +1066,60 @@ const NewTripDetails: React.FC = () => {
     // setIsModalOpen(true); // No longer needed
   };
 
+  const detailEvent = useMemo(
+    () => (detailEventId && trip?.events
+      ? trip.events.find((candidate) => candidate.id === detailEventId) ?? null
+      : null),
+    [detailEventId, trip?.events],
+  );
+
+  const detailEventThumbnail = useMemo(() => {
+    if (!detailEvent) return undefined;
+    const registryItem = EVENT_TYPES[detailEvent.type];
+    return eventThumbnails[detailEvent.id] || registryItem?.defaultThumbnail;
+  }, [detailEvent, eventThumbnails]);
+
+  const detailEventContext = useMemo(() => {
+    if (!detailEvent || !trip) {
+      return {
+        weatherLabel: null,
+        flightStatus: null,
+        outboundTransfer: null,
+        currency: 'USD',
+      };
+    }
+
+    const currency = trip.settings?.defaultCurrency || trip.budget?.currency || 'USD';
+
+    return {
+      weatherLabel: getEventDetailWeatherLabel(detailEvent, weatherSnapshots),
+      flightStatus: flightStatusSnapshots.find(
+        (snapshot) => snapshot.eventId === detailEvent.id,
+      ) ?? null,
+      outboundTransfer: resolveOutboundTransferForEvent(
+        detailEvent,
+        trip.events,
+        weatherSnapshots,
+        timelineTransferLegs,
+      ),
+      currency,
+    };
+  }, [detailEvent, trip, weatherSnapshots, flightStatusSnapshots, timelineTransferLegs]);
+
+  const handleOpenEventDetail = useCallback((event: Event) => {
+    setDetailEventId(event.id);
+  }, []);
+
+  const handleCloseEventDetail = useCallback(() => {
+    setDetailEventId(null);
+  }, []);
+
+  const handleDetailEdit = useCallback(() => {
+    if (!detailEvent) return;
+    setDetailEventId(null);
+    handleEditEventClick(detailEvent);
+  }, [detailEvent]);
+
   const handleDismissHealthIssue = useCallback(async (
     issueKey: string,
     reason: HealthDismissalReason,
@@ -1229,6 +1297,17 @@ const NewTripDetails: React.FC = () => {
       alert('Failed to update event status. Please try again.');
     }
   };
+
+  const handleDetailDelete = useCallback(async () => {
+    if (!detailEvent) return;
+    await handleDeleteEvent(detailEvent.id);
+    setDetailEventId(null);
+  }, [detailEvent, trip]);
+
+  const handleDetailStatusChange = useCallback(async (status: 'confirmed' | 'exploring') => {
+    if (!detailEvent) return;
+    await handleStatusChange(detailEvent, status);
+  }, [detailEvent, trip]);
 
   const handleAIParse = async () => {
     if (!trip || !user) return;
@@ -1458,26 +1537,19 @@ const NewTripDetails: React.FC = () => {
       ref={timelineRef}
       events={trip.events}
       trip={trip}
-      tripId={trip._id}
-      currentUserId={user?._id}
       tripStartDate={trip.startDate}
       tripEndDate={trip.endDate}
       eventThumbnails={eventThumbnails}
-      isCondensedView={isCondensedView}
       canEdit={canEdit}
       deletingEvents={deletingEvents}
       weatherSnapshots={weatherSnapshots}
       flightStatusSnapshots={flightStatusSnapshots}
       notifications={notifications}
-      onEditEvent={handleEditEventClick}
-      onDeleteEvent={handleDeleteEvent}
-      onStatusChange={handleStatusChange}
-      onVote={handleVote}
+      onOpenEventDetail={handleOpenEventDetail}
       onOpenDecision={handleOpenDecision}
       onCompareSelectedEvents={canEdit ? handleCreateDecisionClick : undefined}
       healthIssues={tripHealth?.issues ?? []}
       onOpenHealthIssue={handleOpenHealthIssue}
-      onLocationApplied={replaceTripEvents}
       onReviewEventLocation={
         canEdit
           ? (event) => locationConfirmQueue.startUnresolvedReview([event])
@@ -1547,7 +1619,6 @@ const NewTripDetails: React.FC = () => {
           canEdit={canEdit}
           sheetBody={mapSheetBody}
           activePanel={activePanel}
-          collapseSheet={isL4ModalOpen}
           unreadNotificationCount={unreadNotificationCount}
           onExitMapView={() => handleSetMapView(false)}
           onReviewLocations={handleImproveLocations}
@@ -1557,7 +1628,6 @@ const NewTripDetails: React.FC = () => {
             tripId: trip._id,
             canEdit,
             addableEventTypes,
-            isCondensedView,
             isImprovingLocations: locationConfirmQueue.open,
             improveLocationsLabel: locationConfirmQueue.open
               ? `Reviewing ${locationConfirmQueue.queuePosition.current}/${locationConfirmQueue.queuePosition.total}`
@@ -1570,12 +1640,14 @@ const NewTripDetails: React.FC = () => {
             onOpenNotifications: () => {
               handleOpenPanelForMap('notifications');
             },
-            onCondensedViewChange: setIsCondensedView,
           }}
         />
       ) : (
-    <div className={cn('min-h-screen', tripSurfaces.canvas)}>
-      <div className="mx-auto max-w-7xl space-y-3 px-3 py-4 lg:space-y-6 lg:px-4 lg:py-6">
+    <div
+      className={cn('min-h-screen', tripSurfaces.canvas)}
+      style={{ '--trip-details-toolbar-height': `${toolbarHeight ?? 112}px` } as React.CSSProperties}
+    >
+      <div className="mx-auto max-w-7xl space-y-3 px-0 py-3 lg:space-y-6 lg:px-4 lg:py-6">
       <TripDetailsHero
         trip={trip}
         tripThumbnail={tripThumbnail}
@@ -1598,12 +1670,12 @@ const NewTripDetails: React.FC = () => {
       />
 
       <TripDetailsToolbar
+        ref={toolbarRef}
         tripId={trip._id}
         canEdit={canEdit}
         addableEventTypes={addableEventTypes}
         activePanel={activePanel}
         unreadNotificationCount={unreadNotificationCount}
-        isCondensedView={isCondensedView}
         isImprovingLocations={locationConfirmQueue.open}
         improveLocationsLabel={
           locationConfirmQueue.open
@@ -1620,7 +1692,6 @@ const NewTripDetails: React.FC = () => {
           openPanel('notifications');
           fetchNotifications();
         }}
-        onCondensedViewChange={setIsCondensedView}
         activeView={detailsTab}
         onViewChange={handleDetailsViewChange}
         showCalendarTab={!isMobileLayout}
@@ -1640,7 +1711,7 @@ const NewTripDetails: React.FC = () => {
         />
       )}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
         <main className="min-w-0 space-y-3">
           {detailsTab === 'calendar' && !isMobileLayout && (
             <TripCalendarView
@@ -1664,14 +1735,16 @@ const NewTripDetails: React.FC = () => {
           )}
         </main>
 
-        <div className="hidden space-y-4 lg:block">
-          {contextSignals && (
-            <ProactiveTripContext
-              signals={contextSignals}
-              onCardAction={handleProactiveCardAction}
-              onDismissCard={handleDismissContextCard}
-            />
-          )}
+        <div className="hidden lg:block">
+          <div className="sticky top-[calc(var(--trip-details-toolbar-height,7rem)+0.75rem)] space-y-4">
+            {contextSignals && (
+              <ProactiveTripContext
+                signals={contextSignals}
+                onCardAction={handleProactiveCardAction}
+                onDismissCard={handleDismissContextCard}
+              />
+            )}
+          </div>
         </div>
       </div>
       </div>
@@ -1768,6 +1841,34 @@ const NewTripDetails: React.FC = () => {
         draftEvent={eventFormDraft}
         onClose={handleCloseModal}
         onSave={handleSaveEvent}
+      />
+
+      <EventDetailSheet
+        open={Boolean(detailEvent)}
+        onOpenChange={(open) => {
+          if (!open) handleCloseEventDetail();
+        }}
+        event={detailEvent}
+        thumbnail={detailEventThumbnail}
+        trip={trip ?? undefined}
+        currentUserId={user?._id}
+        canEdit={canEdit}
+        currency={detailEventContext.currency}
+        weatherLabel={detailEventContext.weatherLabel}
+        flightStatus={detailEventContext.flightStatus}
+        outboundTransfer={detailEventContext.outboundTransfer}
+        onEdit={canEdit ? handleDetailEdit : undefined}
+        onDelete={canEdit ? handleDetailDelete : undefined}
+        onStatusChange={canEdit ? handleDetailStatusChange : undefined}
+        onVote={handleVote}
+        onReviewLocation={
+          canEdit && detailEvent
+            ? () => {
+              handleCloseEventDetail();
+              locationConfirmQueue.startUnresolvedReview([detailEvent]);
+            }
+            : undefined
+        }
       />
 
       {success && (

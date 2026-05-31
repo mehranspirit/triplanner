@@ -114,7 +114,7 @@ const MapBottomSheet: React.FC<MapBottomSheetProps> = ({
         )}
 
         {snap !== 'peek' && (
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] [--trip-timeline-sticky-top:0px] [--trip-timeline-sticky-top-md:0px]">
+          <div className="min-h-0 flex-1 overflow-y-auto px-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] [--trip-timeline-sticky-top:0px] [--trip-timeline-sticky-top-md:0px]">
             {children}
           </div>
         )}

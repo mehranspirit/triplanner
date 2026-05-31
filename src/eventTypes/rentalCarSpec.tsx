@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
 import { RentalCarEvent } from '@/types/eventTypes';
-import RentalCarEventCard from '../components/TripDetails/EventCards/RentalCarEventCard';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { format, setHours, setMinutes, setSeconds, parse } from 'date-fns';
@@ -409,7 +408,6 @@ const rentalCarSpec: EventSpec<RentalCarEvent> = {
     ['Booking Ref', event.bookingReference || 'N/A'],
     ['Status', event.status],
   ],
-  cardComponent: RentalCarEventCard,
 };
 
 // Register the specification
