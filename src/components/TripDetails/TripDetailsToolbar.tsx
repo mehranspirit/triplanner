@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import { EventType } from '@/types/eventTypes';
 import { cn } from '@/lib/utils';
+import { tripSurfaces } from '@/styles/tripSurfaces';
 import { TripPanel } from './hooks/useTripPanelManager';
 
 interface TripDetailsToolbarProps {
@@ -30,6 +31,7 @@ interface TripDetailsToolbarProps {
   isCondensedView: boolean;
   isImprovingLocations: boolean;
   improveLocationsLabel?: string;
+  mapLocationProgress?: { geocoded: number; total: number };
   onOpenAIImport: () => void;
   onAddEvent: (eventType: EventType) => void;
   onOpenExploreSuggestions: () => void;
@@ -63,6 +65,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   isCondensedView,
   isImprovingLocations,
   improveLocationsLabel,
+  mapLocationProgress,
   onOpenAIImport,
   onAddEvent,
   onOpenExploreSuggestions,
@@ -74,15 +77,18 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   onMapViewChange,
 }) => {
   const navigate = useNavigate();
+  const showLocationProgress = mapLocationProgress
+    && mapLocationProgress.total > 0
+    && mapLocationProgress.geocoded < mapLocationProgress.total;
 
   return (
-    <div className="sticky top-0 z-40 rounded-2xl border border-slate-200/80 bg-white/95 p-2 shadow-lg shadow-slate-900/5 backdrop-blur lg:rounded-3xl lg:p-3 lg:shadow-xl">
+    <div className={cn(tripSurfaces.float, 'sticky top-0 z-40 p-2 lg:rounded-3xl lg:p-3')}>
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
         <div className="flex items-center gap-2">
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="h-9 flex-1 rounded-full bg-blue-600 px-4 text-sm text-white shadow-md shadow-blue-600/20 hover:bg-blue-700 sm:h-10 sm:flex-none sm:px-5 lg:shadow-lg">
+                <Button className={cn('h-9 flex-1 rounded-full bg-blue-600 px-4 text-sm text-white hover:bg-blue-700 sm:h-10 sm:flex-none sm:px-5', tripSurfaces.primaryCta)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Event
                 </Button>
@@ -217,12 +223,12 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
         </div>
 
         {onMapViewChange && (
-          <div className="inline-flex w-full rounded-full border border-slate-200 bg-slate-50 p-1 sm:w-auto">
+          <div className={cn('inline-flex w-full sm:w-auto', tripSurfaces.segmentTrack)}>
             <button
               type="button"
               className={cn(
                 'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm',
-                !isMapView ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                !isMapView ? tripSurfaces.segmentActive : 'text-slate-600 hover:text-slate-900',
               )}
               onClick={() => onMapViewChange(false)}
             >
@@ -233,7 +239,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
               type="button"
               className={cn(
                 'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm',
-                isMapView ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                isMapView ? tripSurfaces.segmentActive : 'text-slate-600 hover:text-slate-900',
               )}
               onClick={() => onMapViewChange(true)}
             >
@@ -241,6 +247,27 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
               Map
             </button>
           </div>
+        )}
+
+        {showLocationProgress && (
+          canEdit ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50/90 px-3 py-1.5 text-xs font-medium text-teal-900 shadow-sm transition-colors hover:bg-teal-100 sm:text-sm"
+              onClick={onImproveLocations}
+              disabled={isImprovingLocations}
+            >
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+              {isImprovingLocations
+                ? (improveLocationsLabel || 'Reviewing...')
+                : `${mapLocationProgress.geocoded}/${mapLocationProgress.total} on map`}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 sm:text-sm">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              {`${mapLocationProgress.geocoded}/${mapLocationProgress.total} on map`}
+            </span>
+          )
         )}
 
         <div className="hidden items-center justify-between gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 lg:flex lg:justify-end">

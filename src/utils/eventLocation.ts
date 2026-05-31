@@ -500,3 +500,33 @@ export const eventNeedsLocationConfirmation = (
 
   return getEventLocationQueries(event).length > 0;
 };
+
+const MAP_PROGRESS_EVENT_TYPES = new Set([
+  'activity',
+  'stay',
+  'destination',
+  'rental_car',
+  'flight',
+  'train',
+  'bus',
+]);
+
+export interface TripMapLocationProgress {
+  geocoded: number;
+  total: number;
+  isComplete: boolean;
+}
+
+/** Count geocoded vs mappable itinerary events for toolbar progress chip. */
+export const getTripMapLocationProgress = (events: Event[]): TripMapLocationProgress => {
+  const mappableEvents = events.filter(
+    (event) => event.status !== 'alternative' && MAP_PROGRESS_EVENT_TYPES.has(event.type),
+  );
+  const geocoded = mappableEvents.filter(eventHasMapCoordinates).length;
+
+  return {
+    geocoded,
+    total: mappableEvents.length,
+    isComplete: mappableEvents.length === 0 || geocoded === mappableEvents.length,
+  };
+};

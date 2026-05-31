@@ -1,6 +1,6 @@
 # Trip View Modes — Standard vs Immersive Map
 
-Companion docs: [Planning Tools Ideas](./planning-tools-ideas.md), [Proactive Travel Assistant Plan](./proactive-travel-assistant-plan.md), [Trip Health & Collaborative Decisions Plan](./trip-health-and-decisions-plan.md).
+Companion docs: [Planning Tools Ideas](./planning-tools-ideas.md), [Proactive Travel Assistant Plan](./proactive-travel-assistant-plan.md), [Trip Health & Collaborative Decisions Plan](./trip-health-and-decisions-plan.md), [Trip Details Design Overhaul](./trip-details-design-overhaul.md).
 
 This doc defines a **single toggle** between the current trip details experience and an **immersive map-first view**. The standard view is unchanged. Map view reuses the same trip data, panels, and modals.
 

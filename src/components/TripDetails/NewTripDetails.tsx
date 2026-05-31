@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTripDetails } from './hooks';
 import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
@@ -14,10 +14,14 @@ import ProactiveTripContext from '@/components/TripDetails/ProactiveTripContext'
 import TripPanelHost from '@/components/TripDetails/panels/TripPanelHost';
 import { useTripPanelManager, TripPanel, TripPanelOptions } from '@/components/TripDetails/hooks/useTripPanelManager';
 import { useMapView } from '@/components/TripDetails/hooks/useMapView';
+import { useTripDetailsTab } from '@/components/TripDetails/hooks/useTripDetailsTab';
 import MapTripView from '@/components/TripDetails/map/MapTripView';
 import MapSheetBody from '@/components/TripDetails/map/MapSheetBody';
 import MapViewSuggestPrompt from '@/components/TripDetails/map/MapViewSuggestPrompt';
-import TripTimeline from '@/components/TripDetails/timeline/TripTimeline';
+import TripTimeline, { TripTimelineHandle } from '@/components/TripDetails/timeline/TripTimeline';
+import TripDayStrip from '@/components/TripDetails/TripDayStrip';
+import TripDetailsTabs from '@/components/TripDetails/TripDetailsTabs';
+import TripCalendarView from '@/components/TripDetails/TripCalendarView';
 import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/imports/TravelImportDialog';
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
 import { ProactiveContextCard as ProactiveContextCardData, ProactiveContextCardType } from '@/components/TripDetails/context/tripContextTypes';
@@ -39,7 +43,7 @@ import {
   suggestDecisionTitle,
 } from '@/utils/decisionHelpers';
 import { DecisionLoserAction } from '@/types/decisionTypes';
-import { eventNeedsMapLocation } from '@/utils/eventLocation';
+import { eventNeedsMapLocation, getTripMapLocationProgress } from '@/utils/eventLocation';
 import { buildParsedEventCandidates, ParsedEventCandidate } from '@/services/travelImportValidation';
 import { api } from '@/services/api';
 import { hashText } from '@/utils/hash';
@@ -66,6 +70,8 @@ import {
   loadMapViewSuggestDismissed,
   saveMapViewSuggestDismissed,
 } from '@/utils/mapViewPreferences';
+import { tripSurfaces } from '@/styles/tripSurfaces';
+import { buildTripDayStripItems, ALL_DAYS_FILTER_KEY, getTimelineDateKey } from '@/utils/timelineDates';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -154,9 +160,15 @@ const NewTripDetails: React.FC = () => {
   const [modalType, setModalType] = useState<EventType | null>(null); // State to track which modal to show
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [eventFormDraft, setEventFormDraft] = useState<Partial<Event> | null>(null);
-  const [isCondensedView, setIsCondensedView] = useState(false);
+  const [isCondensedView, setIsCondensedView] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches,
+  );
   const { activePanel, panelOptions, openPanel, closePanel } = useTripPanelManager();
   const { isMapView, isHydrated, setMapView } = useMapView(trip?._id);
+  const { activeTab: detailsTab, setActiveTab: setDetailsTab } = useTripDetailsTab(trip?._id);
+  const timelineRef = useRef<TripTimelineHandle>(null);
+  const [activeDayKey, setActiveDayKey] = useState(ALL_DAYS_FILTER_KEY);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const handleSetMapView = useCallback((next: boolean) => {
     if (next) closePanel();
@@ -292,6 +304,33 @@ const NewTripDetails: React.FC = () => {
     }) : null,
     [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots, dismissedInsightIds, dismissedContextCardTypes, tripHealth]
   );
+  const mapLocationProgress = useMemo(
+    () => getTripMapLocationProgress(trip?.events ?? []),
+    [trip?.events],
+  );
+  const dayStripItems = useMemo(
+    () => buildTripDayStripItems(trip?.events ?? [], trip?.startDate, trip?.endDate),
+    [trip?.endDate, trip?.events, trip?.startDate],
+  );
+
+  useEffect(() => {
+    setActiveDayKey(ALL_DAYS_FILTER_KEY);
+  }, [trip?._id]);
+
+  const handleDaySelect = useCallback((dateKey: string) => {
+    setActiveDayKey(dateKey);
+  }, []);
+
+  const handleCalendarEventSelect = useCallback((event: Event) => {
+    setSelectedEventId(event.id);
+    setDetailsTab('itinerary');
+    const dateKey = getTimelineDateKey(event);
+    setActiveDayKey(dateKey || ALL_DAYS_FILTER_KEY);
+    window.requestAnimationFrame(() => {
+      timelineRef.current?.scrollToEvent(event.id);
+    });
+  }, [setDetailsTab]);
+
   const unreadNotificationCount = notifications.filter(notification => !notification.readAt).length;
   const handledAssistantChecklistItemIds = assistantSuggestionFeedback
     .filter(feedback => feedback.suggestionType === 'assistant_checklist_item')
@@ -1337,6 +1376,7 @@ const NewTripDetails: React.FC = () => {
 
   const tripTimeline = (
     <TripTimeline
+      ref={timelineRef}
       events={trip.events}
       trip={trip}
       tripId={trip._id}
@@ -1365,6 +1405,8 @@ const NewTripDetails: React.FC = () => {
           : undefined
       }
       onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
+      dayFilterKey={activeDayKey}
+      selectedEventId={selectedEventId}
     />
   );
 
@@ -1452,7 +1494,7 @@ const NewTripDetails: React.FC = () => {
           }}
         />
       ) : (
-    <div className="min-h-screen bg-slate-100/70">
+    <div className={cn('min-h-screen', tripSurfaces.canvas)}>
       <div className="mx-auto max-w-7xl space-y-3 px-3 py-4 lg:space-y-6 lg:px-4 lg:py-6">
       <TripDetailsHero
         trip={trip}
@@ -1487,6 +1529,7 @@ const NewTripDetails: React.FC = () => {
             ? `Reviewing ${locationConfirmQueue.queuePosition.current}/${locationConfirmQueue.queuePosition.total}`
             : undefined
         }
+        mapLocationProgress={mapLocationProgress}
         onOpenAIImport={() => setIsAIParseModalOpen(true)}
         onAddEvent={handleAddEventClick}
         onOpenExploreSuggestions={() => setIsExploreSuggestionsOpen(true)}
@@ -1500,6 +1543,19 @@ const NewTripDetails: React.FC = () => {
         isMapView={isMapView}
         onMapViewChange={handleSetMapView}
       />
+
+      <TripDetailsTabs
+        activeTab={detailsTab}
+        onTabChange={setDetailsTab}
+      />
+
+      {detailsTab === 'itinerary' && (
+        <TripDayStrip
+          days={dayStripItems}
+          activeDayKey={activeDayKey}
+          onDaySelect={handleDaySelect}
+        />
+      )}
 
       {showMapSuggest && (
         <MapViewSuggestPrompt
@@ -1517,7 +1573,17 @@ const NewTripDetails: React.FC = () => {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
         <main className="min-w-0">
-          {tripTimeline}
+          {detailsTab === 'calendar' && (
+            <TripCalendarView
+              events={trip.events}
+              tripStartDate={trip.startDate}
+              tripEndDate={trip.endDate}
+              selectedEventId={selectedEventId}
+              onEventSelect={handleCalendarEventSelect}
+            />
+          )}
+
+          {detailsTab === 'itinerary' && tripTimeline}
         </main>
 
         <div className="hidden space-y-4 lg:block">

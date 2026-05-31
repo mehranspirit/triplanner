@@ -1,6 +1,8 @@
 import React from 'react';
 import ProactiveContextCard from './ProactiveContextCard';
 import { ProactiveContextCard as ProactiveContextCardData, TripContextSignals } from './context/tripContextTypes';
+import { tripSurfaces } from '@/styles/tripSurfaces';
+import { cn } from '@/lib/utils';
 
 interface ProactiveTripContextProps {
   signals: TripContextSignals;
@@ -23,7 +25,7 @@ const ProactiveTripContext: React.FC<ProactiveTripContextProps> = ({
   if (signals.cards.length === 0) {
     return (
       <aside className="hidden lg:block lg:sticky lg:top-24">
-        <section className="rounded-[2rem] border border-slate-200 bg-white/80 p-4 shadow-sm">
+        <section className={cn(tripSurfaces.content, 'rounded-[2rem] bg-white/80 p-4')}>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
             {getPhaseLabel(signals.phase)}
           </p>
@@ -40,7 +42,7 @@ const ProactiveTripContext: React.FC<ProactiveTripContextProps> = ({
 
   return (
     <aside className="space-y-3 lg:sticky lg:top-24">
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-900/5">
+      <section className={cn(tripSurfaces.floatStrong, 'p-4')}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">

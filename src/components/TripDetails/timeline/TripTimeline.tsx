@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react';
 import { format } from 'date-fns';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { Bell, CalendarPlus, CheckSquare, CloudSun, Info, MapPin, Scale, X } from 'lucide-react';
+import { Bell, CalendarPlus, CheckSquare, CloudSun, Info, MapPin, Navigation, Scale, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import { Event, Trip } from '@/types/eventTypes';
@@ -10,13 +10,29 @@ import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { TripNotification } from '@/types/notificationTypes';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
 import { cn } from '@/lib/utils';
+import { tripSurfaces } from '@/styles/tripSurfaces';
 import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
-import { eventHasLocationAttention } from '@/utils/eventLocation';
+import { eventHasLocationAttention, getGoogleMapsSearchUrl } from '@/utils/eventLocation';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
 import { EventVoteAction } from '@/components/TripDetails/hooks/useEventVotes';
 import EventVoteControls from '@/components/TripDetails/EventCards/EventVoteControls';
+import EventStatusChip from '@/components/TripDetails/EventCards/EventStatusChip';
 import { getDecisionForEvent, getSharedDecisionComparisonType, isEventSelectableForDecision } from '@/utils/decisionHelpers';
 import { indexTimelineHealthIssuesByDate } from '@/utils/timelineHealthChips';
+import {
+  ALL_DAYS_FILTER_KEY,
+  filterEventsByDayKey,
+  formatTimelineDate,
+  getTimelineDateKey,
+  groupEventsByTimelineDateKeys,
+  isTimelineDateToday,
+  parseTimelineDateKey,
+  UNSCHEDULED_FILTER_KEY,
+} from '@/utils/timelineDates';
+
+export interface TripTimelineHandle {
+  scrollToEvent: (eventId: string) => void;
+}
 
 interface TripTimelineProps {
   events: Event[];
@@ -43,27 +59,9 @@ interface TripTimelineProps {
   onLocationApplied?: (events: Event[]) => void;
   onReviewEventLocation?: (event: Event) => void;
   onAddEvent?: () => void;
+  dayFilterKey?: string;
+  selectedEventId?: string | null;
 }
-
-const getTimelineDateKey = (event: Event) => {
-  const start = getEventStart(event);
-  if (!start) return '';
-  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-};
-
-const formatTimelineDate = (dateKey: string) => {
-  try {
-    const [year, month, day] = dateKey.split('-').map(Number);
-    const date = new Date(year, month - 1, day, 12);
-    if (Number.isNaN(date.getTime())) return { weekday: dateKey, date: '' };
-    return {
-      weekday: format(date, 'EEEE'),
-      date: format(date, 'MMMM d, yyyy'),
-    };
-  } catch {
-    return { weekday: dateKey, date: '' };
-  }
-};
 
 const formatWeatherForecast = (forecast: WeatherDay) => {
   const parts = [
@@ -110,10 +108,7 @@ const ContextChip = ({
   );
 };
 
-const getDateFromKey = (dateKey: string) => {
-  const [year, month, day] = dateKey.split('-').map(Number);
-  return new Date(year, month - 1, day, 12);
-};
+const getDateFromKey = (dateKey: string) => parseTimelineDateKey(dateKey) ?? new Date(dateKey);
 
 const getEventNotifications = (event: Event, notifications: TripNotification[]) => (
   notifications.filter(notification => !notification.readAt && !notification.dismissedAt && notification.eventId === event.id)
@@ -229,12 +224,21 @@ const getEventIcon = (event: Event) => {
   }
 };
 
+const getDayHeaderParts = (dateKey: string) => {
+  if (dateKey === UNSCHEDULED_FILTER_KEY) {
+    return { weekday: 'Unscheduled', date: 'Events without dates' };
+  }
+  return formatTimelineDate(dateKey);
+};
+
 const CondensedEventCard = ({
   event,
   thumbnail,
   trip,
   currentUserId,
   onVote,
+  onEdit,
+  onReviewLocation,
   isSelectionMode = false,
   isSelected = false,
   isSelectable = false,
@@ -246,6 +250,8 @@ const CondensedEventCard = ({
   trip?: Trip;
   currentUserId?: string;
   onVote?: (eventId: string, voteType: EventVoteAction) => void;
+  onEdit?: () => void;
+  onReviewLocation?: () => void;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   isSelectable?: boolean;
@@ -255,11 +261,14 @@ const CondensedEventCard = ({
   const isExploring = event.status === 'exploring';
   const isActive = isEventCurrentlyActive(event);
   const start = getEventStart(event);
+  const mapsUrl = getGoogleMapsSearchUrl(event);
 
   return (
     <div
       className={cn(
-        'relative flex items-center gap-3 rounded-2xl border bg-white p-3 shadow-sm transition-all duration-200 hover:border-blue-200 hover:shadow-md',
+        tripSurfaces.content,
+        tripSurfaces.contentHover,
+        'relative flex items-center gap-3 p-3 hover:border-blue-200/80',
         isExploring && 'border-amber-200 bg-amber-50/80',
         isActive && !isExploring && 'border-blue-200 bg-blue-50/60 shadow-blue-100',
         isSelectionMode && isSelected && 'border-violet-400 ring-2 ring-violet-100',
@@ -291,11 +300,7 @@ const CondensedEventCard = ({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-slate-950">{getEventDisplayName(event)}</h3>
-          {isExploring && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-              Exploring
-            </span>
-          )}
+          <EventStatusChip event={event} />
           {isActive && !isExploring && (
             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800">
               Now
@@ -327,11 +332,53 @@ const CondensedEventCard = ({
           )}
         </div>
       </div>
+      {!isSelectionMode && (
+        <div className="flex shrink-0 flex-col gap-1">
+          {onEdit && (
+            <button
+              type="button"
+              className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+              aria-label="Open event details"
+              onClick={(clickEvent) => {
+                clickEvent.stopPropagation();
+                onEdit();
+              }}
+            >
+              <Info className="h-4 w-4" />
+            </button>
+          )}
+          {mapsUrl && (
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+              aria-label="Get directions"
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+            >
+              <Navigation className="h-4 w-4" />
+            </a>
+          )}
+          {canEdit && onReviewLocation && eventHasLocationAttention(event) && (
+            <button
+              type="button"
+              className="rounded-full p-2 text-teal-600 transition-colors hover:bg-teal-50"
+              aria-label="Review location"
+              onClick={(clickEvent) => {
+                clickEvent.stopPropagation();
+                onReviewLocation();
+              }}
+            >
+              <MapPin className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
 
-const TripTimeline: React.FC<TripTimelineProps> = ({
+const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function TripTimeline({
   events,
   trip,
   tripId,
@@ -356,9 +403,13 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
   onLocationApplied,
   onReviewEventLocation,
   onAddEvent,
-}) => {
+  dayFilterKey = ALL_DAYS_FILTER_KEY,
+  selectedEventId,
+}, ref) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
+  const eventSectionRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const timelineSectionRef = useRef<HTMLElement>(null);
 
   const selectableEventIds = useMemo(() => {
     if (!trip) return new Set<string>();
@@ -431,6 +482,13 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
   };
 
   const sortedEvents = sortEventsByStart(events).filter((event) => event.status !== 'alternative');
+  const isDayFiltered = dayFilterKey !== ALL_DAYS_FILTER_KEY;
+
+  const visibleEvents = useMemo(() => {
+    if (!isDayFiltered) return sortedEvents;
+    return filterEventsByDayKey(sortedEvents, dayFilterKey);
+  }, [dayFilterKey, isDayFiltered, sortedEvents]);
+
   const tripDateRange = (() => {
     const start = tripStartDate ? new Date(tripStartDate) : null;
     const end = tripEndDate ? new Date(tripEndDate) : null;
@@ -445,16 +503,28 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
         return !!start && (start < tripDateRange.start || start > tripDateRange.end);
       })
     : [];
-  const groupedEvents = sortedEvents.reduce((groups, event) => {
-    const dateKey = getTimelineDateKey(event);
-    if (!dateKey) return groups;
-    if (!groups[dateKey]) groups[dateKey] = [];
-    groups[dateKey].push(event);
-    return groups;
-  }, {} as Record<string, Event[]>);
+  const groupedEvents = useMemo(() => {
+    if (isDayFiltered) {
+      if (dayFilterKey === UNSCHEDULED_FILTER_KEY) {
+        return { [UNSCHEDULED_FILTER_KEY]: visibleEvents };
+      }
+      return { [dayFilterKey]: visibleEvents };
+    }
+
+    return groupEventsByTimelineDateKeys(visibleEvents);
+  }, [dayFilterKey, isDayFiltered, visibleEvents]);
+
+  useImperativeHandle(ref, () => ({
+    scrollToEvent: (eventId: string) => {
+      const section = eventSectionRefs.current.get(eventId);
+      if (!section) return;
+
+      section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+  }), []);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-900/5 ring-1 ring-slate-100 md:rounded-[2rem] md:p-6 md:shadow-2xl">
+    <section ref={timelineSectionRef} className={cn(tripSurfaces.floatStrong, 'p-3 md:p-6')}>
       <div className="mb-4 flex items-center justify-between gap-3 md:mb-6">
         <div>
           <p className="hidden text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 sm:block">Main itinerary</p>
@@ -489,7 +559,10 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
             </Button>
           )}
           <p className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 md:px-3 md:py-1 md:text-sm">
-            {sortedEvents.length} event{sortedEvents.length === 1 ? '' : 's'}
+            {visibleEvents.length} event{visibleEvents.length === 1 ? '' : 's'}
+            {isDayFiltered && sortedEvents.length !== visibleEvents.length && (
+              <span className="text-slate-400"> / {sortedEvents.length}</span>
+            )}
           </p>
         </div>
       </div>
@@ -533,34 +606,52 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
             </button>
           )}
         </div>
+      ) : visibleEvents.length === 0 && isDayFiltered ? (
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+          <h3 className="text-lg font-semibold text-slate-950">No events this day</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+            {dayFilterKey === UNSCHEDULED_FILTER_KEY
+              ? 'All events have dates assigned.'
+              : 'Nothing is scheduled for this day yet.'}
+          </p>
+        </div>
       ) : (
         <div className="space-y-6 md:space-y-8">
-          {Object.entries(groupedEvents).map(([dateKey, dateEvents]) => {
-            const dateParts = formatTimelineDate(dateKey);
+          {Object.entries(groupedEvents)
+            .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+            .map(([dateKey, dateEvents]) => {
+            const dateParts = getDayHeaderParts(dateKey);
+            const isToday = dateKey !== UNSCHEDULED_FILTER_KEY && isTimelineDateToday(dateKey);
             const hasActiveEvent = dateEvents.some(event => isEventCurrentlyActive(event));
             const dayAlertCount = getDayNotificationCount(dateKey, notifications);
             const dayWeatherSummary = getDayWeatherSummary(dateKey, weatherSnapshots);
             const dayHealthChips = healthChipsByDate.get(dateKey) ?? [];
 
             return (
-              <div key={dateKey} className="relative pl-7">
-                <div className="absolute bottom-0 left-3 top-12 w-px bg-gradient-to-b from-blue-200 via-slate-200 to-transparent" />
-                <div className="sticky top-[var(--trip-timeline-sticky-top,3.5rem)] z-30 mb-3 -ml-7 bg-white/90 py-1.5 backdrop-blur md:top-[var(--trip-timeline-sticky-top-md,5rem)] md:mb-4 md:py-2">
+              <div
+                key={dateKey}
+                className="relative pl-7"
+              >
+                <div className={cn('absolute bottom-0 left-3 top-12 w-px', tripSurfaces.timelineSpine)} />
+                <div className={cn(
+                  'sticky top-[var(--trip-timeline-sticky-top,3.5rem)] z-30 mb-3 -ml-7 py-1.5 md:top-[var(--trip-timeline-sticky-top-md,5rem)] md:mb-4 md:py-2',
+                  isToday ? 'bg-gradient-to-b from-blue-50/90 to-transparent' : 'bg-white/90 backdrop-blur-sm',
+                )}>
                   <div className={cn(
-                    'inline-flex items-center gap-3 rounded-2xl border px-4 py-2 shadow-sm',
-                    hasActiveEvent
-                      ? 'border-blue-200 bg-blue-50 text-blue-950'
-                      : 'border-slate-200 bg-slate-50 text-slate-950'
+                    'inline-flex items-center gap-3 rounded-2xl border px-4 py-2',
+                    isToday || hasActiveEvent
+                      ? tripSurfaces.dayHeaderToday
+                      : tripSurfaces.dayHeaderDefault,
                   )}>
                     <span className={cn(
                       'h-3 w-3 rounded-full',
-                      hasActiveEvent ? 'animate-pulse bg-blue-500' : 'bg-slate-300'
+                      isToday || hasActiveEvent ? 'animate-pulse bg-blue-500' : 'bg-slate-300',
                     )} />
                     <div>
                       <p className="text-sm font-bold">{dateParts.weekday}</p>
                       {dateParts.date && <p className="text-xs text-slate-500">{dateParts.date}</p>}
                     </div>
-                    {hasActiveEvent && (
+                    {(isToday || hasActiveEvent) && (
                       <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
                         Today
                       </span>
@@ -624,16 +715,34 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                     const activeDecision = trip
                       ? getDecisionForEvent(trip.decisions, event.id)
                       : undefined;
+                    const isEventActive = isEventCurrentlyActive(event);
 
                     return (
                       <div
                         key={event.id}
+                        ref={(element) => {
+                          if (element) {
+                            eventSectionRefs.current.set(event.id, element);
+                          } else {
+                            eventSectionRefs.current.delete(event.id);
+                          }
+                        }}
+                        data-timeline-event={event.id}
                         className={cn(
                           'relative transition-all duration-300',
-                          isDeleting && 'animate-fade-out opacity-0'
+                          isDeleting && 'animate-fade-out opacity-0',
+                          selectedEventId === event.id
+                            && 'rounded-2xl ring-2 ring-blue-400 ring-offset-2 ring-offset-white',
                         )}
                       >
-                        <div className="absolute -left-[1.45rem] top-6 h-3 w-3 rounded-full border-2 border-white bg-slate-300 shadow ring-2 ring-slate-100" />
+                        <div className={cn(
+                          'absolute -left-[1.45rem] top-6 h-3 w-3 rounded-full',
+                          isEventActive
+                            ? tripSurfaces.timelineDotActive
+                            : isToday
+                              ? tripSurfaces.timelineDotToday
+                              : tripSurfaces.timelineDot,
+                        )} />
                         {isCondensedView ? (
                           <CondensedEventCard
                             event={event}
@@ -641,6 +750,12 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
                             trip={trip}
                             currentUserId={currentUserId}
                             onVote={onVote}
+                            onEdit={canEdit ? () => onEditEvent(event) : undefined}
+                            onReviewLocation={
+                              canEdit && onReviewEventLocation
+                                ? () => onReviewEventLocation(event)
+                                : undefined
+                            }
                             isSelectionMode={isSelectionMode}
                             isSelected={selectedEventIds.has(event.id)}
                             isSelectable={isEventSelectionEligible(event)}
@@ -756,6 +871,6 @@ const TripTimeline: React.FC<TripTimelineProps> = ({
       )}
     </section>
   );
-};
+});
 
 export default TripTimeline;

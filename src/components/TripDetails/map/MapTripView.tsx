@@ -7,6 +7,7 @@ import { eventHasMapCoordinates } from '@/utils/eventLocation';
 import { getTripStatusSummary } from '@/services/tripStatus';
 import { resolveMapTileStyleForTrip } from '@/config/mapTiles';
 import { cn } from '@/lib/utils';
+import { tripSurfaces } from '@/styles/tripSurfaces';
 import { TripPanel } from '../hooks/useTripPanelManager';
 import { getPanelSheetSnap } from '../panels/tripPanelMeta';
 import MapGeocodeBanner from './MapGeocodeBanner';
@@ -167,7 +168,7 @@ const MapTripView: React.FC<MapTripViewProps> = ({
               )}
             </button>
 
-            <div className="inline-flex rounded-full border border-white/15 bg-white/10 p-1">
+            <div className={cn('inline-flex', tripSurfaces.mapSegmentTrack)}>
               <button
                 type="button"
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-white/80 transition-colors hover:text-white sm:text-sm"
@@ -180,7 +181,7 @@ const MapTripView: React.FC<MapTripViewProps> = ({
                 type="button"
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium sm:text-sm',
-                  'bg-white text-slate-900 shadow-sm',
+                  tripSurfaces.mapSegmentActive,
                 )}
                 aria-current="page"
               >
@@ -217,7 +218,7 @@ const MapTripView: React.FC<MapTripViewProps> = ({
           </div>
 
           <div className="pointer-events-none absolute left-3 top-3 z-[5] flex flex-col gap-2">
-            <div className="pointer-events-auto inline-flex rounded-full border border-white/20 bg-slate-950/80 p-1 shadow-lg backdrop-blur-md">
+            <div className={cn('pointer-events-auto inline-flex', tripSurfaces.mapSegmentTrack)}>
               {(['today', 'all'] as const).map((filter) => (
                 <button
                   key={filter}
@@ -226,7 +227,7 @@ const MapTripView: React.FC<MapTripViewProps> = ({
                   className={cn(
                     'rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors sm:text-sm',
                     mapFilter === filter
-                      ? 'bg-white text-slate-900 shadow-sm'
+                      ? tripSurfaces.mapSegmentActive
                       : 'text-white/80 hover:text-white',
                   )}
                   onClick={() => setMapFilter(filter)}

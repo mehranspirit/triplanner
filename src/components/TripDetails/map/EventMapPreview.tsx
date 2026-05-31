@@ -10,6 +10,7 @@ import {
 } from '@/utils/eventTime';
 import { getGoogleMapsSearchUrl } from '@/utils/eventLocation';
 import { cn } from '@/lib/utils';
+import { tripSurfaces } from '@/styles/tripSurfaces';
 
 interface EventMapPreviewProps {
   event: Event;
@@ -44,7 +45,7 @@ const EventMapPreview: React.FC<EventMapPreviewProps> = ({
   const showNavigation = stopCount > 1;
 
   return (
-    <div className="pointer-events-auto flex items-stretch gap-1 rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur-md">
+    <div className={cn('pointer-events-auto flex items-stretch gap-1', tripSurfaces.overlay)}>
       {showNavigation && (
         <button
           type="button"

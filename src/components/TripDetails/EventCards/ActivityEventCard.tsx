@@ -106,7 +106,7 @@ const ActivityEventCard: React.FC<ActivityEventCardProps> = ({
   const hasLongContent = (event.description?.length || 0) > 100 || (event.notes?.length || 0) > 100;
 
   return (
-    <EventCardShell isExploring={isExploring}>
+    <EventCardShell isExploring={isExploring} event={event}>
       <EventCardActions
         isExploring={isExploring}
         onAddToCalendar={handleAddToCalendar}
