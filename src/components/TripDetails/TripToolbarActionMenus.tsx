@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
 import {
   Bell,
   CalendarDays,
@@ -22,30 +21,14 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { EVENT_TYPES } from '@/eventTypes/registry';
 import { EventType } from '@/types/eventTypes';
 import { TripDetailsView } from '@/types/tripDetailsViewTypes';
 import { cn } from '@/lib/utils';
 import { tripSurfaces } from '@/styles/tripSurfaces';
 import { TripPanel } from './hooks/useTripPanelManager';
-
-const eventIconForType = (type: EventType) => {
-  if (type === 'flight') return <FaPlane className="mr-2 h-4 w-4 text-blue-500" />;
-  if (type === 'arrival') return <FaPlane className="mr-2 h-4 w-4 rotate-45 text-green-500" />;
-  if (type === 'departure') return <FaPlane className="mr-2 h-4 w-4 -rotate-45 text-red-500" />;
-  if (type === 'train') return <FaTrain className="mr-2 h-4 w-4 text-green-500" />;
-  if (type === 'bus') return <FaBus className="mr-2 h-4 w-4 text-purple-500" />;
-  if (type === 'rental_car') return <FaCar className="mr-2 h-4 w-4 text-red-500" />;
-  if (type === 'stay') return <FaHotel className="mr-2 h-4 w-4 text-yellow-500" />;
-  if (type === 'destination') return <FaMapMarkerAlt className="mr-2 h-4 w-4 text-pink-500" />;
-  if (type === 'activity') return <FaMountain className="mr-2 h-4 w-4 text-indigo-500" />;
-  return <Plus className="mr-2 h-4 w-4" />;
-};
+import TripAddEventMenuItems from './TripAddEventMenuItems';
 
 export interface TripToolbarActionMenusProps {
   tripId: string;
@@ -97,34 +80,12 @@ const TripToolbarActionMenus: React.FC<TripToolbarActionMenusProps> = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
-            <DropdownMenuLabel>Add to itinerary</DropdownMenuLabel>
-            <DropdownMenuItem onClick={onOpenAIImport} className="font-medium">
-              <Sparkles className="mr-2 h-4 w-4 text-blue-500" />
-              Import booking with AI
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onOpenExploreSuggestions} className="font-medium">
-              <Sparkles className="mr-2 h-4 w-4 text-amber-500" />
-              Suggest activities with AI
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Plus className="mr-2 h-4 w-4" />
-                Manual entry
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {addableEventTypes.map((type) => {
-                  const eventType = EVENT_TYPES[type];
-                  if (!eventType) return null;
-                  return (
-                    <DropdownMenuItem key={type} onClick={() => onAddEvent(type)}>
-                      {eventIconForType(type)}
-                      {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            <TripAddEventMenuItems
+              addableEventTypes={addableEventTypes}
+              onOpenAIImport={onOpenAIImport}
+              onOpenExploreSuggestions={onOpenExploreSuggestions}
+              onAddEvent={onAddEvent}
+            />
           </DropdownMenuContent>
         </DropdownMenu>
       )}

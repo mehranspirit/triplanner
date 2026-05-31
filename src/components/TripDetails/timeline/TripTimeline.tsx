@@ -1,9 +1,15 @@
 import React, { useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react';
 import { Bell, CalendarPlus, CheckSquare, CloudSun, Info, Scale, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { EVENT_TYPES } from '@/eventTypes/registry';
-import { Event, Trip } from '@/types/eventTypes';
+import { Event, EventType, Trip } from '@/types/eventTypes';
 import { TripHealthIssue } from '@/types/tripHealthTypes';
+import TripAddEventMenuItems from '@/components/TripDetails/TripAddEventMenuItems';
 import { FlightStatusSnapshot } from '@/types/flightStatusTypes';
 import { TripNotification } from '@/types/notificationTypes';
 import { WeatherDay, WeatherSnapshot } from '@/types/weatherTypes';
@@ -56,7 +62,10 @@ interface TripTimelineProps {
   healthIssues?: TripHealthIssue[];
   onOpenHealthIssue?: (issueId: string) => void;
   onReviewEventLocation?: (event: Event) => void;
-  onAddEvent?: () => void;
+  addableEventTypes?: EventType[];
+  onAddEvent?: (eventType: EventType) => void;
+  onOpenAIImport?: () => void;
+  onOpenExploreSuggestions?: () => void;
   dayFilterKey?: string;
   selectedEventId?: string | null;
   timelineTransferLegs?: TimelineTransferLeg[];
@@ -156,7 +165,10 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
   healthIssues = [],
   onOpenHealthIssue,
   onReviewEventLocation,
+  addableEventTypes = [],
   onAddEvent,
+  onOpenAIImport,
+  onOpenExploreSuggestions,
   dayFilterKey = ALL_DAYS_FILTER_KEY,
   selectedEventId,
   timelineTransferLegs = [],
@@ -166,6 +178,8 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
 }, ref) {
   const { referenceNow } = useTripReferenceNow();
   const isMapSheet = variant === 'map-sheet';
+  const showAddEventMenu = canEdit
+    && Boolean(onAddEvent && onOpenAIImport && onOpenExploreSuggestions && addableEventTypes.length > 0);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const eventSectionRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -388,14 +402,25 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
           <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
             Add flights, stays, reservations, or activities to turn this trip into a timeline.
           </p>
-          {onAddEvent && (
-            <button
-              type="button"
-              className="mt-4 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
-              onClick={onAddEvent}
-            >
-              Add first event
-            </button>
+          {showAddEventMenu && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="mt-4 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
+                >
+                  Add first event
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-64">
+                <TripAddEventMenuItems
+                  addableEventTypes={addableEventTypes}
+                  onOpenAIImport={onOpenAIImport!}
+                  onOpenExploreSuggestions={onOpenExploreSuggestions!}
+                  onAddEvent={onAddEvent!}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       ) : visibleEvents.length === 0 && isDayFiltered ? (

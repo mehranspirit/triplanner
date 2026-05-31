@@ -1629,7 +1629,10 @@ const NewTripDetails: React.FC = () => {
           ? (event) => locationConfirmQueue.startUnresolvedReview([event])
           : undefined
       }
-      onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
+      onAddEvent={canEdit ? handleAddEventClick : undefined}
+      onOpenAIImport={canEdit ? () => setIsAIParseModalOpen(true) : undefined}
+      onOpenExploreSuggestions={canEdit ? () => setIsExploreSuggestionsOpen(true) : undefined}
+      addableEventTypes={addableEventTypes}
       dayFilterKey={activeDayKey}
       selectedEventId={selectedEventId}
       timelineTransferLegs={timelineTransferLegs}
@@ -1660,7 +1663,10 @@ const NewTripDetails: React.FC = () => {
           ? (event) => locationConfirmQueue.startUnresolvedReview([event])
           : undefined
       }
-      onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
+      onAddEvent={canEdit ? handleAddEventClick : undefined}
+      onOpenAIImport={canEdit ? () => setIsAIParseModalOpen(true) : undefined}
+      onOpenExploreSuggestions={canEdit ? () => setIsExploreSuggestionsOpen(true) : undefined}
+      addableEventTypes={addableEventTypes}
       dayFilterKey={ALL_DAYS_FILTER_KEY}
       selectedEventId={selectedEventId}
       timelineTransferLegs={timelineTransferLegs}
