@@ -1,12 +1,12 @@
 import {
   Calendar,
   CheckCircle2,
+  CircleDashed,
   Edit,
   Map,
   MapPin,
   Navigation,
   Plane,
-  Search,
   Share,
   Trash2,
   type LucideIcon,
@@ -18,6 +18,7 @@ import {
   getGoogleMapsSearchUrl,
   openEventInGoogleMaps,
 } from '@/utils/eventLocation';
+import { EXPLORING_EVENT_UI_LABEL } from '@/utils/eventStatusLabels';
 import { getEventDisplayName, getEventStart, getEventEnd } from '@/utils/eventTime';
 
 export type EventActionTier = 'primary' | 'status' | 'secondary' | 'destructive';
@@ -222,8 +223,8 @@ export const buildEventActions = (
   if (canEdit && handlers.onStatusChange) {
     actions.push({
       id: 'toggle-status',
-      label: isExploring ? 'Mark as confirmed' : 'Move to exploring',
-      icon: isExploring ? CheckCircle2 : Search,
+      label: isExploring ? 'Mark as confirmed' : `Save as ${EXPLORING_EVENT_UI_LABEL.toLowerCase()}`,
+      icon: isExploring ? CheckCircle2 : CircleDashed,
       tier: 'status',
       surfaces: ['sheet-overflow'],
       handler: () => handlers.onStatusChange!(isExploring ? 'confirmed' : 'exploring'),

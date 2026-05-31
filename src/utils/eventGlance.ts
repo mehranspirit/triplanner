@@ -19,7 +19,24 @@ export const EVENT_TYPE_ACCENT_CLASSES: Partial<Record<EventType, string>> = {
   departure: 'border-l-sky-500',
 };
 
-export const EXPLORING_ACCENT_CLASS = 'border-l-amber-400';
+export const EXPLORING_ACCENT_CLASS = 'border-l-[6px] border-l-stone-500/75 border-dashed';
+
+/** Warm manilla paper — sketchbook draft treatment on the timeline. */
+export const EXPLORING_CARD_CLASS = [
+  '!border-2 !border-dashed !border-stone-300/90',
+  'bg-[#F7F2E8]',
+  'shadow-sm shadow-stone-400/20',
+  '[background-image:repeating-linear-gradient(-45deg,transparent,transparent_11px,rgb(168_152_120_/_0.1)_11px,rgb(168_152_120_/_0.1)_12px)]',
+].join(' ');
+
+/** Title styling shared across timeline glance layouts. */
+export const EXPLORING_TITLE_CLASS = 'italic text-stone-700';
+
+/** Thumbnail treatment for draft events. */
+export const EXPLORING_THUMBNAIL_IMAGE_CLASS = 'opacity-80 sepia-[0.18] saturate-[0.88]';
+
+export const EXPLORING_THUMBNAIL_FRAME_CLASS =
+  'ring-2 ring-dashed ring-stone-400/70 ring-offset-2 ring-offset-[#F7F2E8]';
 
 export const formatEventGlanceTimeRange = (event: Event): string => {
   const start = getEventStart(event);

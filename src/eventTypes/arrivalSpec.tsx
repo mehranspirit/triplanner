@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
+import { EXPLORING_EVENT_UI_LABEL } from '@/utils/eventStatusLabels';
 import { ArrivalDepartureEvent } from '@/types/eventTypes';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
@@ -281,7 +282,7 @@ const renderArrivalFormFields = (form: UseFormReturn<ArrivalFormData>): React.Re
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value="exploring">Exploring</SelectItem>
+                            <SelectItem value="exploring">{EXPLORING_EVENT_UI_LABEL}</SelectItem>
                             <SelectItem value="confirmed">Confirmed</SelectItem>
                         </SelectContent>
                     </Select>

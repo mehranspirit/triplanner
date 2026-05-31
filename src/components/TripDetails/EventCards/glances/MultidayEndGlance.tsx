@@ -2,6 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { getEventDisplayName } from '@/utils/eventTime';
 import { getMultidayDayPosition, getMultidayEndpointDetails } from '@/utils/timelineDates';
+import { EXPLORING_TITLE_CLASS } from '@/utils/eventGlance';
 import { EventGlanceContentProps } from '@/components/TripDetails/EventCards/glances/EventGlanceContentProps';
 
 const MultidayEndGlance: React.FC<EventGlanceContentProps> = ({
@@ -44,7 +45,7 @@ const MultidayEndGlance: React.FC<EventGlanceContentProps> = ({
       <h3
         className={cn(
           'mt-1 truncate text-sm font-semibold',
-          isExploring ? 'text-slate-700' : 'text-slate-950',
+          isExploring ? EXPLORING_TITLE_CLASS : 'text-slate-950',
         )}
       >
         {getEventDisplayName(event)}

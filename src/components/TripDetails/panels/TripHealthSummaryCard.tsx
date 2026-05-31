@@ -105,7 +105,7 @@ const TripHealthSummaryCard: React.FC<TripHealthSummaryCardProps> = ({ summary, 
     {isFullyReady && !isLoading && (
       <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-100 bg-white/70 px-3 py-2 text-xs text-emerald-800">
         <Sparkles className="h-3.5 w-3.5 shrink-0" />
-        <span>Trip health is in great shape. Keep confirming exploring options as plans firm up.</span>
+        <span>Trip health is in great shape. Keep confirming draft options as plans firm up.</span>
       </div>
     )}
 

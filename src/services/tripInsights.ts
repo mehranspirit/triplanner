@@ -13,6 +13,7 @@ import {
   eventHasLocationAttention,
 } from '@/utils/eventLocation';
 import { getTransferSummary } from '@/utils/transferAnalysis';
+import { EXPLORING_EVENT_UI_LABEL, EXPLORING_EVENT_UI_LABEL_PLURAL } from '@/utils/eventStatusLabels';
 import { LONG_TRANSFER_DISTANCE_KM, LONG_TRANSFER_EXTRA_BUFFER_MINUTES } from '@/constants/tripHealthThresholds';
 
 interface TripInsightInput {
@@ -394,7 +395,7 @@ const getPlanningGapInsights = (trip: Trip, events: Event[]): TripInsight[] => {
       type: 'reminder',
       severity: 'info',
       title: 'Some events need decisions',
-      message: `${exploringCount} event${exploringCount === 1 ? '' : 's'} still marked as exploring.`,
+      message: `${exploringCount} ${exploringCount === 1 ? EXPLORING_EVENT_UI_LABEL.toLowerCase() : EXPLORING_EVENT_UI_LABEL_PLURAL.toLowerCase()} still need${exploringCount === 1 ? 's' : ''} a decision.`,
       actionLabel: 'Review events',
       actionTarget: 'event',
       source: { kind: 'trip', id: trip._id },

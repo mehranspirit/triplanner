@@ -10,6 +10,7 @@ import {
   getMultidayEventDayRole,
   getMultidaySpanLabel,
   getStayNightDateKeys,
+  getTimelineAutoScrollDependencyKey,
   resolveActiveTimelineDayKey,
   getTimelineDateKey,
   isTimelineDateToday,
@@ -66,6 +67,19 @@ describe('timelineDates', () => {
   it('marks today using the local timeline date key', () => {
     const todayKey = getTimelineDateKey(makeEvent('today', new Date().toISOString()));
     expect(isTimelineDateToday(todayKey)).toBe(true);
+  });
+
+  it('ignores vote tallies in the timeline auto-scroll dependency key', () => {
+    const base = makeEvent('1', '2026-06-01T10:00:00.000Z');
+    const withVotes = {
+      ...base,
+      likes: ['user-a'],
+      dislikes: ['user-b'],
+    } as Event;
+
+    expect(getTimelineAutoScrollDependencyKey([base])).toBe(
+      getTimelineAutoScrollDependencyKey([withVotes]),
+    );
   });
 
   it('resolves the active timeline day to today when today has events', () => {

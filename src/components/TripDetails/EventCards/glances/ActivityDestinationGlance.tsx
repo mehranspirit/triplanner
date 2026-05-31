@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { getEventDisplayName } from '@/utils/eventTime';
-import { formatEventGlanceTimeRange } from '@/utils/eventGlance';
+import { formatEventGlanceTimeRange, EXPLORING_TITLE_CLASS } from '@/utils/eventGlance';
 import { EventGlanceContentProps } from '@/components/TripDetails/EventCards/glances/EventGlanceContentProps';
 
 const ActivityDestinationGlance: React.FC<EventGlanceContentProps> = ({
@@ -22,7 +22,7 @@ const ActivityDestinationGlance: React.FC<EventGlanceContentProps> = ({
         <h3
           className={cn(
             'truncate text-sm font-semibold',
-            isExploring ? 'text-slate-700' : 'text-slate-950',
+            isExploring ? EXPLORING_TITLE_CLASS : 'text-slate-950',
           )}
         >
           {getEventDisplayName(event)}

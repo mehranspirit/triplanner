@@ -29,33 +29,45 @@ interface EventGlanceMetaChipsProps {
   event: Event;
   weatherSnapshots?: WeatherSnapshot[];
   className?: string;
+  hideStatusChip?: boolean;
+  hideVoteChip?: boolean;
 }
 
 const EventGlanceMetaChips: React.FC<EventGlanceMetaChipsProps> = ({
   event,
   weatherSnapshots = [],
   className,
+  hideStatusChip = false,
+  hideVoteChip = false,
 }) => {
   const costLabel = getEventCostGlanceLabel(event);
   const weatherLabel = getWeatherGlanceLabelForEvent(event, weatherSnapshots);
-  const voteLabel = getEventVoteGlanceLabel(event);
+  const voteLabel = hideVoteChip ? null : getEventVoteGlanceLabel(event);
 
   const hasExtraChips = Boolean(costLabel || weatherLabel || voteLabel);
+
+  if (!hasExtraChips && hideStatusChip) {
+    return null;
+  }
 
   if (!hasExtraChips) {
     return (
       <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
-        <EventStatusChip event={event} />
+        {!hideStatusChip && <EventStatusChip event={event} />}
       </div>
     );
   }
 
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
-      <EventStatusChip event={event} />
+      {!hideStatusChip && <EventStatusChip event={event} />}
       {costLabel && <MetaChip>{costLabel}</MetaChip>}
       {weatherLabel && <MetaChip>{weatherLabel}</MetaChip>}
-      {voteLabel && <MetaChip className="border-amber-200/80 bg-amber-50/80 text-amber-800">{voteLabel}</MetaChip>}
+      {voteLabel && (
+        <MetaChip className="border-stone-300/80 bg-[#EDE4D3]/90 text-stone-800">
+          {voteLabel}
+        </MetaChip>
+      )}
     </div>
   );
 };

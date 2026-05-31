@@ -253,6 +253,17 @@ export const resolveActiveTimelineDayKey = (
   return previous?.dateKey ?? firstDated.dateKey;
 };
 
+/** Stable key for timeline auto-scroll — ignores vote tallies and other non-schedule fields. */
+export const getTimelineAutoScrollDependencyKey = (events: Event[]): string => (
+  events.map((event) => [
+    event.id,
+    event.type,
+    event.status ?? '',
+    event.startDate ?? '',
+    event.endDate ?? '',
+  ].join(':')).join('|')
+);
+
 export const formatTimelineDate = (dateKey: string) => {
   try {
     const date = parseTimelineDateKey(dateKey);

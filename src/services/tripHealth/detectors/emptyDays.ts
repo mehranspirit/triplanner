@@ -8,6 +8,7 @@ import {
 } from '@/utils/tripHealthDates';
 import { buildEmptyDayIssueKey } from '../issueKeys';
 import { emptyDayResolutionOptions } from '../resolutionOptions';
+import { EXPLORING_EVENT_UI_LABEL_PLURAL } from '@/utils/eventStatusLabels';
 
 const SCHEDULE_EVENT_TYPES = new Set([
   'activity',
@@ -84,7 +85,7 @@ export const detectEmptyDays = (trip: Trip, events: Event[]): TripHealthIssue[] 
         dimension: 'schedule',
         severity: 'info',
         title: `Under-planned day: ${formatShortDate(dateKey)}`,
-        reason: 'Only exploring placeholders are scheduled — confirm an anchor or add a plan for this day.',
+        reason: `Only ${EXPLORING_EVENT_UI_LABEL_PLURAL.toLowerCase()} are scheduled — confirm an anchor or add a plan for this day.`,
         affectedDates: [dateKey],
         relatedEventIds: dayEvents.map((event) => event.id),
         resolutionOptions: emptyDayResolutionOptions(dateKey),

@@ -7,6 +7,7 @@ import { getEventEnd, getEventStart, sortEventsByStart } from '@/utils/eventTime
 import { eventHasMapCoordinates } from '@/utils/eventLocation';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
+import { EXPLORING_EVENT_UI_LABEL } from '@/utils/eventStatusLabels';
 import { endOfDay, startOfDay } from 'date-fns';
 import { MapTileStyle, OSM_TILE_URL, OSM_ATTRIBUTION, resolveMapTileLayer } from '@/config/mapTiles';
 import MapViewSkeleton from '@/components/TripDetails/map/MapViewSkeleton';
@@ -40,8 +41,8 @@ const blueIcon = new L.Icon({
   shadowAnchor: [12, 41]
 });
 
-const greenIcon = new L.Icon({
-  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+const goldIcon = new L.Icon({
+  iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
@@ -65,7 +66,7 @@ const getMarkerIcon = (event: Event) => {
   if (!event.status || event.status === 'confirmed') {
     return blueIcon;
   } else if (event.status === 'exploring') {
-    return greenIcon;
+    return goldIcon;
   } else if (event.status === 'alternative') {
     return violetIcon;
   }
@@ -78,10 +79,10 @@ const getLocationGroupKey = (lat: number, lon: number) => (
 
 const createNumberedMarkerIcon = (label: string, variant: 'confirmed' | 'exploring') => {
   const colors = {
-    confirmed: { bg: '#2563eb' },
-    exploring: { bg: '#16a34a' },
+    confirmed: { bg: '#2563eb', text: '#ffffff', border: '2px solid #ffffff' },
+    exploring: { bg: '#EDE4D3', text: '#44403c', border: '2px dashed #78716c' },
   };
-  const { bg } = colors[variant];
+  const { bg, text, border } = colors[variant];
   const fontSize = label.length > 5 ? '8px' : label.length > 3 ? '9px' : '12px';
 
   return L.divIcon({
@@ -92,9 +93,9 @@ const createNumberedMarkerIcon = (label: string, variant: 'confirmed' | 'explori
         height: 30px;
         border-radius: 50%;
         background: ${bg};
-        border: 2px solid #ffffff;
+        border: ${border};
         box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
-        color: #ffffff;
+        color: ${text};
         font-size: ${fontSize};
         font-weight: 700;
         display: flex;
@@ -1138,9 +1139,9 @@ const TripMap: React.FC<TripMapProps> = ({
                           <div className="mt-1 text-sm text-gray-600">{eventDetails.additionalInfo}</div>
                         )}
                         <div className={`mt-1 text-sm font-medium ${
-                          isConfirmed ? 'text-blue-600' : originalEvent?.status === 'alternative' ? 'text-violet-600' : 'text-green-600'
+                          isConfirmed ? 'text-blue-600' : originalEvent?.status === 'alternative' ? 'text-violet-600' : 'text-stone-700'
                         }`}>
-                          {isConfirmed ? 'Confirmed' : originalEvent?.status === 'alternative' ? 'Alternative' : 'Exploring'}
+                          {isConfirmed ? 'Confirmed' : originalEvent?.status === 'alternative' ? 'Alternative' : EXPLORING_EVENT_UI_LABEL}
                         </div>
                       </div>
                     );
@@ -1178,8 +1179,8 @@ const TripMap: React.FC<TripMapProps> = ({
                 <span className="text-sm">Confirmed Event</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-green-500" />
-                <span className="text-sm">Exploring Event</span>
+                <div className="h-4 w-4 rounded-full border-2 border-dashed border-stone-500 bg-[#F7F2E8]" />
+                <span className="text-sm">{EXPLORING_EVENT_UI_LABEL} event</span>
               </div>
               <label className="flex cursor-pointer items-center gap-2 pt-1">
                 <input

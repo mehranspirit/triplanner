@@ -32,6 +32,7 @@ import TimelineLegConnector from '@/components/TripDetails/timeline/TimelineLegC
 import { buildTimelineLegKey, TimelineTransferLeg } from '@/types/timelineTransferLegTypes';
 import { resolveTimelineTransferLeg } from '@/utils/transferAnalysis';
 import { useTripReferenceNow } from '@/components/TripDetails/TripReferenceNowContext';
+import { EventVoteAction } from '@/components/TripDetails/hooks/useEventVotes';
 
 export interface TripTimelineHandle {
   scrollToEvent: (eventId: string) => void;
@@ -60,6 +61,8 @@ interface TripTimelineProps {
   selectedEventId?: string | null;
   timelineTransferLegs?: TimelineTransferLeg[];
   variant?: 'default' | 'map-sheet';
+  currentUserId?: string;
+  onVote?: (eventId: string, voteType: EventVoteAction) => void;
 }
 
 const formatWeatherForecast = (forecast: WeatherDay) => {
@@ -158,6 +161,8 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
   selectedEventId,
   timelineTransferLegs = [],
   variant = 'default',
+  currentUserId,
+  onVote,
 }, ref) {
   const { referenceNow } = useTripReferenceNow();
   const isMapSheet = variant === 'map-sheet';
@@ -355,8 +360,8 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
       )}
 
       {isSelectionMode && !isMapSheet && (
-        <div className="mx-3 mb-4 rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-900 md:mx-0">
-          Select two or more exploring options of the same type — activity, destination, or stay — then compare them as alternatives.
+        <div className="mx-3 mb-4 rounded-xl border border-dashed border-stone-300 bg-[#F7F2E8] px-3 py-2 text-xs text-stone-800 md:mx-0">
+          Select two or more draft options of the same type — activity, destination, or stay — then compare them as alternatives.
           {activeSelectionType && (
             <span className="mt-1 block font-medium">
               Currently selecting {activeSelectionType === 'stay' ? 'stays' : `${activeSelectionType}s`}.
@@ -627,6 +632,10 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                                   ? () => onReviewEventLocation(event)
                                   : undefined
                               }
+                              trip={trip}
+                              currentUserId={currentUserId}
+                              onVote={onVote}
+                              canVote={canEdit}
                             />
                           </div>
                         </div>

@@ -80,7 +80,7 @@ import {
   saveMapViewSuggestDismissed,
 } from '@/utils/mapViewPreferences';
 import { tripSurfaces } from '@/styles/tripSurfaces';
-import { buildTripDayStripItems, ALL_DAYS_FILTER_KEY, getTimelineDateKey, resolveActiveTimelineDayKey } from '@/utils/timelineDates';
+import { buildTripDayStripItems, ALL_DAYS_FILTER_KEY, getTimelineDateKey, getTimelineAutoScrollDependencyKey, resolveActiveTimelineDayKey } from '@/utils/timelineDates';
 import { useTripSimulatedDate } from '@/components/TripDetails/hooks/useTripSimulatedDate';
 import { TripReferenceNowProvider } from '@/components/TripDetails/TripReferenceNowContext';
 import MobileTripActionsFab from '@/components/TripDetails/MobileTripActionsFab';
@@ -421,6 +421,11 @@ const NewTripDetails: React.FC = () => {
     setActiveDayKey(ALL_DAYS_FILTER_KEY);
   }, [trip?._id]);
 
+  const timelineAutoScrollKey = useMemo(
+    () => getTimelineAutoScrollDependencyKey(trip?.events ?? []),
+    [trip?.events],
+  );
+
   useEffect(() => {
     if (!trip?._id || !isHydrated || isMapView || detailsTab !== 'itinerary') return;
 
@@ -441,7 +446,7 @@ const NewTripDetails: React.FC = () => {
     return () => window.cancelAnimationFrame(frameId);
   }, [
     trip?._id,
-    trip?.events,
+    timelineAutoScrollKey,
     trip?.startDate,
     trip?.endDate,
     detailsTab,
@@ -1628,6 +1633,8 @@ const NewTripDetails: React.FC = () => {
       dayFilterKey={activeDayKey}
       selectedEventId={selectedEventId}
       timelineTransferLegs={timelineTransferLegs}
+      currentUserId={user?._id}
+      onVote={handleVote}
     />
   );
 
@@ -1657,6 +1664,8 @@ const NewTripDetails: React.FC = () => {
       dayFilterKey={ALL_DAYS_FILTER_KEY}
       selectedEventId={selectedEventId}
       timelineTransferLegs={timelineTransferLegs}
+      currentUserId={user?._id}
+      onVote={handleVote}
     />
   );
 

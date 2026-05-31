@@ -14,7 +14,7 @@ describe('getEventStatusChipInfo', () => {
   it('prioritizes exploring over other statuses', () => {
     expect(getEventStatusChipInfo(makeEvent({
       status: 'exploring',
-    } as Event & { bookingReference: string })).label).toBe('Exploring');
+    } as Event & { bookingReference: string })).label).toBe('Draft');
   });
 
   it('shows booked when a reference exists', () => {

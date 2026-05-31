@@ -6,6 +6,7 @@ import {
   getTransportGlanceTitle,
   getTransportRouteEndpoints,
   truncateGlanceLabel,
+  EXPLORING_TITLE_CLASS,
 } from '@/utils/eventGlance';
 import { EventGlanceContentProps } from '@/components/TripDetails/EventCards/glances/EventGlanceContentProps';
 
@@ -24,7 +25,7 @@ const TransportRouteGlance: React.FC<EventGlanceContentProps> = ({
         <h3
           className={cn(
             'truncate text-sm font-semibold',
-            isExploring ? 'text-slate-700' : 'text-slate-950',
+            isExploring ? EXPLORING_TITLE_CLASS : 'text-slate-950',
           )}
         >
           {getTransportGlanceTitle(event)}

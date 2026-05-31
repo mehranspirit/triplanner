@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { eventFormStatusSchema } from './eventFormStatus';
 import { registerEvent, EventSpec } from './registry';
+import { EXPLORING_EVENT_UI_LABEL } from '@/utils/eventStatusLabels';
 import { StayEvent } from '@/types/eventTypes';
 import React from 'react';
 import { UseFormReturn } from 'react-hook-form';
@@ -329,7 +330,7 @@ const renderStayFormFields = (form: UseFormReturn<StayFormData>): React.ReactNod
                             </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value="exploring">Exploring</SelectItem>
+                            <SelectItem value="exploring">{EXPLORING_EVENT_UI_LABEL}</SelectItem>
                             <SelectItem value="confirmed">Confirmed</SelectItem>
                         </SelectContent>
                     </Select>

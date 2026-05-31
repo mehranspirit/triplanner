@@ -1,4 +1,4 @@
-import React from 'react';
+import { EXPLORING_EVENT_UI_LABEL, EXPLORING_EVENT_UI_LABEL_PLURAL } from '@/utils/eventStatusLabels';
 import { ChevronRight, Plus, Vote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,14 +89,14 @@ const OpenDecisionsSection: React.FC<OpenDecisionsSectionProps> = ({
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
           {orphanCount >= 2 ? (
             <>
-              {orphanCount} exploring options are ready to compare.
+              {orphanCount} {EXPLORING_EVENT_UI_LABEL_PLURAL.toLowerCase()} are ready to compare.
               {canEdit && ' Create a decision to group them for voting.'}
             </>
           ) : (
             <>
               Mark activities, destinations, or stays as
               {' '}
-              <span className="font-medium text-amber-700">Exploring</span>
+              <span className="font-medium text-stone-700">{EXPLORING_EVENT_UI_LABEL}</span>
               , then group at least two into a decision.
             </>
           )}

@@ -71,7 +71,7 @@ const CATEGORY_META: Record<TripHealthDimension, Omit<TripHealthCategoryMeta, 'd
   },
   decisions: {
     label: 'Decisions',
-    description: 'Exploring options that still need a choice',
+    description: 'Draft options that still need a choice',
     iconClassName: 'bg-violet-50 text-violet-700 ring-violet-100',
     renderIcon: (className = 'h-4 w-4') => (
       <Sparkles className={cn(className, 'text-violet-600')} aria-hidden="true" />

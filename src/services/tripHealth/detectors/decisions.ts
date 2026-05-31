@@ -11,6 +11,7 @@ import {
   isVoteableEvent,
 } from '@/utils/decisionHelpers';
 import { buildExploringEventIssueKey, buildOpenDecisionIssueKey } from '../issueKeys';
+import { EXPLORING_EVENT_UI_LABEL } from '@/utils/eventStatusLabels';
 import {
   openDecisionResolutionOptions,
   orphanExploringResolutionOptions,
@@ -103,8 +104,8 @@ export const detectOrphanExploringEvents = (
       severity: 'info',
       title: 'Option needs a decision',
       reason: sameDayOrphanIds.length >= 2
-        ? `${getEventDisplayName(event)} is exploring and not grouped with ${sameDayOrphanIds.length - 1} other option${sameDayOrphanIds.length - 1 === 1 ? '' : 's'} that day.`
-        : `${getEventDisplayName(event)} is still marked as exploring.`,
+        ? `${getEventDisplayName(event)} is a draft and not grouped with ${sameDayOrphanIds.length - 1} other option${sameDayOrphanIds.length - 1 === 1 ? '' : 's'} that day.`
+        : `${getEventDisplayName(event)} is still marked as ${EXPLORING_EVENT_UI_LABEL.toLowerCase()}.`,
       relatedEventIds: [event.id],
       affectedDates: dateKey ? [dateKey] : undefined,
       resolutionOptions: orphanExploringResolutionOptions(event.id, sameDayOrphanIds),

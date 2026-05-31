@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { getMultidaySpanLabel } from '@/utils/timelineDates';
+import { EXPLORING_TITLE_CLASS } from '@/utils/eventGlance';
 import { EventGlanceContentProps } from '@/components/TripDetails/EventCards/glances/EventGlanceContentProps';
 
 const MultidayMiddleGlance: React.FC<EventGlanceContentProps> = ({
@@ -19,7 +20,7 @@ const MultidayMiddleGlance: React.FC<EventGlanceContentProps> = ({
         <h3
           className={cn(
             'truncate text-sm font-semibold',
-            isExploring ? 'text-slate-700' : 'text-slate-950',
+            isExploring ? EXPLORING_TITLE_CLASS : 'text-slate-950',
           )}
         >
           {labels.name}

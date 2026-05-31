@@ -13,6 +13,7 @@ import {
 } from '@/types/eventTypes';
 import { DEFAULT_THUMBNAILS } from './thumbnailHelpers'; // Assuming default thumbnails are here
 import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
+import { EXPLORING_EVENT_UI_LABEL } from '@/utils/eventStatusLabels';
 
 const getExportDateKey = (event: Event): string => {
   const start = getEventStart(event);
@@ -135,8 +136,9 @@ const getExportStyles = (mode: ItineraryExportMode): string => {
             position: relative;
           }
           .event-card.exploring {
-            background: #fffbeb;
-            border-color: #fde68a;
+            background-color: #f7f2e8;
+            background-image: repeating-linear-gradient(-45deg, transparent, transparent 11px, rgba(168, 152, 120, 0.1) 11px, rgba(168, 152, 120, 0.1) 12px);
+            border: 2px dashed #d6d3d1;
           }
           .timeline-point {
             border: 2px solid #ffffff;
@@ -196,8 +198,8 @@ const getExportStyles = (mode: ItineraryExportMode): string => {
             color: #166534;
           }
           .status-badge.exploring {
-            background: #fef3c7;
-            color: #92400e;
+            background: #ede4d3;
+            color: #44403c;
           }
           .time-chip {
             background: #f1f5f9;
@@ -416,8 +418,9 @@ const getExportStyles = (mode: ItineraryExportMode): string => {
             position: relative;
           }
           .event-card.exploring {
-            background: #fffbeb;
-            border-color: #fde68a;
+            background-color: #f7f2e8;
+            background-image: repeating-linear-gradient(-45deg, transparent, transparent 11px, rgba(168, 152, 120, 0.1) 11px, rgba(168, 152, 120, 0.1) 12px);
+            border: 2px dashed #d6d3d1;
           }
           .timeline-point {
             border: 2px solid #ffffff;
@@ -477,8 +480,8 @@ const getExportStyles = (mode: ItineraryExportMode): string => {
             color: #166534;
           }
           .status-badge.exploring {
-            background: #fef3c7;
-            color: #92400e;
+            background: #ede4d3;
+            color: #44403c;
           }
           .time-chip {
             background: #f1f5f9;
@@ -884,7 +887,7 @@ export const generateHtmlItinerary = (
                   ? 'event-card exploring'
                   : 'event-card';
                 const statusLabel = event.status === 'exploring'
-                  ? 'Exploring'
+                  ? EXPLORING_EVENT_UI_LABEL
                   : event.status === 'alternative'
                     ? 'Alternative'
                     : 'Confirmed';
