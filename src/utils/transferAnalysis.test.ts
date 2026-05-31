@@ -254,6 +254,22 @@ describe('transferAnalysis timeline legs', () => {
     expect(getTransferSummary(from, to)).not.toBeNull();
   });
 
+  it('shows a leg from checkout stay to a same-day activity that starts before checkout', () => {
+    const stay = makeStay('stay-1', '2026-06-18', '2026-06-21', 9.3919, -84.1420);
+    const activity = makeActivity(
+      'tour',
+      '2026-06-21T09:00:00',
+      '2026-06-21T11:30:00',
+      9.4123,
+      -84.1550,
+    );
+
+    const leg = getTimelineDayTransferLeg(stay, activity, '2026-06-21');
+    expect(leg).not.toBeNull();
+    expect(leg?.flexibleDeparture).toBe(true);
+    expect(leg?.severity).toBe('ok');
+  });
+
   it('formats distance and travel time for timeline chips', () => {
     const leg = getTimelineDayTransferLeg(
       makeActivity('a', '2026-06-01T10:00:00', '2026-06-01T11:00:00', 40.7128, -74.006),

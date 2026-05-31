@@ -85,7 +85,18 @@ const createTimelineTransferLegLogic = ({
 
     if (!isSameLocalDay(fromEnd, toStart)) return null;
 
-    return { fromEnd, toStart, flexibleDeparture: isFlexibleOutboundMultidayLeg(from, to, dayKey) };
+    let flexibleDeparture = isFlexibleOutboundMultidayLeg(from, to, dayKey);
+    // Activity before checkout time: traveler leaves the villa earlier, not at checkout.
+    if (
+      from.type === 'stay'
+      && fromRole === 'end'
+      && toStart.getTime() < fromEnd.getTime()
+    ) {
+      fromEnd = startOfDay(dayDate);
+      flexibleDeparture = true;
+    }
+
+    return { fromEnd, toStart, flexibleDeparture };
   };
 
   const resolveTransferLegToStart = (to, viewDayKey) => {

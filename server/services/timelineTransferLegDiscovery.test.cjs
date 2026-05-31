@@ -141,6 +141,21 @@ test('resolvePreviousTimelineEvent bridges sparse flight days', () => {
   assert.equal(resolved.previousEvent.id, 'dinner');
 });
 
+test('getTimelineDayLegTimes handles checkout stay to pre-checkout activity', () => {
+  const stay = makeStay('stay-1', '2026-06-18', '2026-06-21', 9.3919, -84.1420);
+  const activity = makeActivity(
+    'tour',
+    '2026-06-21T09:00:00',
+    '2026-06-21T11:30:00',
+    9.4123,
+    -84.1550,
+  );
+
+  const legTimes = getTimelineDayLegTimes(stay, activity, '2026-06-21');
+  assert.ok(legTimes);
+  assert.equal(legTimes.flexibleDeparture, true);
+});
+
 test('getDistanceKm filters short hops', () => {
   const nearA = { lat: 40.7128, lng: -74.006 };
   const nearB = { lat: 40.7138, lng: -74.005 };
