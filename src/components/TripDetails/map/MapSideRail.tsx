@@ -1,13 +1,15 @@
 import React from 'react';
 import { TripPanel } from '../hooks/useTripPanelManager';
+import { cn } from '@/lib/utils';
 
 interface MapSideRailProps {
   children: React.ReactNode;
   activePanel: TripPanel | null;
+  className?: string;
 }
 
-const MapSideRail: React.FC<MapSideRailProps> = ({ children, activePanel }) => (
-    <aside className="flex min-h-0 flex-col border-t border-white/10 bg-white lg:border-l lg:border-t-0">
+const MapSideRail: React.FC<MapSideRailProps> = ({ children, activePanel, className }) => (
+    <aside className={cn('min-h-0 flex-col border-t border-white/10 bg-white lg:border-l lg:border-t-0', className)}>
     {!activePanel && (
       <div className="shrink-0 border-b border-slate-100 px-4 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Itinerary</p>

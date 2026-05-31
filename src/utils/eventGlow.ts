@@ -21,8 +21,8 @@ export const getEventColor = (type: EventType) => {
 };
 
 // Check if an event is currently active based on its type and dates
-export const isEventCurrentlyActive = (event: Event): boolean => {
-  const today = new Date();
+export const isEventCurrentlyActive = (event: Event, now = new Date()): boolean => {
+  const today = now;
 
   switch (event.type) {
     case 'stay': {

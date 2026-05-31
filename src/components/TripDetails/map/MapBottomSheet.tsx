@@ -108,8 +108,11 @@ const MapBottomSheet: React.FC<MapBottomSheetProps> = ({
         </button>
 
         {snap === 'peek' && peekContent && (
-          <div className="shrink-0 border-b border-slate-100 px-4 pb-3">
-            {peekContent}
+          <div className="shrink-0 border-b border-slate-100 px-4 pb-3 pt-0.5">
+            <div className="flex items-end justify-between gap-3">
+              {peekContent}
+              <p className="shrink-0 pb-0.5 text-[10px] font-medium text-slate-400">Pull up</p>
+            </div>
           </div>
         )}
 

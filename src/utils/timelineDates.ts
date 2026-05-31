@@ -192,9 +192,11 @@ export const getMultidaySpanLabel = (event: Event, dayKey: string) => {
   };
 };
 
-export const getTodayTimelineDateKey = () => format(new Date(), 'yyyy-MM-dd');
+export const getTodayTimelineDateKey = (now = new Date()) => format(now, 'yyyy-MM-dd');
 
-export const isTimelineDateToday = (dateKey: string) => dateKey === getTodayTimelineDateKey();
+export const isTimelineDateToday = (dateKey: string, now = new Date()) => (
+  dateKey === getTodayTimelineDateKey(now)
+);
 
 /** Best day to focus in the timeline: today when relevant, otherwise trip-relative anchor. */
 export const resolveActiveTimelineDayKey = (
@@ -203,7 +205,7 @@ export const resolveActiveTimelineDayKey = (
   tripEndDate?: string,
   now = new Date(),
 ): string | null => {
-  const stripDays = buildTripDayStripItems(events, tripStartDate, tripEndDate).filter(
+  const stripDays = buildTripDayStripItems(events, tripStartDate, tripEndDate, now).filter(
     (day) => !day.isAllDays,
   );
 
@@ -315,6 +317,7 @@ export const buildTripDayStripItems = (
   events: Event[],
   tripStartDate?: string,
   tripEndDate?: string,
+  now = new Date(),
 ): TripDayStripItem[] => {
   const itineraryEvents = events.filter((event) => event.status !== 'alternative');
   const eventDateKeys = new Set(
@@ -369,7 +372,7 @@ export const buildTripDayStripItems = (
           dateKey,
           shortLabel: format(date, 'MMM d'),
           weekdayLabel: format(date, 'EEE'),
-          isToday: isTimelineDateToday(dateKey),
+          isToday: isTimelineDateToday(dateKey, now),
           hasEvents: itineraryEvents.some((event) => eventOccursOnDayKey(event, dateKey)),
         };
       }),
@@ -384,7 +387,7 @@ export const buildTripDayStripItems = (
         dateKey,
         shortLabel: format(date, 'MMM d'),
         weekdayLabel: format(date, 'EEE'),
-        isToday: isTimelineDateToday(dateKey),
+        isToday: isTimelineDateToday(dateKey, now),
         hasEvents: itineraryEvents.some((event) => eventOccursOnDayKey(event, dateKey)),
       };
     }),

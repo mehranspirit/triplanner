@@ -45,7 +45,7 @@ const MapSheetPanelHeader: React.FC<MapSheetPanelHeaderProps> = ({
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Trip detail panels">
+      <div className="mt-3 hidden gap-2 overflow-x-auto pb-1 lg:flex" role="tablist" aria-label="Trip detail panels">
         {panelGroups.map((group) => (
           <div key={group.label} className="flex shrink-0 items-center gap-1">
             <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">

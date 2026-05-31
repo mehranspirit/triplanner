@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutList, Map as MapIcon, Wand2 } from 'lucide-react';
+import { LayoutList, Map as MapIcon } from 'lucide-react';
 import TripMap, { TripMapFilter } from '@/components/TripMap';
 import { Trip, Event } from '@/types/eventTypes';
 import { useMapViewChrome } from '@/context/MapViewChromeContext';
@@ -9,47 +9,71 @@ import { resolveMapTileStyleForTrip } from '@/config/mapTiles';
 import { cn } from '@/lib/utils';
 import { tripSurfaces } from '@/styles/tripSurfaces';
 import { TripPanel } from '../hooks/useTripPanelManager';
+import { getPanelSheetSnap } from '../panels/tripPanelMeta';
 import MapGeocodeBanner from './MapGeocodeBanner';
 import MapSideRail from './MapSideRail';
 import EventMapPreview from './EventMapPreview';
-import ToolsMenuSheet from './ToolsMenuSheet';
-import type { ToolsMenuSheetProps } from './toolsMenuSheetTypes';
+import MapBottomSheet, { MapSheetSnap } from './MapBottomSheet';
+import TodayPeek from './TodayPeek';
+import TripToolbarActionMenus, { TripToolbarActionMenusProps } from '../TripToolbarActionMenus';
+import TripSimulatedDatePicker from '../TripSimulatedDatePicker';
 
 interface MapTripViewProps {
   trip: Trip;
   canEdit: boolean;
-  sheetBody: React.ReactNode;
+  mobileSheetBody: React.ReactNode;
+  desktopRailBody: React.ReactNode;
   activePanel: TripPanel | null;
   unreadNotificationCount: number;
+  isOverlayModalOpen?: boolean;
   onExitMapView: () => void;
   onReviewLocations?: () => void;
   onOpenEvent?: (event: Event) => void;
   onClosePanel: () => void;
-  toolsMenuProps: Omit<ToolsMenuSheetProps, 'open' | 'onOpenChange' | 'unreadNotificationCount'>;
+  toolbarMenuProps: Omit<TripToolbarActionMenusProps, 'activePanel' | 'unreadNotificationCount' | 'isMapView'>;
 }
 
 const MapTripView: React.FC<MapTripViewProps> = ({
   trip,
   canEdit,
-  sheetBody,
+  mobileSheetBody,
+  desktopRailBody,
   activePanel,
   unreadNotificationCount,
+  isOverlayModalOpen = false,
   onExitMapView,
   onReviewLocations,
   onOpenEvent,
   onClosePanel,
-  toolsMenuProps,
+  toolbarMenuProps,
 }) => {
   const { setMapViewActive } = useMapViewChrome();
   const [mapFilter, setMapFilter] = useState<TripMapFilter>('all');
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [navigableEvents, setNavigableEvents] = useState<Event[]>([]);
-  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [sheetSnap, setSheetSnap] = useState<MapSheetSnap>('peek');
 
   useEffect(() => {
     setMapViewActive(true);
     return () => setMapViewActive(false);
   }, [setMapViewActive]);
+
+  useEffect(() => {
+    if (isOverlayModalOpen) {
+      setSheetSnap('peek');
+      return;
+    }
+
+    if (activePanel && activePanel !== 'map') {
+      setSheetSnap(getPanelSheetSnap(activePanel));
+    }
+  }, [activePanel, isOverlayModalOpen]);
+
+  useEffect(() => {
+    if (!activePanel && !isOverlayModalOpen) {
+      setSheetSnap((current) => (current === 'full' ? 'half' : current));
+    }
+  }, [activePanel, isOverlayModalOpen]);
 
   const geocodedCount = useMemo(
     () => (trip.events || []).filter(eventHasMapCoordinates).length,
@@ -67,6 +91,9 @@ const MapTripView: React.FC<MapTripViewProps> = ({
   const handleEventSelect = (event: Event) => {
     setSelectedEvent(event);
     onClosePanel();
+    if (sheetSnap === 'peek') {
+      setSheetSnap('half');
+    }
   };
 
   const handleNavigableEventsChange = useCallback((events: Event[]) => {
@@ -108,22 +135,14 @@ const MapTripView: React.FC<MapTripViewProps> = ({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              className="relative inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90 transition-colors hover:bg-white/15 sm:text-sm"
-              aria-expanded={isToolsOpen}
-              aria-haspopup="dialog"
-              onClick={() => setIsToolsOpen(true)}
-            >
-              <Wand2 className="h-3.5 w-3.5" />
-              Tools
-              {unreadNotificationCount > 0 && (
-                <span className="absolute -right-1 -top-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                  {unreadNotificationCount}
-                </span>
-              )}
-            </button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <TripToolbarActionMenus
+              {...toolbarMenuProps}
+              activePanel={activePanel}
+              unreadNotificationCount={unreadNotificationCount}
+              isMapView
+              className="hidden lg:flex"
+            />
 
             <div className={cn('inline-flex', tripSurfaces.mapSegmentTrack)}>
               <button
@@ -149,6 +168,10 @@ const MapTripView: React.FC<MapTripViewProps> = ({
           </div>
         </div>
 
+        <div className="mt-3 hidden lg:block">
+          <TripSimulatedDatePicker />
+        </div>
+
         <div className="mt-3">
           <MapGeocodeBanner
             geocodedCount={geocodedCount}
@@ -159,8 +182,8 @@ const MapTripView: React.FC<MapTripViewProps> = ({
         </div>
       </header>
 
-      <div className="relative grid min-h-0 flex-1 grid-rows-2 lg:grid-cols-2 lg:grid-rows-1">
-        <div className="relative min-h-0">
+      <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-2">
+        <div className="relative h-full min-h-0">
           <div className="absolute inset-0 z-0">
             <TripMap
               trip={trip}
@@ -195,7 +218,7 @@ const MapTripView: React.FC<MapTripViewProps> = ({
             </div>
 
             {selectedEvent && (
-              <div className="pointer-events-auto max-w-sm">
+              <div className="pointer-events-auto max-w-[min(100%,20rem)]">
                 <EventMapPreview
                   event={selectedEvent}
                   stopIndex={selectedStopIndex}
@@ -210,21 +233,26 @@ const MapTripView: React.FC<MapTripViewProps> = ({
           </div>
 
           {import.meta.env.VITE_MAPTILER_API_KEY && (
-            <div className="pointer-events-none absolute bottom-3 left-3 z-[5] max-w-[calc(100%-1.5rem)] rounded-md bg-slate-950/75 px-2 py-1 text-[10px] text-white/80 backdrop-blur-sm lg:bottom-4">
+            <div className={cn(
+              'pointer-events-none absolute left-3 z-[5] max-w-[calc(100%-1.5rem)] rounded-md bg-slate-950/75 px-2 py-1 text-[10px] text-white/80 backdrop-blur-sm',
+              'bottom-[calc(5.75rem+env(safe-area-inset-bottom)+0.75rem)] lg:bottom-4',
+            )}
+            >
               © MapTiler © OpenStreetMap contributors
             </div>
           )}
 
-          <ToolsMenuSheet
-            open={isToolsOpen}
-            unreadNotificationCount={unreadNotificationCount}
-            onOpenChange={setIsToolsOpen}
-            {...toolsMenuProps}
-          />
+          <MapBottomSheet
+            snap={sheetSnap}
+            onSnapChange={setSheetSnap}
+            peekContent={<TodayPeek trip={trip} />}
+          >
+            {mobileSheetBody}
+          </MapBottomSheet>
         </div>
 
-        <MapSideRail activePanel={activePanel}>
-          {sheetBody}
+        <MapSideRail activePanel={activePanel} className="hidden lg:flex">
+          {desktopRailBody}
         </MapSideRail>
       </div>
     </div>

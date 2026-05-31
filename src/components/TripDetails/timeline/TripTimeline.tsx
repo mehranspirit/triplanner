@@ -31,6 +31,7 @@ import {
 import TimelineLegConnector from '@/components/TripDetails/timeline/TimelineLegConnector';
 import { buildTimelineLegKey, TimelineTransferLeg } from '@/types/timelineTransferLegTypes';
 import { resolveTimelineTransferLeg } from '@/utils/transferAnalysis';
+import { useTripReferenceNow } from '@/components/TripDetails/TripReferenceNowContext';
 
 export interface TripTimelineHandle {
   scrollToEvent: (eventId: string) => void;
@@ -58,6 +59,7 @@ interface TripTimelineProps {
   dayFilterKey?: string;
   selectedEventId?: string | null;
   timelineTransferLegs?: TimelineTransferLeg[];
+  variant?: 'default' | 'map-sheet';
 }
 
 const formatWeatherForecast = (forecast: WeatherDay) => {
@@ -155,7 +157,10 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
   dayFilterKey = ALL_DAYS_FILTER_KEY,
   selectedEventId,
   timelineTransferLegs = [],
+  variant = 'default',
 }, ref) {
+  const { referenceNow } = useTripReferenceNow();
+  const isMapSheet = variant === 'map-sheet';
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
   const eventSectionRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -293,9 +298,19 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
     <section
       ref={timelineSectionRef}
       className={cn(
-        'bg-white pt-3 pb-4 md:rounded-[2rem] md:border md:border-slate-200/80 md:p-6 md:shadow-xl md:shadow-slate-900/[0.08]',
+        isMapSheet
+          ? 'px-3 pb-3 pt-1'
+          : 'bg-white pb-4 pt-3 md:rounded-[2rem] md:border md:border-slate-200/80 md:p-6 md:shadow-xl md:shadow-slate-900/[0.08]',
       )}
     >
+      {isMapSheet ? (
+        <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Itinerary</p>
+          <p className="text-[11px] font-medium text-slate-400">
+            {visibleEvents.length} stop{visibleEvents.length === 1 ? '' : 's'}
+          </p>
+        </div>
+      ) : (
       <div className="mb-4 flex items-center justify-between gap-3 px-3 md:mb-6 md:px-0">
         <div>
           <p className="hidden text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 sm:block">Main itinerary</p>
@@ -337,8 +352,9 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
           </p>
         </div>
       </div>
+      )}
 
-      {isSelectionMode && (
+      {isSelectionMode && !isMapSheet && (
         <div className="mx-3 mb-4 rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-900 md:mx-0">
           Select two or more exploring options of the same type — activity, destination, or stay — then compare them as alternatives.
           {activeSelectionType && (
@@ -387,14 +403,18 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
           </p>
         </div>
       ) : (
-        <div className="relative pl-7 pr-3 md:pr-0">
-          <div className={cn('pointer-events-none absolute bottom-0 left-3 top-0 z-0 w-px', tripSurfaces.timelineSpine)} />
-          <div className="relative space-y-6 md:space-y-8">
+        <div className={cn('relative', isMapSheet ? 'pl-5 pr-0.5' : 'pl-7 pr-3 md:pr-0')}>
+          <div className={cn(
+            'pointer-events-none absolute bottom-0 top-0 z-0 w-px',
+            isMapSheet ? 'left-2' : 'left-3',
+            tripSurfaces.timelineSpine,
+          )} />
+          <div className={cn('relative', isMapSheet ? 'space-y-4' : 'space-y-6 md:space-y-8')}>
           {Object.entries(groupedEvents)
             .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
             .map(([dateKey, dateEvents]) => {
             const dateParts = getDayHeaderParts(dateKey);
-            const isToday = dateKey !== UNSCHEDULED_FILTER_KEY && isTimelineDateToday(dateKey);
+            const isToday = dateKey !== UNSCHEDULED_FILTER_KEY && isTimelineDateToday(dateKey, referenceNow);
             const dayAlertCount = getDayNotificationCount(dateKey, notifications);
             const dayWeatherSummary = getDayWeatherSummary(dateKey, weatherSnapshots);
             const dayHealthChips = healthChipsByDate.get(dateKey) ?? [];
@@ -413,15 +433,21 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                 className="relative scroll-mt-[calc(var(--trip-details-toolbar-height,7rem)+0.5rem)]"
               >
                 <div className={cn(
-                  'sticky top-[var(--trip-timeline-sticky-top,var(--trip-details-toolbar-height,7rem))] z-30 mb-2 py-1 md:mb-3',
+                  'sticky z-30 mb-1.5 py-0.5',
+                  isMapSheet
+                    ? 'top-0'
+                    : 'top-[var(--trip-timeline-sticky-top,var(--trip-details-toolbar-height,7rem))] mb-2 md:mb-3',
                 )}>
                   <div>
                     <div className={cn(
-                      'inline-flex w-full max-w-full items-center gap-2 rounded-lg border px-2.5 py-1 sm:w-auto',
+                      'inline-flex w-full max-w-full items-center gap-2 rounded-lg border sm:w-auto',
+                      isMapSheet ? 'px-2 py-0.5' : 'px-2.5 py-1',
                       isToday
                         ? tripSurfaces.dayHeaderToday
                         : tripSurfaces.dayHeaderDefault,
-                      'shadow-lg shadow-slate-900/20 ring-1 ring-white/60',
+                      isMapSheet
+                        ? 'shadow-md shadow-slate-900/10 ring-1 ring-white/50'
+                        : 'shadow-lg shadow-slate-900/20 ring-1 ring-white/60',
                     )}>
                       <span className={cn(
                         'h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30',
@@ -443,7 +469,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                       )}
                     </div>
                     {(dayWeatherSummary || dayAlertCount > 0 || dayHealthChips.length > 0) && (
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className={cn('flex flex-wrap gap-1.5', isMapSheet ? 'mt-1.5' : 'mt-2 gap-2')}>
                         {dayHealthChips.map((chip) => (
                           <ContextChip
                             key={chip.issueId}
@@ -474,7 +500,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className={cn(isMapSheet ? 'space-y-3' : 'space-y-4')}>
                   {sortEventsByStart(dateEvents).map((event, eventIndex, dayEvents) => {
                     const resolvedLeg = resolveTimelineTransferLeg(
                       sortedEvents,
@@ -501,7 +527,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                     const activeDecision = trip
                       ? getDecisionForEvent(trip.decisions, event.id)
                       : undefined;
-                    const isEventActive = isEventCurrentlyActive(event);
+                    const isEventActive = isEventCurrentlyActive(event, referenceNow);
                     const multidayRole = getMultidayEventDayRole(event, dateKey);
                     const glanceAttention = {
                       alertCount: eventAlerts.length > 0 ? eventAlerts.length : undefined,
@@ -535,7 +561,8 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                           )}
                         >
                         <div className={cn(
-                          'absolute -left-[1.45rem] h-3 w-3 rounded-full',
+                          'absolute h-3 w-3 rounded-full',
+                          isMapSheet ? '-left-[0.85rem]' : '-left-[1.45rem]',
                           showMobileMetaRow ? 'top-2.5 md:top-6' : 'top-6',
                           isEventActive
                             ? tripSurfaces.timelineDotActive
@@ -614,7 +641,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
         </div>
       )}
 
-      {isSelectionMode && selectedEventIds.size >= 2 && (
+      {isSelectionMode && !isMapSheet && selectedEventIds.size >= 2 && (
         <div className="sticky bottom-3 z-20 mt-4 flex justify-center md:bottom-4">
           <Button
             type="button"

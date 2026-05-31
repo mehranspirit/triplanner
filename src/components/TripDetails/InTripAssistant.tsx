@@ -24,6 +24,7 @@ import {
   InTripHandyGroup,
   InTripHeroAction,
 } from '@/utils/inTripAssistantContent';
+import { useTripReferenceNow } from './TripReferenceNowContext';
 
 interface InTripAssistantProps {
   trip: Trip;
@@ -427,6 +428,7 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
   onDismissInsight,
   variant = 'panel',
 }) => {
+  const { referenceNow } = useTripReferenceNow();
   const content = useMemo(
     () => buildInTripAssistantContent({
       trip,
@@ -434,8 +436,9 @@ const InTripAssistant: React.FC<InTripAssistantProps> = ({
       weatherSnapshots,
       flightStatusSnapshots,
       todayBriefing,
+      now: referenceNow,
     }),
-    [trip, insights, weatherSnapshots, flightStatusSnapshots, todayBriefing],
+    [trip, insights, weatherSnapshots, flightStatusSnapshots, todayBriefing, referenceNow],
   );
 
   const handleOpenEventDetailById = (eventId: string) => {

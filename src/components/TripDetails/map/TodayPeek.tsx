@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { formatDistanceToNowStrict } from 'date-fns';
+import { formatDistanceStrict } from 'date-fns';
 import { Clock3 } from 'lucide-react';
 import { Trip } from '@/types/eventTypes';
 import {
@@ -10,36 +10,38 @@ import {
   sortEventsByStart,
 } from '@/utils/eventTime';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
+import { useTripReferenceNow } from '@/components/TripDetails/TripReferenceNowContext';
 
 interface TodayPeekProps {
   trip: Trip;
 }
 
 const TodayPeek: React.FC<TodayPeekProps> = ({ trip }) => {
+  const { referenceNow } = useTripReferenceNow();
   const { current, next } = useMemo(() => {
     const sorted = sortEventsByStart(trip.events.filter(event => event.status !== 'alternative'));
     return {
-      current: getCurrentEvent(sorted) ?? sorted.find(event => isEventCurrentlyActive(event)) ?? null,
-      next: getNextEvent(sorted, new Date()),
+      current: getCurrentEvent(sorted, referenceNow) ?? sorted.find(event => isEventCurrentlyActive(event, referenceNow)) ?? null,
+      next: getNextEvent(sorted, referenceNow),
     };
-  }, [trip.events]);
+  }, [trip.events, referenceNow]);
 
   const primary = current ?? next;
   const hasEvents = trip.events.filter((event) => event.status !== 'alternative').length > 0;
 
   if (!hasEvents) {
-    return <p className="text-sm text-slate-600">No stops yet · swipe up for itinerary</p>;
+    return <p className="text-sm text-slate-600">No stops yet</p>;
   }
 
   if (!primary) {
-    return <p className="text-sm text-slate-600">Nothing scheduled today · swipe up for itinerary</p>;
+    return <p className="text-sm text-slate-600">Nothing scheduled today</p>;
   }
 
   const start = getEventStart(primary);
   const timing = current
     ? 'Happening now'
-    : start && start > new Date()
-      ? `Starts in ${formatDistanceToNowStrict(start)}`
+    : start && start > referenceNow
+      ? `Starts in ${formatDistanceStrict(referenceNow, start)}`
       : 'Up next';
 
   return (

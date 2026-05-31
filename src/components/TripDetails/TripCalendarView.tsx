@@ -15,6 +15,7 @@ import { tripSurfaces } from '@/styles/tripSurfaces';
 import { getEventStart, sortEventsByStart } from '@/utils/eventTime';
 import { getEventTimelineDateKeys, isTimelineDateToday } from '@/utils/timelineDates';
 import { CalendarDayMultidayMarkers, CalendarEventCell, partitionCalendarDayEvents } from '@/components/TripDetails/calendar/MultidayCalendarEvent';
+import { useTripReferenceNow } from '@/components/TripDetails/TripReferenceNowContext';
 
 interface TripCalendarViewProps {
   events: Event[];
@@ -56,6 +57,7 @@ const TripCalendarView: React.FC<TripCalendarViewProps> = ({
   selectedEventId,
   onEventSelect,
 }) => {
+  const { referenceNow } = useTripReferenceNow();
   const itineraryEvents = useMemo(
     () => sortEventsByStart(events.filter((event) => event.status !== 'alternative')),
     [events],
@@ -154,7 +156,7 @@ const TripCalendarView: React.FC<TripCalendarViewProps> = ({
                     const inRange = day >= rangeStart && day <= rangeEnd;
                     const dayEvents = eventsByDate.get(dateKey) ?? [];
                     const { headerEvent, headerMultidayEvents, listEvents } = partitionCalendarDayEvents(dayEvents, dateKey);
-                    const isToday = isTimelineDateToday(dateKey);
+                    const isToday = isTimelineDateToday(dateKey, referenceNow);
 
                     return (
                       <div

@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { tripSurfaces } from '@/styles/tripSurfaces';
 import { getEventLocationLabel } from '@/utils/eventTime';
 import { isEventCurrentlyActive } from '@/utils/eventGlow';
+import { useTripReferenceNow } from '@/components/TripDetails/TripReferenceNowContext';
 import {
   EVENT_TYPE_ACCENT_CLASSES,
   EXPLORING_ACCENT_CLASS,
@@ -83,8 +84,9 @@ const EventGlanceCard: React.FC<EventGlanceCardProps> = ({
   onOpenDecision,
   onReviewLocation,
 }) => {
+  const { referenceNow } = useTripReferenceNow();
   const isExploring = event.status === 'exploring';
-  const isActive = isEventCurrentlyActive(event);
+  const isActive = isEventCurrentlyActive(event, referenceNow);
   const location = getEventLocationLabel(event)
     || (event as { address?: string }).address
     || undefined;

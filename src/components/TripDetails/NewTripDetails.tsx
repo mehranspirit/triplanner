@@ -80,6 +80,9 @@ import {
 } from '@/utils/mapViewPreferences';
 import { tripSurfaces } from '@/styles/tripSurfaces';
 import { buildTripDayStripItems, ALL_DAYS_FILTER_KEY, getTimelineDateKey, resolveActiveTimelineDayKey } from '@/utils/timelineDates';
+import { useTripSimulatedDate } from '@/components/TripDetails/hooks/useTripSimulatedDate';
+import { TripReferenceNowProvider } from '@/components/TripDetails/TripReferenceNowContext';
+import MobileTripActionsFab from '@/components/TripDetails/MobileTripActionsFab';
 
 // Function to process text and make links clickable
 const processText = (text: string | undefined | null): string => {
@@ -159,6 +162,8 @@ const NewTripDetails: React.FC = () => {
     patchTripLocal,
     fetchTrip
   } = useTripDetails();
+
+  const simulatedDate = useTripSimulatedDate(trip);
 
   const locationConfirmQueue = useLocationConfirmQueue({
     tripId: trip?._id,
@@ -366,8 +371,9 @@ const NewTripDetails: React.FC = () => {
       dismissedInsightIds,
       dismissedContextCardTypes,
       tripHealth,
+      now: simulatedDate.referenceNow,
     }) : null,
-    [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots, dismissedInsightIds, dismissedContextCardTypes, tripHealth]
+    [trip, notifications, travelImports, visibleTripInsights, weatherSnapshots, flightStatusSnapshots, dismissedInsightIds, dismissedContextCardTypes, tripHealth, simulatedDate.referenceNow]
   );
   const mapLocationProgress = useMemo(
     () => getTripMapLocationProgress(trip?.events ?? []),
@@ -380,10 +386,12 @@ const NewTripDetails: React.FC = () => {
     mapLocationProgress.geocoded,
     mapLocationProgress.total,
     locationConfirmQueue.open,
+    simulatedDate.isUiTestTrip,
+    simulatedDate.isSimulating,
   ]);
   const dayStripItems = useMemo(
-    () => buildTripDayStripItems(trip?.events ?? [], trip?.startDate, trip?.endDate),
-    [trip?.endDate, trip?.events, trip?.startDate],
+    () => buildTripDayStripItems(trip?.events ?? [], trip?.startDate, trip?.endDate, simulatedDate.referenceNow),
+    [trip?.endDate, trip?.events, trip?.startDate, simulatedDate.referenceNow],
   );
 
   useEffect(() => {
@@ -397,6 +405,7 @@ const NewTripDetails: React.FC = () => {
       trip.events ?? [],
       trip.startDate,
       trip.endDate,
+      simulatedDate.referenceNow,
     );
     if (!activeDayKey) return;
 
@@ -415,6 +424,7 @@ const NewTripDetails: React.FC = () => {
     detailsTab,
     isHydrated,
     isMapView,
+    simulatedDate.referenceNow,
   ]);
 
   const handleDaySelect = useCallback((dateKey: string) => {
@@ -1598,69 +1608,106 @@ const NewTripDetails: React.FC = () => {
     />
   );
 
-  const mapSheetBody = (
-    <MapSheetBody
-      activePanel={activePanel}
-      panelOptions={panelOptions}
-      timeline={tripTimeline}
+  const mapSheetTimeline = (
+    <TripTimeline
+      variant="map-sheet"
+      events={trip.events}
       trip={trip}
+      tripStartDate={trip.startDate}
+      tripEndDate={trip.endDate}
+      eventThumbnails={eventThumbnails}
       canEdit={canEdit}
-      insights={visibleTripInsights}
-      notifications={notifications}
-      notificationPreferences={notificationPreferences}
-      isLoadingNotifications={isLoadingNotifications}
-      notificationError={notificationError}
+      deletingEvents={deletingEvents}
       weatherSnapshots={weatherSnapshots}
       flightStatusSnapshots={flightStatusSnapshots}
-      todayBriefing={todayBriefing?.briefing}
-      todayBriefingGeneratedAt={todayBriefing?.generatedAt}
-      todayBriefingError={todayBriefingError}
-      isGeneratingTodayBriefing={isGeneratingTodayBriefing}
-      replanBriefing={replanBriefing?.briefing}
-      replanBriefingGeneratedAt={replanBriefing?.generatedAt}
-      replanBriefingError={replanBriefingError}
-      isGeneratingReplanBriefing={isGeneratingReplanBriefing}
-      onClose={closePanel}
-      onOpenPanel={handleOpenPanelForMap}
-      onRefreshNotifications={() => fetchNotifications()}
-      onMarkNotificationRead={(notification) => handleUpdateNotification(notification, { read: true })}
-      onDismissNotification={(notification) => handleUpdateNotification(notification, { dismissed: true })}
-      onNotificationAction={handleNotificationAction}
-      onUpdateNotificationPreferences={handleUpdateNotificationPreferences}
-      onGenerateTodayBriefing={handleGenerateTodayBriefing}
-      onGenerateReplanBriefing={handleGenerateReplanBriefing}
-      onOpenEventDetail={handleNavigateToEventDetail}
-      onDismissInsight={handleDismissInsight}
-      tripHealthSummary={tripHealth?.summary ?? {
-        headlineScore: 100,
-        logisticsScore: 100,
-        contentScore: 100,
-        openIssueCount: 0,
-        criticalCount: 0,
-        warningCount: 0,
-      }}
-      tripHealthIssues={tripHealth?.issues ?? []}
-      isComputingTripHealth={loading}
-      onExecuteHealthResolution={handleExecuteHealthResolution}
+      notifications={notifications}
+      onOpenEventDetail={handleOpenEventDetail}
       onOpenDecision={handleOpenDecision}
-      onCreateDecision={() => handleCreateDecisionClick()}
+      healthIssues={tripHealth?.issues ?? []}
+      onOpenHealthIssue={handleOpenHealthIssue}
+      onReviewEventLocation={
+        canEdit
+          ? (event) => locationConfirmQueue.startUnresolvedReview([event])
+          : undefined
+      }
+      onAddEvent={canEdit ? () => handleAddEventClick('stay') : undefined}
+      dayFilterKey={ALL_DAYS_FILTER_KEY}
+      selectedEventId={selectedEventId}
+      timelineTransferLegs={timelineTransferLegs}
     />
   );
 
+  const mapSheetBodyProps = {
+    activePanel,
+    panelOptions,
+    trip,
+    canEdit,
+    insights: visibleTripInsights,
+    notifications,
+    notificationPreferences,
+    isLoadingNotifications,
+    notificationError,
+    weatherSnapshots,
+    flightStatusSnapshots,
+    todayBriefing: todayBriefing?.briefing,
+    todayBriefingGeneratedAt: todayBriefing?.generatedAt,
+    todayBriefingError,
+    isGeneratingTodayBriefing,
+    replanBriefing: replanBriefing?.briefing,
+    replanBriefingGeneratedAt: replanBriefing?.generatedAt,
+    replanBriefingError,
+    isGeneratingReplanBriefing,
+    onClose: closePanel,
+    onOpenPanel: handleOpenPanelForMap,
+    onRefreshNotifications: () => fetchNotifications(),
+    onMarkNotificationRead: (notification: TripNotification) => handleUpdateNotification(notification, { read: true }),
+    onDismissNotification: (notification: TripNotification) => handleUpdateNotification(notification, { dismissed: true }),
+    onNotificationAction: handleNotificationAction,
+    onUpdateNotificationPreferences: handleUpdateNotificationPreferences,
+    onGenerateTodayBriefing: handleGenerateTodayBriefing,
+    onGenerateReplanBriefing: handleGenerateReplanBriefing,
+    onOpenEventDetail: handleNavigateToEventDetail,
+    onDismissInsight: handleDismissInsight,
+    tripHealthSummary: tripHealth?.summary ?? {
+      headlineScore: 100,
+      logisticsScore: 100,
+      contentScore: 100,
+      openIssueCount: 0,
+      criticalCount: 0,
+      warningCount: 0,
+    },
+    tripHealthIssues: tripHealth?.issues ?? [],
+    isComputingTripHealth: loading,
+    onExecuteHealthResolution: handleExecuteHealthResolution,
+    onOpenDecision: handleOpenDecision,
+    onCreateDecision: () => handleCreateDecisionClick(),
+  };
+
+  const mapMobileSheetBody = (
+    <MapSheetBody {...mapSheetBodyProps} timeline={mapSheetTimeline} />
+  );
+
+  const mapDesktopRailBody = (
+    <MapSheetBody {...mapSheetBodyProps} timeline={tripTimeline} />
+  );
+
   return (
+    <TripReferenceNowProvider value={simulatedDate}>
     <>
       {showMapView ? (
         <MapTripView
           trip={trip}
           canEdit={canEdit}
-          sheetBody={mapSheetBody}
+          mobileSheetBody={mapMobileSheetBody}
+          desktopRailBody={mapDesktopRailBody}
           activePanel={activePanel}
           unreadNotificationCount={unreadNotificationCount}
+          isOverlayModalOpen={isL4ModalOpen}
           onExitMapView={() => handleSetMapView(false)}
           onReviewLocations={handleImproveLocations}
           onOpenEvent={handleNavigateToEventDetail}
           onClosePanel={closePanel}
-          toolsMenuProps={{
+          toolbarMenuProps={{
             tripId: trip._id,
             canEdit,
             addableEventTypes,
@@ -1676,6 +1723,7 @@ const NewTripDetails: React.FC = () => {
             onOpenNotifications: () => {
               handleOpenPanelForMap('notifications');
             },
+            onViewChange: handleDetailsViewChange,
           }}
         />
       ) : (
@@ -1748,7 +1796,7 @@ const NewTripDetails: React.FC = () => {
       )}
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
-        <main className="min-w-0 space-y-3">
+        <main className="min-w-0 space-y-3 pb-24 lg:pb-0">
           {detailsTab === 'calendar' && !isMobileLayout && (
             <TripCalendarView
               events={trip.events}
@@ -1807,6 +1855,37 @@ const NewTripDetails: React.FC = () => {
       </div>
     </div>
       )}
+
+      <MobileTripActionsFab
+        tripId={trip._id}
+        canEdit={canEdit}
+        addableEventTypes={addableEventTypes}
+        activePanel={activePanel}
+        unreadNotificationCount={unreadNotificationCount}
+        isImprovingLocations={locationConfirmQueue.open}
+        improveLocationsLabel={
+          locationConfirmQueue.open
+            ? `Reviewing ${locationConfirmQueue.queuePosition.current}/${locationConfirmQueue.queuePosition.total}`
+            : undefined
+        }
+        highlightToday={Boolean(contextSignals?.showEmbeddedToday)}
+        isMapView={showMapView}
+        onOpenAIImport={() => setIsAIParseModalOpen(true)}
+        onAddEvent={handleAddEventClick}
+        onOpenExploreSuggestions={() => setIsExploreSuggestionsOpen(true)}
+        onImproveLocations={handleImproveLocations}
+        onOpenPanel={showMapView ? handleOpenPanelForMap : openPanel}
+        onOpenNotifications={() => {
+          if (showMapView) {
+            handleOpenPanelForMap('notifications');
+          } else {
+            openPanel('notifications');
+            fetchNotifications();
+          }
+        }}
+        onViewChange={handleDetailsViewChange}
+        onClosePanel={closePanel}
+      />
 
       {!showMapView && (
       <TripPanelHost
@@ -2023,6 +2102,7 @@ const NewTripDetails: React.FC = () => {
         onRetry={locationConfirmQueue.handleRetry}
       />
     </>
+    </TripReferenceNowProvider>
   );
 };
 

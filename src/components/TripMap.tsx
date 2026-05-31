@@ -1154,7 +1154,7 @@ const TripMap: React.FC<TripMapProps> = ({
 
         {/* Map legend + unmapped warning (top-right, above bottom sheet) */}
         <div className="leaflet-top leaflet-right m-3 flex max-w-xs flex-col items-end gap-2">
-          <div className="leaflet-control rounded-lg bg-white p-3 shadow-lg">
+          <div className="leaflet-control hidden rounded-lg bg-white p-3 shadow-lg lg:block">
             <h4 className="mb-2 font-semibold">Legend</h4>
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
