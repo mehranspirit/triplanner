@@ -20,8 +20,8 @@ import MapSheetBody from '@/components/TripDetails/map/MapSheetBody';
 import MapViewSuggestPrompt from '@/components/TripDetails/map/MapViewSuggestPrompt';
 import TripTimeline, { TripTimelineHandle } from '@/components/TripDetails/timeline/TripTimeline';
 import TripDayStrip from '@/components/TripDetails/TripDayStrip';
-import TripDetailsTabs from '@/components/TripDetails/TripDetailsTabs';
 import TripCalendarView from '@/components/TripDetails/TripCalendarView';
+import { TripDetailsView } from '@/types/tripDetailsViewTypes';
 import TravelImportDialog, { ImportInboxFilter } from '@/components/TripDetails/imports/TravelImportDialog';
 import { getTripContextSignals } from '@/components/TripDetails/context/getTripContextSignals';
 import { ProactiveContextCard as ProactiveContextCardData, ProactiveContextCardType } from '@/components/TripDetails/context/tripContextTypes';
@@ -174,6 +174,15 @@ const NewTripDetails: React.FC = () => {
     if (next) closePanel();
     setMapView(next);
   }, [closePanel, setMapView]);
+
+  const handleDetailsViewChange = useCallback((view: TripDetailsView) => {
+    if (view === 'map') {
+      handleSetMapView(true);
+      return;
+    }
+    handleSetMapView(false);
+    setDetailsTab(view);
+  }, [handleSetMapView, setDetailsTab]);
 
   const [showMapSuggest, setShowMapSuggest] = useState(false);
   const [notifications, setNotifications] = useState<TripNotification[]>([]);
@@ -1514,6 +1523,7 @@ const NewTripDetails: React.FC = () => {
             return Promise.reject(error);
           }
         }}
+        onOpenExpenses={() => navigate(`/trips/${trip._id}/expenses`)}
       />
 
       <TripDetailsToolbar
@@ -1540,22 +1550,9 @@ const NewTripDetails: React.FC = () => {
           fetchNotifications();
         }}
         onCondensedViewChange={setIsCondensedView}
-        isMapView={isMapView}
-        onMapViewChange={handleSetMapView}
+        activeView={detailsTab}
+        onViewChange={handleDetailsViewChange}
       />
-
-      <TripDetailsTabs
-        activeTab={detailsTab}
-        onTabChange={setDetailsTab}
-      />
-
-      {detailsTab === 'itinerary' && (
-        <TripDayStrip
-          days={dayStripItems}
-          activeDayKey={activeDayKey}
-          onDaySelect={handleDaySelect}
-        />
-      )}
 
       {showMapSuggest && (
         <MapViewSuggestPrompt
@@ -1572,7 +1569,7 @@ const NewTripDetails: React.FC = () => {
       )}
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-start">
-        <main className="min-w-0">
+        <main className="min-w-0 space-y-3">
           {detailsTab === 'calendar' && (
             <TripCalendarView
               events={trip.events}
@@ -1583,7 +1580,16 @@ const NewTripDetails: React.FC = () => {
             />
           )}
 
-          {detailsTab === 'itinerary' && tripTimeline}
+          {detailsTab === 'itinerary' && (
+            <>
+              <TripDayStrip
+                days={dayStripItems}
+                activeDayKey={activeDayKey}
+                onDaySelect={handleDaySelect}
+              />
+              {tripTimeline}
+            </>
+          )}
         </main>
 
         <div className="hidden space-y-4 lg:block">

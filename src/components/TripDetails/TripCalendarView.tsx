@@ -12,9 +12,9 @@ import {
 import { Event } from '@/types/eventTypes';
 import { cn } from '@/lib/utils';
 import { tripSurfaces } from '@/styles/tripSurfaces';
-import { getEventDisplayName, getEventStart, sortEventsByStart } from '@/utils/eventTime';
+import { getEventStart, sortEventsByStart } from '@/utils/eventTime';
 import { getEventTimelineDateKeys, isTimelineDateToday } from '@/utils/timelineDates';
-import EventStatusChip from '@/components/TripDetails/EventCards/EventStatusChip';
+import { CalendarDayMultidayMarkers, CalendarEventCell, partitionCalendarDayEvents } from '@/components/TripDetails/calendar/MultidayCalendarEvent';
 
 interface TripCalendarViewProps {
   events: Event[];
@@ -153,6 +153,7 @@ const TripCalendarView: React.FC<TripCalendarViewProps> = ({
                     const dateKey = format(day, 'yyyy-MM-dd');
                     const inRange = day >= rangeStart && day <= rangeEnd;
                     const dayEvents = eventsByDate.get(dateKey) ?? [];
+                    const { headerEvent, headerMultidayEvents, listEvents } = partitionCalendarDayEvents(dayEvents, dateKey);
                     const isToday = isTimelineDateToday(dateKey);
 
                     return (
@@ -168,12 +169,23 @@ const TripCalendarView: React.FC<TripCalendarViewProps> = ({
                         )}
                       >
                         <div className="mb-2 flex items-center justify-between gap-1">
-                          <span className={cn(
-                            'text-sm font-semibold',
-                            inRange ? 'text-slate-950' : 'text-slate-400',
-                          )}>
-                            {format(day, 'd')}
-                          </span>
+                          <div className="flex min-w-0 items-center gap-1">
+                            <span className={cn(
+                              'text-sm font-semibold',
+                              inRange ? 'text-slate-950' : 'text-slate-400',
+                            )}>
+                              {format(day, 'd')}
+                            </span>
+                            {inRange && headerEvent && (
+                              <CalendarDayMultidayMarkers
+                                headerEvent={headerEvent}
+                                allMultidayEvents={headerMultidayEvents}
+                                dateKey={dateKey}
+                                selectedEventId={selectedEventId}
+                                onSelect={onEventSelect}
+                              />
+                            )}
+                          </div>
                           {isToday && inRange && (
                             <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800">
                               Today
@@ -181,31 +193,20 @@ const TripCalendarView: React.FC<TripCalendarViewProps> = ({
                           )}
                         </div>
 
-                        {inRange && (
+                        {inRange && listEvents.length > 0 && (
                           <div className="space-y-1.5">
-                            {dayEvents.slice(0, 3).map((event) => (
-                              <button
+                            {listEvents.slice(0, 3).map((event) => (
+                              <CalendarEventCell
                                 key={event.id}
-                                type="button"
-                                className={cn(
-                                  'w-full rounded-xl border px-2 py-1.5 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/80',
-                                  selectedEventId === event.id
-                                    ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200'
-                                    : 'border-slate-200 bg-slate-50/80',
-                                )}
-                                onClick={() => onEventSelect(event)}
-                              >
-                                <p className="truncate text-xs font-semibold text-slate-950">
-                                  {getEventDisplayName(event)}
-                                </p>
-                                <div className="mt-1">
-                                  <EventStatusChip event={event} />
-                                </div>
-                              </button>
+                                event={event}
+                                dateKey={dateKey}
+                                selected={selectedEventId === event.id}
+                                onSelect={() => onEventSelect(event)}
+                              />
                             ))}
-                            {dayEvents.length > 3 && (
+                            {listEvents.length > 3 && (
                               <p className="px-1 text-[11px] font-medium text-slate-500">
-                                +{dayEvents.length - 3} more
+                                +{listEvents.length - 3} more
                               </p>
                             )}
                           </div>

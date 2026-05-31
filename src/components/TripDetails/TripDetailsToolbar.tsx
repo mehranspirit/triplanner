@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { Bell, CalendarDays, CheckSquare, ClipboardList, CreditCard, FileText, LayoutList, Map as MapIconLucide, MapIcon, MapPin, Plus, Sparkles, Users, Wand2 } from 'lucide-react';
+import { Bell, CalendarDays, CheckSquare, ClipboardList, CreditCard, FileText, LayoutList, Map as MapIconLucide, MapIcon, MapPin, Plus, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,10 +14,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { EVENT_TYPES } from '@/eventTypes/registry';
 import { EventType } from '@/types/eventTypes';
+import { TripDetailsView } from '@/types/tripDetailsViewTypes';
 import { cn } from '@/lib/utils';
 import { tripSurfaces } from '@/styles/tripSurfaces';
 import { TripPanel } from './hooks/useTripPanelManager';
@@ -27,6 +27,7 @@ interface TripDetailsToolbarProps {
   canEdit: boolean;
   addableEventTypes: EventType[];
   activePanel: TripPanel | null;
+  activeView: TripDetailsView;
   unreadNotificationCount: number;
   isCondensedView: boolean;
   isImprovingLocations: boolean;
@@ -39,9 +40,18 @@ interface TripDetailsToolbarProps {
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
   onCondensedViewChange: (value: boolean) => void;
-  isMapView?: boolean;
-  onMapViewChange?: (isMapView: boolean) => void;
+  onViewChange: (view: TripDetailsView) => void;
 }
+
+const VIEW_OPTIONS: Array<{
+  id: TripDetailsView;
+  label: string;
+  icon: React.ReactNode;
+}> = [
+  { id: 'itinerary', label: 'Itinerary', icon: <LayoutList className="h-3.5 w-3.5" /> },
+  { id: 'calendar', label: 'Calendar', icon: <CalendarDays className="h-3.5 w-3.5" /> },
+  { id: 'map', label: 'Map', icon: <MapIconLucide className="h-3.5 w-3.5" /> },
+];
 
 const eventIconForType = (type: EventType) => {
   if (type === 'flight') return <FaPlane className="mr-2 h-4 w-4 text-blue-500" />;
@@ -61,6 +71,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   canEdit,
   addableEventTypes,
   activePanel,
+  activeView,
   unreadNotificationCount,
   isCondensedView,
   isImprovingLocations,
@@ -73,8 +84,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
   onOpenPanel,
   onOpenNotifications,
   onCondensedViewChange,
-  isMapView = false,
-  onMapViewChange,
+  onViewChange,
 }) => {
   const navigate = useNavigate();
   const showLocationProgress = mapLocationProgress
@@ -83,7 +93,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
 
   return (
     <div className={cn(tripSurfaces.float, 'sticky top-0 z-40 p-2 lg:rounded-3xl lg:p-3')}>
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
+      <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           {canEdit && (
             <DropdownMenu>
@@ -132,7 +142,7 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                 variant="outline"
                 className={cn(
                   'h-9 flex-1 rounded-full border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 sm:h-10 sm:flex-none sm:px-4',
-                  activePanel && 'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-50'
+                  activePanel && 'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-50',
                 )}
               >
                 <Wand2 className="mr-2 h-4 w-4 shrink-0 text-teal-500" />
@@ -193,9 +203,9 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                   </DropdownMenuItem>
                 </>
               )}
-              <DropdownMenuItem onClick={() => onOpenPanel('map')}>
+              <DropdownMenuItem onClick={() => onViewChange('map')}>
                 <MapIcon className="mr-2 h-4 w-4 text-blue-500" />
-                Map
+                Map view
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Money</DropdownMenuLabel>
@@ -204,9 +214,9 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                 Expenses and settlements
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel className="lg:hidden">View</DropdownMenuLabel>
+              <DropdownMenuLabel>View</DropdownMenuLabel>
               <DropdownMenuItem
-                className="flex items-center justify-between lg:hidden"
+                className="flex items-center justify-between"
                 onSelect={(event) => event.preventDefault()}
               >
                 <span>Condensed timeline</span>
@@ -216,74 +226,58 @@ const TripDetailsToolbar: React.FC<TripDetailsToolbarProps> = ({
                   aria-label="Condensed timeline"
                 />
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="lg:hidden" />
+              <DropdownMenuSeparator />
               <DropdownMenuLabel>Trip</DropdownMenuLabel>
               <DropdownMenuItem disabled>
-                <Users className="mr-2 h-4 w-4 text-slate-500" />
                 Collaborators, export, and trip settings are in the header menu
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {showLocationProgress && (
+            canEdit ? (
+              <button
+                type="button"
+                className="ml-auto hidden items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50/90 px-3 py-1.5 text-xs font-medium text-teal-900 shadow-sm transition-colors hover:bg-teal-100 sm:inline-flex sm:text-sm"
+                onClick={onImproveLocations}
+                disabled={isImprovingLocations}
+              >
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+                {isImprovingLocations
+                  ? (improveLocationsLabel || 'Reviewing...')
+                  : `${mapLocationProgress.geocoded}/${mapLocationProgress.total} on map`}
+              </button>
+            ) : (
+              <span className="ml-auto hidden items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 sm:inline-flex sm:text-sm">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                {`${mapLocationProgress.geocoded}/${mapLocationProgress.total} on map`}
+              </span>
+            )
+          )}
         </div>
 
-        {onMapViewChange && (
-          <div className={cn('inline-flex w-full sm:w-auto', tripSurfaces.segmentTrack)}>
+        <nav
+          aria-label="Trip views"
+          className={cn('flex w-full', tripSurfaces.segmentTrack)}
+        >
+          {VIEW_OPTIONS.map((view) => (
             <button
+              key={view.id}
               type="button"
+              aria-current={activeView === view.id ? 'page' : undefined}
               className={cn(
-                'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm',
-                !isMapView ? tripSurfaces.segmentActive : 'text-slate-600 hover:text-slate-900',
+                'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm',
+                activeView === view.id
+                  ? tripSurfaces.segmentActive
+                  : 'text-slate-600 hover:text-slate-900',
               )}
-              onClick={() => onMapViewChange(false)}
+              onClick={() => onViewChange(view.id)}
             >
-              <LayoutList className="h-3.5 w-3.5" />
-              Standard
+              {view.icon}
+              {view.label}
             </button>
-            <button
-              type="button"
-              className={cn(
-                'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-4 sm:text-sm',
-                isMapView ? tripSurfaces.segmentActive : 'text-slate-600 hover:text-slate-900',
-              )}
-              onClick={() => onMapViewChange(true)}
-            >
-              <MapIconLucide className="h-3.5 w-3.5" />
-              Map
-            </button>
-          </div>
-        )}
-
-        {showLocationProgress && (
-          canEdit ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50/90 px-3 py-1.5 text-xs font-medium text-teal-900 shadow-sm transition-colors hover:bg-teal-100 sm:text-sm"
-              onClick={onImproveLocations}
-              disabled={isImprovingLocations}
-            >
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-teal-600" />
-              {isImprovingLocations
-                ? (improveLocationsLabel || 'Reviewing...')
-                : `${mapLocationProgress.geocoded}/${mapLocationProgress.total} on map`}
-            </button>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 sm:text-sm">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-              {`${mapLocationProgress.geocoded}/${mapLocationProgress.total} on map`}
-            </span>
-          )
-        )}
-
-        <div className="hidden items-center justify-between gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 lg:flex lg:justify-end">
-          <Label htmlFor="condensed-view" className="cursor-pointer text-sm font-medium text-slate-700">
-            Condensed
-          </Label>
-          <Switch
-            id="condensed-view"
-            checked={isCondensedView}
-            onCheckedChange={onCondensedViewChange}
-          />
-        </div>
+          ))}
+        </nav>
       </div>
     </div>
   );
