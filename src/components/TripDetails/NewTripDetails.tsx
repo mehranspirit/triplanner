@@ -1623,7 +1623,8 @@ const NewTripDetails: React.FC = () => {
     || isAddDecisionOptionOpen
     || isReviewUnresolvedOpen
     || locationConfirmQueue.open
-    || Boolean(activeDecisionId);
+    || Boolean(activeDecisionId)
+    || Boolean(detailEventId);
 
   const tripTimeline = (
     <TripTimeline
@@ -1929,6 +1930,7 @@ const NewTripDetails: React.FC = () => {
         canEdit={canEdit}
         addableEventTypes={addableEventTypes}
         activePanel={activePanel}
+        hidden={isL4ModalOpen}
         unreadNotificationCount={unreadNotificationCount}
         isImprovingLocations={locationConfirmQueue.open}
         improveLocationsLabel={

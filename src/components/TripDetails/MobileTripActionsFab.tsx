@@ -49,6 +49,7 @@ interface MobileTripActionsFabProps {
   onOpenNotifications: () => void;
   onViewChange: (view: TripDetailsView) => void;
   onClosePanel: () => void;
+  hidden?: boolean;
 }
 
 const actionShellClass = 'flex items-center gap-2 rounded-full shadow-lg transition-transform';
@@ -80,6 +81,7 @@ const MobileTripActionsFab: React.FC<MobileTripActionsFabProps> = ({
   onOpenNotifications,
   onViewChange,
   onClosePanel,
+  hidden = false,
 }) => {
   const navigate = useNavigate();
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
@@ -89,6 +91,10 @@ const MobileTripActionsFab: React.FC<MobileTripActionsFabProps> = ({
     setSpeedDialOpen(false);
     setFabMenuOpen(false);
   };
+
+  if (hidden) {
+    return null;
+  }
 
   const handleOpenPanel = (panel: TripPanel) => {
     closeSpeedDial();

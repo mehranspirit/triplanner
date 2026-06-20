@@ -215,7 +215,7 @@ const EventDetailSheet: React.FC<EventDetailSheetProps> = ({
         </div>
 
         {canEdit && (onEdit || overflowActions.length > 0) && (
-          <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50/80 px-5 py-3">
+          <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50/80 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {onEdit && (
               <Button
                 type="button"
