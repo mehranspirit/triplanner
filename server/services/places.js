@@ -1,11 +1,62 @@
 const fetch = require('node-fetch');
 const logger = require('../utils/logger');
+const { formatOpeningHours, buildPlaceContactInfo } = require('./placesFormatting');
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const PLACES_AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
+const AUTOCOMPLETE_FIELD_MASK = [
+  'suggestions.placePrediction.placeId',
+  'suggestions.placePrediction.text.text',
+  'suggestions.placePrediction.structuredFormat.mainText.text',
+  'suggestions.placePrediction.structuredFormat.secondaryText.text',
+  'suggestions.placePrediction.types',
+].join(',');
+const PLACE_DETAILS_FIELD_MASK = [
+  'id',
+  'displayName',
+  'formattedAddress',
+  'location',
+  'types',
+  'websiteUri',
+  'nationalPhoneNumber',
+  'internationalPhoneNumber',
+  'regularOpeningHours',
+].join(',');
 
 const summarizeInput = (input) => {
   const text = String(input).trim();
   return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+};
+
+const buildGoogleHeaders = (fieldMask) => ({
+  'Content-Type': 'application/json',
+  'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+  'X-Goog-FieldMask': fieldMask,
+});
+
+const mapPlaceDetails = (place) => {
+  const lat = Number(place.location?.latitude);
+  const lng = Number(place.location?.longitude);
+
+  if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    return null;
+  }
+
+  const openingHours = formatOpeningHours(place.regularOpeningHours);
+  const website = place.websiteUri || undefined;
+  const contactInfo = buildPlaceContactInfo(place);
+
+  return {
+    placeId: place.id,
+    name: place.displayName?.text || '',
+    formattedAddress: place.formattedAddress || '',
+    lat,
+    lng,
+    types: place.types || [],
+    website,
+    openingHours,
+    contactInfo,
+  };
 };
 
 const autocompletePlaces = async (input, options = {}) => {
@@ -19,50 +70,66 @@ const autocompletePlaces = async (input, options = {}) => {
     return [];
   }
 
-  const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
-  url.searchParams.set('input', trimmedInput);
-  url.searchParams.set('key', GOOGLE_MAPS_API_KEY);
+  const body = { input: trimmedInput };
+  const sessionToken = String(options.sessionToken || '').trim();
+  if (sessionToken) {
+    body.sessionToken = sessionToken;
+  }
 
   const lat = Number(options.lat);
   const lng = Number(options.lng);
   if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
-    url.searchParams.set('location', `${lat},${lng}`);
-    url.searchParams.set('radius', String(options.radius || 50000));
+    body.locationBias = {
+      circle: {
+        center: {
+          latitude: lat,
+          longitude: lng,
+        },
+        radius: Number(options.radius) || 50000,
+      },
+    };
   }
 
-  logger.info('Places autocomplete request', { input: summarizeInput(trimmedInput) });
+  logger.info('Places autocomplete request', {
+    input: summarizeInput(trimmedInput),
+    hasSessionToken: Boolean(sessionToken),
+  });
 
-  const response = await fetch(url.toString());
+  const response = await fetch(PLACES_AUTOCOMPLETE_URL, {
+    method: 'POST',
+    headers: buildGoogleHeaders(AUTOCOMPLETE_FIELD_MASK),
+    body: JSON.stringify(body),
+  });
+
   if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
     logger.warn('Places autocomplete HTTP error', {
       input: summarizeInput(trimmedInput),
       status: response.status,
+      errorBody: errorBody.slice(0, 300),
     });
     return [];
   }
 
   const data = await response.json();
-  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-    logger.warn('Places autocomplete failed', {
-      input: summarizeInput(trimmedInput),
-      status: data.status,
-      errorMessage: data.error_message,
-    });
-    return [];
-  }
+  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
 
-  const predictions = Array.isArray(data.predictions) ? data.predictions : [];
-
-  return predictions.slice(0, 8).map((prediction) => ({
-    placeId: prediction.place_id,
-    description: prediction.description,
-    mainText: prediction.structured_formatting?.main_text || prediction.description,
-    secondaryText: prediction.structured_formatting?.secondary_text || '',
-    types: prediction.types || [],
-  }));
+  return suggestions
+    .map((suggestion) => suggestion.placePrediction)
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((prediction) => ({
+      placeId: prediction.placeId,
+      description: prediction.text?.text || '',
+      mainText: prediction.structuredFormat?.mainText?.text
+        || prediction.text?.text
+        || '',
+      secondaryText: prediction.structuredFormat?.secondaryText?.text || '',
+      types: prediction.types || [],
+    }));
 };
 
-const getPlaceDetails = async (placeId) => {
+const getPlaceDetails = async (placeId, options = {}) => {
   const normalizedPlaceId = String(placeId || '').trim();
   if (!normalizedPlaceId) {
     return null;
@@ -73,54 +140,38 @@ const getPlaceDetails = async (placeId) => {
     return null;
   }
 
-  const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-  url.searchParams.set('place_id', normalizedPlaceId);
-  url.searchParams.set(
-    'fields',
-    'place_id,name,formatted_address,geometry,types',
-  );
-  url.searchParams.set('key', GOOGLE_MAPS_API_KEY);
+  const sessionToken = String(options.sessionToken || '').trim();
+  const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(normalizedPlaceId)}`);
+  if (sessionToken) {
+    url.searchParams.set('sessionToken', sessionToken);
+  }
 
-  logger.info('Place details request', { placeId: normalizedPlaceId });
+  logger.info('Place details request', {
+    placeId: normalizedPlaceId,
+    hasSessionToken: Boolean(sessionToken),
+  });
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: buildGoogleHeaders(PLACE_DETAILS_FIELD_MASK),
+  });
+
   if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
     logger.warn('Place details HTTP error', {
       placeId: normalizedPlaceId,
       status: response.status,
+      errorBody: errorBody.slice(0, 300),
     });
     return null;
   }
 
-  const data = await response.json();
-  if (data.status !== 'OK' || !data.result) {
-    logger.warn('Place details failed', {
-      placeId: normalizedPlaceId,
-      status: data.status,
-      errorMessage: data.error_message,
-    });
-    return null;
-  }
-
-  const { result } = data;
-  const lat = Number(result.geometry?.location?.lat);
-  const lng = Number(result.geometry?.location?.lng);
-
-  if (Number.isNaN(lat) || Number.isNaN(lng)) {
-    return null;
-  }
-
-  return {
-    placeId: result.place_id,
-    name: result.name,
-    formattedAddress: result.formatted_address,
-    lat,
-    lng,
-    types: result.types || [],
-  };
+  const place = await response.json();
+  return mapPlaceDetails(place);
 };
 
 module.exports = {
   autocompletePlaces,
   getPlaceDetails,
+  mapPlaceDetails,
 };

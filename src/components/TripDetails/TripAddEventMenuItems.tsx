@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaBus, FaCar, FaHotel, FaMapMarkerAlt, FaMountain, FaPlane, FaTrain } from 'react-icons/fa';
-import { Plus, Sparkles } from 'lucide-react';
+import { MapPin, Plus, Sparkles } from 'lucide-react';
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -29,6 +29,7 @@ export interface TripAddEventMenuItemsProps {
   addableEventTypes: EventType[];
   onOpenAIImport: () => void;
   onOpenExploreSuggestions: () => void;
+  onOpenPlaceSearch?: () => void;
   onAddEvent: (eventType: EventType) => void;
   manualEntrySubContentClassName?: string;
   onSelect?: () => void;
@@ -38,6 +39,7 @@ const TripAddEventMenuItems: React.FC<TripAddEventMenuItemsProps> = ({
   addableEventTypes,
   onOpenAIImport,
   onOpenExploreSuggestions,
+  onOpenPlaceSearch,
   onAddEvent,
   manualEntrySubContentClassName,
   onSelect,
@@ -58,6 +60,12 @@ const TripAddEventMenuItems: React.FC<TripAddEventMenuItemsProps> = ({
         <Sparkles className="mr-2 h-4 w-4 text-amber-500" />
         Suggest activities with AI
       </DropdownMenuItem>
+      {onOpenPlaceSearch && (
+        <DropdownMenuItem onClick={wrap(onOpenPlaceSearch)} className="font-medium">
+          <MapPin className="mr-2 h-4 w-4 text-teal-600" />
+          Search a place
+        </DropdownMenuItem>
+      )}
       <DropdownMenuSeparator />
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>

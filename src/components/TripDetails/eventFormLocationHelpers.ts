@@ -22,6 +22,38 @@ export const applyPickedLocationToForm = (
   form.setValue('address', picked.address, { shouldDirty: true });
   form.setValue('location', buildEndpointLocationFromPick(picked), { shouldDirty: true });
   form.setValue('source', 'google_places', { shouldDirty: true });
+
+  if (picked.contactInfo) {
+    form.setValue('contactInfo', picked.contactInfo, { shouldDirty: true });
+  }
+
+  const eventType = form.getValues('type');
+  if (picked.openingHours && eventType === 'destination') {
+    form.setValue('openingHours', picked.openingHours, { shouldDirty: true });
+  } else if (picked.openingHours && eventType === 'activity') {
+    const existingNotes = String(form.getValues('notes') || '').trim();
+    const hoursBlock = picked.openingHours.startsWith('Hours')
+      ? picked.openingHours
+      : `Hours:\n${picked.openingHours}`;
+    if (!existingNotes.includes(picked.openingHours)) {
+      form.setValue(
+        'notes',
+        existingNotes ? `${existingNotes}\n\n${hoursBlock}` : hoursBlock,
+        { shouldDirty: true },
+      );
+    }
+  }
+
+  if (picked.website && eventType === 'activity' && !picked.contactInfo?.includes(picked.website)) {
+    const existingDescription = String(form.getValues('description') || '').trim();
+    if (!existingDescription.includes(picked.website)) {
+      form.setValue(
+        'description',
+        existingDescription ? `${existingDescription}\n${picked.website}` : picked.website,
+        { shouldDirty: true },
+      );
+    }
+  }
 };
 
 export const applyPickedTransportLocationToForm = (

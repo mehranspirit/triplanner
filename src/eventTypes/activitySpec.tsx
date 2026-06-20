@@ -62,6 +62,7 @@ export const activityEventSchema = z.object({
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
   address: z.string().optional(),
   description: z.string().optional(),
+  contactInfo: z.string().optional(),
   cost: z.preprocess(
     (val) => val === '' || val === undefined ? undefined : Number(val),
     z.number().min(0, { message: "Cost must be a positive number" }).optional()

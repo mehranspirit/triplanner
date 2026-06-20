@@ -60,6 +60,8 @@ export const destinationEventSchema = z.object({
   source: z.enum(['manual', 'google_places', 'google_flights', 'booking.com', 'airbnb', 'expedia', 'tripadvisor', 'other']).optional(),
   address: z.string().optional(),
   description: z.string().optional(),
+  contactInfo: z.string().optional(),
+  openingHours: z.string().optional(),
 }).refine(data => {
   const startString = `${data.startDate}T${data.startTime}`;
   const endString = `${data.endDate}T${data.endTime}`;

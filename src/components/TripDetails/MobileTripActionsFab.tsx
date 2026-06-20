@@ -43,6 +43,7 @@ interface MobileTripActionsFabProps {
   onOpenAIImport: () => void;
   onAddEvent: (eventType: EventType) => void;
   onOpenExploreSuggestions: () => void;
+  onOpenPlaceSearch?: () => void;
   onImproveLocations: () => void;
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
@@ -73,6 +74,7 @@ const MobileTripActionsFab: React.FC<MobileTripActionsFabProps> = ({
   onOpenAIImport,
   onAddEvent,
   onOpenExploreSuggestions,
+  onOpenPlaceSearch,
   onImproveLocations,
   onOpenPanel,
   onOpenNotifications,
@@ -176,6 +178,7 @@ const MobileTripActionsFab: React.FC<MobileTripActionsFabProps> = ({
                   addableEventTypes={addableEventTypes}
                   onOpenAIImport={onOpenAIImport}
                   onOpenExploreSuggestions={onOpenExploreSuggestions}
+                  onOpenPlaceSearch={onOpenPlaceSearch}
                   onAddEvent={onAddEvent}
                   manualEntrySubContentClassName="z-[200]"
                   onSelect={closeSpeedDial}

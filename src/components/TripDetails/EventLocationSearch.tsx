@@ -12,8 +12,10 @@ import { api } from '@/services/api';
 import {
   PickedEventLocation,
   PlaceAutocompleteResult,
+  PlaceDetailsResult,
 } from '@/types/geocodingTypes';
 import { Event } from '@/types/eventTypes';
+import { createPlacesSessionToken } from '@/utils/placesSessionToken';
 
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -24,6 +26,9 @@ export const buildPickedEventLocation = (
     formattedAddress: string;
     placeId?: string;
     name?: string;
+    website?: string;
+    openingHours?: string;
+    contactInfo?: string;
   },
 ): PickedEventLocation => ({
   lat: details.lat,
@@ -34,6 +39,9 @@ export const buildPickedEventLocation = (
   source: 'google_places',
   quality: 'exact',
   confidence: 0.95,
+  website: details.website,
+  openingHours: details.openingHours,
+  contactInfo: details.contactInfo,
 });
 
 interface EventLocationSearchProps {
@@ -41,7 +49,7 @@ interface EventLocationSearchProps {
   currentAddress?: string;
   locationBias?: { lat: number; lng: number };
   compact?: boolean;
-  onPick: (location: PickedEventLocation) => void | Promise<void>;
+  onPick: (location: PickedEventLocation, details: PlaceDetailsResult) => void | Promise<void>;
 }
 
 const EventLocationSearch: React.FC<EventLocationSearchProps> = ({
@@ -58,6 +66,18 @@ const EventLocationSearch: React.FC<EventLocationSearchProps> = ({
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
+  const sessionTokenRef = useRef<string | null>(null);
+
+  const resetSessionToken = () => {
+    sessionTokenRef.current = null;
+  };
+
+  const ensureSessionToken = () => {
+    if (!sessionTokenRef.current) {
+      sessionTokenRef.current = createPlacesSessionToken();
+    }
+    return sessionTokenRef.current;
+  };
 
   useEffect(() => {
     setQuery(initialQuery);
@@ -73,8 +93,11 @@ const EventLocationSearch: React.FC<EventLocationSearchProps> = ({
       setResults([]);
       setLoading(false);
       setError(null);
+      resetSessionToken();
       return;
     }
+
+    const sessionToken = ensureSessionToken();
 
     setLoading(true);
     setError(null);
@@ -84,7 +107,10 @@ const EventLocationSearch: React.FC<EventLocationSearchProps> = ({
       requestIdRef.current = requestId;
 
       try {
-        const autocompleteResults = await api.placesAutocomplete(trimmed, locationBias);
+        const autocompleteResults = await api.placesAutocomplete(trimmed, {
+          ...locationBias,
+          sessionToken,
+        });
         if (requestIdRef.current !== requestId) {
           return;
         }
@@ -117,10 +143,17 @@ const EventLocationSearch: React.FC<EventLocationSearchProps> = ({
     setApplyingPlaceId(result.placeId);
     setError(null);
 
+    const sessionToken = sessionTokenRef.current;
+    if (!sessionToken) {
+      setError('Search session expired. Try typing again.');
+      return;
+    }
+
     try {
-      const details = await api.placeDetails(result.placeId);
+      const details = await api.placeDetails(result.placeId, sessionToken);
       const picked = buildPickedEventLocation(details);
-      await onPick(picked);
+      await onPick(picked, details);
+      resetSessionToken();
       setQuery(picked.address);
       setResults([]);
     } catch (selectError) {

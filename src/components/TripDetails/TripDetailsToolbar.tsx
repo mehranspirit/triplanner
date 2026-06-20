@@ -21,6 +21,7 @@ interface TripDetailsToolbarProps {
   onOpenAIImport: () => void;
   onAddEvent: (eventType: EventType) => void;
   onOpenExploreSuggestions: () => void;
+  onOpenPlaceSearch?: () => void;
   onImproveLocations: () => void;
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
@@ -51,6 +52,7 @@ const TripDetailsToolbar = forwardRef<HTMLDivElement, TripDetailsToolbarProps>(f
   onOpenAIImport,
   onAddEvent,
   onOpenExploreSuggestions,
+  onOpenPlaceSearch,
   onImproveLocations,
   onOpenPanel,
   onOpenNotifications,
@@ -83,6 +85,7 @@ const TripDetailsToolbar = forwardRef<HTMLDivElement, TripDetailsToolbarProps>(f
             onOpenAIImport={onOpenAIImport}
             onAddEvent={onAddEvent}
             onOpenExploreSuggestions={onOpenExploreSuggestions}
+            onOpenPlaceSearch={onOpenPlaceSearch}
             onImproveLocations={onImproveLocations}
             onOpenPanel={onOpenPanel}
             onOpenNotifications={onOpenNotifications}

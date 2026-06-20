@@ -66,6 +66,7 @@ interface TripTimelineProps {
   onAddEvent?: (eventType: EventType) => void;
   onOpenAIImport?: () => void;
   onOpenExploreSuggestions?: () => void;
+  onOpenPlaceSearch?: () => void;
   dayFilterKey?: string;
   selectedEventId?: string | null;
   timelineTransferLegs?: TimelineTransferLeg[];
@@ -169,6 +170,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
   onAddEvent,
   onOpenAIImport,
   onOpenExploreSuggestions,
+  onOpenPlaceSearch,
   dayFilterKey = ALL_DAYS_FILTER_KEY,
   selectedEventId,
   timelineTransferLegs = [],
@@ -417,6 +419,7 @@ const TripTimeline = forwardRef<TripTimelineHandle, TripTimelineProps>(function 
                   addableEventTypes={addableEventTypes}
                   onOpenAIImport={onOpenAIImport!}
                   onOpenExploreSuggestions={onOpenExploreSuggestions!}
+                  onOpenPlaceSearch={onOpenPlaceSearch}
                   onAddEvent={onAddEvent!}
                 />
               </DropdownMenuContent>

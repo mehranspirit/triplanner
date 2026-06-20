@@ -42,6 +42,7 @@ export interface TripToolbarActionMenusProps {
   onOpenAIImport: () => void;
   onAddEvent: (eventType: EventType) => void;
   onOpenExploreSuggestions: () => void;
+  onOpenPlaceSearch?: () => void;
   onImproveLocations: () => void;
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;
@@ -61,6 +62,7 @@ const TripToolbarActionMenus: React.FC<TripToolbarActionMenusProps> = ({
   onOpenAIImport,
   onAddEvent,
   onOpenExploreSuggestions,
+  onOpenPlaceSearch,
   onImproveLocations,
   onOpenPanel,
   onOpenNotifications,
@@ -84,6 +86,7 @@ const TripToolbarActionMenus: React.FC<TripToolbarActionMenusProps> = ({
               addableEventTypes={addableEventTypes}
               onOpenAIImport={onOpenAIImport}
               onOpenExploreSuggestions={onOpenExploreSuggestions}
+              onOpenPlaceSearch={onOpenPlaceSearch}
               onAddEvent={onAddEvent}
             />
           </DropdownMenuContent>

@@ -75,6 +75,7 @@ const ToolsMenuSheet: React.FC<ToolsMenuSheetProps> = ({
   onOpenAIImport,
   onAddEvent,
   onOpenExploreSuggestions,
+  onOpenPlaceSearch,
   onImproveLocations,
   onOpenPanel,
   onOpenNotifications,
@@ -129,6 +130,13 @@ const ToolsMenuSheet: React.FC<ToolsMenuSheetProps> = ({
                 label="Suggest activities with AI"
                 onClick={() => closeAndRun(onOpenExploreSuggestions)}
               />
+              {onOpenPlaceSearch && (
+                <MenuItem
+                  icon={<MapPin className="h-4 w-4 text-teal-600" />}
+                  label="Search a place"
+                  onClick={() => closeAndRun(onOpenPlaceSearch)}
+                />
+              )}
               {addableEventTypes.map((type) => {
                 const eventType = EVENT_TYPES[type];
                 if (!eventType) return null;

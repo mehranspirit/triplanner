@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'; // Assuming Shadcn UI Button
 import { Event, EventType, Trip } from '@/types/eventTypes'; // Import EventType
 import { cn } from '@/lib/utils';
 import ExploreSuggestionsModal from '@/components/TripDetails/ExploreSuggestionsModal';
+import PlaceAddEventDialog from '@/components/TripDetails/PlaceAddEventDialog';
 import ReviewUnresolvedLocationsDialog from '@/components/TripDetails/ReviewUnresolvedLocationsDialog';
 import LocationConfirmDialog from '@/components/TripDetails/LocationConfirmDialog';
 import { useLocationConfirmQueue } from '@/components/TripDetails/hooks/useLocationConfirmQueue';
@@ -290,6 +291,7 @@ const NewTripDetails: React.FC = () => {
   const [deletingEvents, setDeletingEvents] = useState<Set<string>>(new Set());
   const [isReviewUnresolvedOpen, setIsReviewUnresolvedOpen] = useState(false);
   const [isExploreSuggestionsOpen, setIsExploreSuggestionsOpen] = useState(false);
+  const [isPlaceAddOpen, setIsPlaceAddOpen] = useState(false);
   const [exploreScope, setExploreScope] = useState<ExploreScope | null>(null);
   const [activeDecisionId, setActiveDecisionId] = useState<string | null>(null);
   const [isCreateDecisionOpen, setIsCreateDecisionOpen] = useState(false);
@@ -1272,6 +1274,22 @@ const NewTripDetails: React.FC = () => {
     setExploreScope(null);
   };
 
+  const handleAddPlaceEvent = async (
+    eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'>,
+  ) => {
+    const newEvent = await addEvent(eventData);
+    if (newEvent) {
+      locationConfirmQueue.enqueue({
+        event: newEvent,
+        previousEvent: null,
+      });
+
+      if (trip) {
+        trip.events = [...trip.events, newEvent];
+      }
+    }
+  };
+
   const handleSaveEvent = async (eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt' | 'updatedBy' | 'likes' | 'dislikes'> | Event) => {
     try {
     if ('id' in eventData && editingEvent && eventData.id === editingEvent.id) {
@@ -1600,6 +1618,7 @@ const NewTripDetails: React.FC = () => {
   const isL4ModalOpen = isAIParseModalOpen
     || Boolean(modalType)
     || isExploreSuggestionsOpen
+    || isPlaceAddOpen
     || isCreateDecisionOpen
     || isAddDecisionOptionOpen
     || isReviewUnresolvedOpen
@@ -1632,6 +1651,7 @@ const NewTripDetails: React.FC = () => {
       onAddEvent={canEdit ? handleAddEventClick : undefined}
       onOpenAIImport={canEdit ? () => setIsAIParseModalOpen(true) : undefined}
       onOpenExploreSuggestions={canEdit ? () => setIsExploreSuggestionsOpen(true) : undefined}
+      onOpenPlaceSearch={canEdit ? () => setIsPlaceAddOpen(true) : undefined}
       addableEventTypes={addableEventTypes}
       dayFilterKey={activeDayKey}
       selectedEventId={selectedEventId}
@@ -1666,6 +1686,7 @@ const NewTripDetails: React.FC = () => {
       onAddEvent={canEdit ? handleAddEventClick : undefined}
       onOpenAIImport={canEdit ? () => setIsAIParseModalOpen(true) : undefined}
       onOpenExploreSuggestions={canEdit ? () => setIsExploreSuggestionsOpen(true) : undefined}
+      onOpenPlaceSearch={canEdit ? () => setIsPlaceAddOpen(true) : undefined}
       addableEventTypes={addableEventTypes}
       dayFilterKey={ALL_DAYS_FILTER_KEY}
       selectedEventId={selectedEventId}
@@ -1756,6 +1777,7 @@ const NewTripDetails: React.FC = () => {
             onOpenAIImport: () => setIsAIParseModalOpen(true),
             onAddEvent: handleAddEventClick,
             onOpenExploreSuggestions: () => setIsExploreSuggestionsOpen(true),
+            onOpenPlaceSearch: () => setIsPlaceAddOpen(true),
             onImproveLocations: handleImproveLocations,
             onOpenPanel: handleOpenPanelForMap,
             onOpenNotifications: () => {
@@ -1811,6 +1833,7 @@ const NewTripDetails: React.FC = () => {
         onOpenAIImport={() => setIsAIParseModalOpen(true)}
         onAddEvent={handleAddEventClick}
         onOpenExploreSuggestions={() => setIsExploreSuggestionsOpen(true)}
+        onOpenPlaceSearch={() => setIsPlaceAddOpen(true)}
         onImproveLocations={handleImproveLocations}
         onOpenPanel={openPanel}
         onOpenNotifications={() => {
@@ -1918,6 +1941,7 @@ const NewTripDetails: React.FC = () => {
         onOpenAIImport={() => setIsAIParseModalOpen(true)}
         onAddEvent={handleAddEventClick}
         onOpenExploreSuggestions={() => setIsExploreSuggestionsOpen(true)}
+        onOpenPlaceSearch={() => setIsPlaceAddOpen(true)}
         onImproveLocations={handleImproveLocations}
         onOpenPanel={showMapView ? handleOpenPanelForMap : openPanel}
         onOpenNotifications={() => {
@@ -2056,6 +2080,16 @@ const NewTripDetails: React.FC = () => {
         <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
           {success}
         </div>
+      )}
+
+      {trip && (
+        <PlaceAddEventDialog
+          open={isPlaceAddOpen}
+          onOpenChange={setIsPlaceAddOpen}
+          trip={trip}
+          activeDayKey={activeDayKey}
+          onAdd={handleAddPlaceEvent}
+        />
       )}
 
       {trip && (

@@ -13,6 +13,7 @@ export interface ToolsMenuSheetProps {
   onOpenAIImport: () => void;
   onAddEvent: (eventType: EventType) => void;
   onOpenExploreSuggestions: () => void;
+  onOpenPlaceSearch?: () => void;
   onImproveLocations: () => void;
   onOpenPanel: (panel: TripPanel) => void;
   onOpenNotifications: () => void;

@@ -13,7 +13,9 @@ router.get('/places/autocomplete', auth, async (req, res) => {
     const lat = req.query.lat !== undefined ? Number(req.query.lat) : undefined;
     const lng = req.query.lng !== undefined ? Number(req.query.lng) : undefined;
 
-    const results = await autocompletePlaces(input, { lat, lng });
+    const sessionToken = String(req.query.sessionToken || '').trim() || undefined;
+
+    const results = await autocompletePlaces(input, { lat, lng, sessionToken });
     res.json({ results });
   } catch (error) {
     console.error('Error autocompleting places:', {
@@ -31,7 +33,9 @@ router.get('/places/details', auth, async (req, res) => {
       return res.status(400).json({ message: 'placeId is required' });
     }
 
-    const details = await getPlaceDetails(placeId);
+    const sessionToken = String(req.query.sessionToken || '').trim() || undefined;
+
+    const details = await getPlaceDetails(placeId, { sessionToken });
     if (!details) {
       return res.status(404).json({ message: 'Place not found' });
     }

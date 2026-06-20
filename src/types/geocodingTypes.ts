@@ -82,6 +82,9 @@ export interface PlaceDetailsResult {
   lat: number;
   lng: number;
   types: string[];
+  website?: string;
+  openingHours?: string;
+  contactInfo?: string;
 }
 
 export interface PickedEventLocation {
@@ -93,6 +96,9 @@ export interface PickedEventLocation {
   source: 'google_places';
   quality: 'exact';
   confidence: number;
+  website?: string;
+  openingHours?: string;
+  contactInfo?: string;
 }
 
 export interface GeocodeQueryAttempt {

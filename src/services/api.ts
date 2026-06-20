@@ -165,9 +165,12 @@ interface API {
   geocodeQuery: (query: string) => Promise<{ lat: number; lng: number; displayName: string; confidence?: number } | null>;
   placesAutocomplete: (
     input: string,
-    options?: { lat?: number; lng?: number },
+    options?: { lat?: number; lng?: number; sessionToken?: string },
   ) => Promise<import('@/types/geocodingTypes').PlaceAutocompleteResult[]>;
-  placeDetails: (placeId: string) => Promise<import('@/types/geocodingTypes').PlaceDetailsResult>;
+  placeDetails: (
+    placeId: string,
+    sessionToken?: string,
+  ) => Promise<import('@/types/geocodingTypes').PlaceDetailsResult>;
   getTripWeather: (tripId: string, options?: { refresh?: boolean }) => Promise<TripWeatherResponse>;
   getTripTimelineLegs: (tripId: string, options?: { refresh?: boolean }) => Promise<TripTimelineLegsResponse>;
   getTripFlightStatuses: (tripId: string, options?: { refresh?: boolean }) => Promise<TripFlightStatusesResponse>;
@@ -1451,10 +1454,11 @@ export const api: API = {
     return response.json();
   },
 
-  placesAutocomplete: async (input: string, options?: { lat?: number; lng?: number }) => {
+  placesAutocomplete: async (input: string, options?: { lat?: number; lng?: number; sessionToken?: string }) => {
     const params = new URLSearchParams({ input });
     if (options?.lat !== undefined) params.set('lat', String(options.lat));
     if (options?.lng !== undefined) params.set('lng', String(options.lng));
+    if (options?.sessionToken) params.set('sessionToken', options.sessionToken);
 
     const response = await fetch(`${API_URL}/api/places/autocomplete?${params.toString()}`, {
       headers: getHeaders(),
@@ -1467,8 +1471,9 @@ export const api: API = {
     return data.results ?? [];
   },
 
-  placeDetails: async (placeId: string) => {
+  placeDetails: async (placeId: string, sessionToken?: string) => {
     const params = new URLSearchParams({ placeId });
+    if (sessionToken) params.set('sessionToken', sessionToken);
     const response = await fetch(`${API_URL}/api/places/details?${params.toString()}`, {
       headers: getHeaders(),
     });
