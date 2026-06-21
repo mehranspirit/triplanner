@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '@/types/eventTypes';
 import { getEventEnd, getEventStart, sortEventsByStart } from '@/utils/eventTime';
+import { ALL_DAYS_FILTER_KEY, filterEventsByDayKey } from '@/utils/timelineDates';
 import { eventHasMapCoordinates } from '@/utils/eventLocation';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -126,6 +127,7 @@ interface TripMapProps {
   className?: string;
   variant?: TripMapVariant;
   mapFilter?: TripMapFilter;
+  dayFilterKey?: string;
   tileStyle?: MapTileStyle;
   onEventSelect?: (event: Event) => void;
   focusEventId?: string | null;
@@ -561,6 +563,7 @@ const TripMap: React.FC<TripMapProps> = ({
   className,
   variant = 'default',
   mapFilter = 'all',
+  dayFilterKey,
   tileStyle = 'streets',
   onEventSelect,
   focusEventId,
@@ -666,10 +669,13 @@ const TripMap: React.FC<TripMapProps> = ({
     const statusFiltered = showAlternatives
       ? trip.events
       : trip.events.filter((event) => event.status !== 'alternative');
-    const filteredEvents = filterEventsForMap(statusFiltered, mapFilter);
+    const filteredEvents = dayFilterKey != null
+      ? filterEventsByDayKey(statusFiltered, dayFilterKey)
+      : filterEventsForMap(statusFiltered, mapFilter);
 
     return extractMapRelevantData({ ...trip, events: filteredEvents });
   }, [
+    dayFilterKey,
     mapFilter,
     showAlternatives,
     trip._id,
@@ -901,12 +907,16 @@ const TripMap: React.FC<TripMapProps> = ({
     );
   }
 
+  const isDayFiltered = dayFilterKey != null && dayFilterKey !== ALL_DAYS_FILTER_KEY;
+
   const emptyMessage = error
-    || (mapFilter === 'today'
-      ? 'No stops scheduled today'
-      : trip.events.length === 0
-        ? 'No stops yet — add events to see them on the map'
-        : 'No map locations found for these events');
+    || (isDayFiltered
+      ? 'No stops on this day'
+      : mapFilter === 'today'
+        ? 'No stops scheduled today'
+        : trip.events.length === 0
+          ? 'No stops yet — add events to see them on the map'
+          : 'No map locations found for these events');
 
   if (groupedMarkers.length === 0) {
     return (
@@ -1033,7 +1043,7 @@ const TripMap: React.FC<TripMapProps> = ({
         </div>
       )}
       <MapContainer
-        key={`map-container-${trip._id}-${mapFilter}-${tileStyle}-${useOsmFallback ? 'osm' : 'primary'}`}
+        key={`map-container-${trip._id}-${dayFilterKey ?? mapFilter}-${tileStyle}-${useOsmFallback ? 'osm' : 'primary'}`}
         center={[groupedMarkers[0]?.lat || locations[0]?.lat || 20, groupedMarkers[0]?.lon || locations[0]?.lon || 0]}
         zoom={4}
         style={{ height: '100%', width: '100%' }}

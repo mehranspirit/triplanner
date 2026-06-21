@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutList, Map as MapIcon } from 'lucide-react';
-import TripMap, { TripMapFilter } from '@/components/TripMap';
+import TripMap from '@/components/TripMap';
 import { Trip, Event } from '@/types/eventTypes';
 import { useMapViewChrome } from '@/context/MapViewChromeContext';
 import { eventHasMapCoordinates } from '@/utils/eventLocation';
@@ -17,6 +17,8 @@ import MapBottomSheet, { MapSheetSnap } from './MapBottomSheet';
 import TodayPeek from './TodayPeek';
 import TripToolbarActionMenus, { TripToolbarActionMenusProps } from '../TripToolbarActionMenus';
 import TripSimulatedDatePicker from '../TripSimulatedDatePicker';
+import TripDayStrip from '../TripDayStrip';
+import { TripDayStripItem } from '@/utils/timelineDates';
 
 interface MapTripViewProps {
   trip: Trip;
@@ -26,6 +28,9 @@ interface MapTripViewProps {
   activePanel: TripPanel | null;
   unreadNotificationCount: number;
   isOverlayModalOpen?: boolean;
+  dayStripItems: TripDayStripItem[];
+  activeDayKey: string;
+  onDaySelect: (dateKey: string) => void;
   onExitMapView: () => void;
   onReviewLocations?: () => void;
   onOpenEvent?: (event: Event) => void;
@@ -41,6 +46,9 @@ const MapTripView: React.FC<MapTripViewProps> = ({
   activePanel,
   unreadNotificationCount,
   isOverlayModalOpen = false,
+  dayStripItems,
+  activeDayKey,
+  onDaySelect,
   onExitMapView,
   onReviewLocations,
   onOpenEvent,
@@ -48,7 +56,6 @@ const MapTripView: React.FC<MapTripViewProps> = ({
   toolbarMenuProps,
 }) => {
   const { setMapViewActive } = useMapViewChrome();
-  const [mapFilter, setMapFilter] = useState<TripMapFilter>('all');
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [navigableEvents, setNavigableEvents] = useState<Event[]>([]);
   const [sheetSnap, setSheetSnap] = useState<MapSheetSnap>('peek');
@@ -180,6 +187,15 @@ const MapTripView: React.FC<MapTripViewProps> = ({
             onReviewLocations={onReviewLocations}
           />
         </div>
+
+        <div className="mt-3">
+          <TripDayStrip
+            days={dayStripItems}
+            activeDayKey={activeDayKey}
+            onDaySelect={onDaySelect}
+            variant="map"
+          />
+        </div>
       </header>
 
       <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-2">
@@ -189,7 +205,7 @@ const MapTripView: React.FC<MapTripViewProps> = ({
               trip={trip}
               variant="immersive"
               className="h-full rounded-none"
-              mapFilter={mapFilter}
+              dayFilterKey={activeDayKey}
               tileStyle={tileStyle}
               onEventSelect={handleEventSelect}
               focusEventId={selectedEvent?.id ?? null}
@@ -198,25 +214,6 @@ const MapTripView: React.FC<MapTripViewProps> = ({
           </div>
 
           <div className="pointer-events-none absolute left-3 top-3 z-[5] flex flex-col gap-2">
-            <div className={cn('pointer-events-auto inline-flex', tripSurfaces.mapSegmentTrack)}>
-              {(['today', 'all'] as const).map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  aria-pressed={mapFilter === filter}
-                  className={cn(
-                    'rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors sm:text-sm',
-                    mapFilter === filter
-                      ? tripSurfaces.mapSegmentActive
-                      : 'text-white/80 hover:text-white',
-                  )}
-                  onClick={() => setMapFilter(filter)}
-                >
-                  {filter === 'all' ? 'All trip' : 'Today'}
-                </button>
-              ))}
-            </div>
-
             {selectedEvent && (
               <div className="pointer-events-auto max-w-[min(100%,20rem)]">
                 <EventMapPreview

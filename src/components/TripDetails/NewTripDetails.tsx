@@ -1689,7 +1689,7 @@ const NewTripDetails: React.FC = () => {
       onOpenExploreSuggestions={canEdit ? () => setIsExploreSuggestionsOpen(true) : undefined}
       onOpenPlaceSearch={canEdit ? () => setIsPlaceAddOpen(true) : undefined}
       addableEventTypes={addableEventTypes}
-      dayFilterKey={ALL_DAYS_FILTER_KEY}
+      dayFilterKey={activeDayKey}
       selectedEventId={selectedEventId}
       timelineTransferLegs={timelineTransferLegs}
       currentUserId={user?._id}
@@ -1763,6 +1763,9 @@ const NewTripDetails: React.FC = () => {
           activePanel={activePanel}
           unreadNotificationCount={unreadNotificationCount}
           isOverlayModalOpen={isL4ModalOpen}
+          dayStripItems={dayStripItems}
+          activeDayKey={activeDayKey}
+          onDaySelect={handleDaySelect}
           onExitMapView={() => handleSetMapView(false)}
           onReviewLocations={handleImproveLocations}
           onOpenEvent={handleNavigateToEventDetail}
