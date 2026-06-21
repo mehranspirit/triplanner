@@ -5,6 +5,7 @@ import {
   buildTripDayStripItems,
   eventOccursOnDayKey,
   filterEventsByDayKey,
+  filterEventsForMapDayKey,
   getEventTimelineDateKeys,
   getMultidayEndpointDetails,
   getMultidayEventDayRole,
@@ -139,6 +140,23 @@ describe('timelineDates', () => {
     expect(eventOccursOnDayKey(stay, '2026-06-02')).toBe(true);
     expect(filterEventsByDayKey([stay], '2026-06-02')).toHaveLength(1);
     expect(filterEventsByDayKey([stay], '2026-06-04')).toHaveLength(0);
+  });
+
+  it('omits middle multiday days from map day filtering', () => {
+    const stay = {
+      id: 'stay-1',
+      type: 'stay',
+      status: 'confirmed',
+      checkIn: '2026-06-01',
+      checkInTime: '15:00',
+      checkOut: '2026-06-03',
+      checkOutTime: '11:00',
+    } as unknown as Event;
+    const activity = makeEvent('activity-1', '2026-06-02', 'activity');
+
+    expect(filterEventsForMapDayKey([stay, activity], '2026-06-01')).toHaveLength(1);
+    expect(filterEventsForMapDayKey([stay, activity], '2026-06-02')).toEqual([activity]);
+    expect(filterEventsForMapDayKey([stay, activity], '2026-06-03')).toHaveLength(1);
   });
 
   it('includes rental cars on every day from pickup through dropoff', () => {

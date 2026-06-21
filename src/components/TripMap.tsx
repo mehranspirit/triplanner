@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Trip, Event, EventType, ArrivalDepartureEvent, StayEvent, DestinationEvent, FlightEvent, TrainEvent, RentalCarEvent, BusEvent, ActivityEvent } from '@/types/eventTypes';
 import { getEventEnd, getEventStart, sortEventsByStart } from '@/utils/eventTime';
-import { ALL_DAYS_FILTER_KEY, filterEventsByDayKey } from '@/utils/timelineDates';
+import { ALL_DAYS_FILTER_KEY, filterEventsByDayKey, filterEventsForMapDayKey } from '@/utils/timelineDates';
 import { eventHasMapCoordinates } from '@/utils/eventLocation';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -582,13 +582,25 @@ const TripMap: React.FC<TripMapProps> = ({
   const loadingRef = useRef<boolean>(true);
   const routeEndpointEventTypes = new Set<EventType>(['flight', 'train', 'bus', 'rental_car']);
 
+  const displayEvents = useMemo(() => {
+    const statusFiltered = showAlternatives
+      ? trip.events
+      : trip.events.filter((event) => event.status !== 'alternative');
+
+    if (dayFilterKey != null) {
+      return filterEventsForMapDayKey(statusFiltered, dayFilterKey);
+    }
+
+    return filterEventsForMap(statusFiltered, mapFilter);
+  }, [dayFilterKey, mapFilter, showAlternatives, trip.events]);
+
   const eventTimelineNumbers = useMemo(() => {
     const timelineNumbers = new Map<string, number>();
-    sortEventsByStart(trip.events).forEach((event, index) => {
+    sortEventsByStart(displayEvents).forEach((event, index) => {
       timelineNumbers.set(event.id, index + 1);
     });
     return timelineNumbers;
-  }, [trip.events]);
+  }, [displayEvents]);
 
   const groupedMarkers = useMemo(() => {
     const groups = new Map<string, GroupedMapMarker>();
@@ -665,19 +677,10 @@ const TripMap: React.FC<TripMapProps> = ({
     setTileLayer(resolveMapTileLayer(tileStyle));
   }, [tileStyle]);
 
-  const mapRelevantData = useMemo(() => {
-    const statusFiltered = showAlternatives
-      ? trip.events
-      : trip.events.filter((event) => event.status !== 'alternative');
-    const filteredEvents = dayFilterKey != null
-      ? filterEventsByDayKey(statusFiltered, dayFilterKey)
-      : filterEventsForMap(statusFiltered, mapFilter);
-
-    return extractMapRelevantData({ ...trip, events: filteredEvents });
-  }, [
-    dayFilterKey,
-    mapFilter,
-    showAlternatives,
+  const mapRelevantData = useMemo(() => (
+    extractMapRelevantData({ ...trip, events: displayEvents })
+  ), [
+    displayEvents,
     trip._id,
     trip.name,
     trip.events.map(event => {

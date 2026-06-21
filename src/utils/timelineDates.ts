@@ -323,6 +323,13 @@ export const filterEventsByDayKey = (events: Event[], dayKey: string): Event[] =
   return itineraryEvents.filter((event) => eventOccursOnDayKey(event, dayKey));
 };
 
+/** Map day view: same as timeline day filter, but hide middle days of multiday stays and rentals. */
+export const filterEventsForMapDayKey = (events: Event[], dayKey: string): Event[] => (
+  filterEventsByDayKey(events, dayKey).filter((event) => (
+    getMultidayEventDayRole(event, dayKey) !== 'middle'
+  ))
+);
+
 /** Build day pills for the strip — full trip range, or event span when dates are missing. */
 export const buildTripDayStripItems = (
   events: Event[],
