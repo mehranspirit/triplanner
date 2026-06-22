@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutList, Map as MapIcon } from 'lucide-react';
+import { Crosshair, LayoutList, Map as MapIcon } from 'lucide-react';
 import TripMap from '@/components/TripMap';
 import { Trip, Event } from '@/types/eventTypes';
 import { useMapViewChrome } from '@/context/MapViewChromeContext';
@@ -19,6 +19,7 @@ import TripToolbarActionMenus, { TripToolbarActionMenusProps } from '../TripTool
 import TripSimulatedDatePicker from '../TripSimulatedDatePicker';
 import TripDayStrip from '../TripDayStrip';
 import { TripDayStripItem } from '@/utils/timelineDates';
+import { UserLocationStatus } from './UserLocationLayer';
 
 interface MapTripViewProps {
   trip: Trip;
@@ -59,6 +60,8 @@ const MapTripView: React.FC<MapTripViewProps> = ({
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [navigableEvents, setNavigableEvents] = useState<Event[]>([]);
   const [sheetSnap, setSheetSnap] = useState<MapSheetSnap>('peek');
+  const [locateUserSignal, setLocateUserSignal] = useState(0);
+  const [userLocationStatus, setUserLocationStatus] = useState<UserLocationStatus>('idle');
 
   useEffect(() => {
     setMapViewActive(true);
@@ -106,6 +109,18 @@ const MapTripView: React.FC<MapTripViewProps> = ({
   const handleNavigableEventsChange = useCallback((events: Event[]) => {
     setNavigableEvents(events);
   }, []);
+
+  const handleLocateUser = () => {
+    setLocateUserSignal((current) => current + 1);
+  };
+
+  const locateButtonLabel = userLocationStatus === 'denied'
+    ? 'Location access denied'
+    : userLocationStatus === 'unavailable'
+      ? 'Location unavailable'
+      : userLocationStatus === 'locating'
+        ? 'Finding your location…'
+        : 'Center map on your location';
 
   const selectedStopIndex = useMemo(
     () => (selectedEvent ? navigableEvents.findIndex((event) => event.id === selectedEvent.id) : -1),
@@ -207,6 +222,9 @@ const MapTripView: React.FC<MapTripViewProps> = ({
               className="h-full rounded-none"
               dayFilterKey={activeDayKey}
               tileStyle={tileStyle}
+              showUserLocation
+              locateUserSignal={locateUserSignal}
+              onUserLocationStatusChange={setUserLocationStatus}
               onEventSelect={handleEventSelect}
               focusEventId={selectedEvent?.id ?? null}
               onNavigableEventsChange={handleNavigableEventsChange}
@@ -228,6 +246,20 @@ const MapTripView: React.FC<MapTripViewProps> = ({
               </div>
             )}
           </div>
+
+          <button
+            type="button"
+            aria-label={locateButtonLabel}
+            title={locateButtonLabel}
+            className={cn(
+              'pointer-events-auto absolute right-3 z-[5] flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-slate-950/80 text-white shadow-lg backdrop-blur-md transition-colors hover:bg-slate-900',
+              'bottom-[calc(5.75rem+env(safe-area-inset-bottom)+0.75rem)] lg:bottom-4',
+              userLocationStatus === 'locating' && 'animate-pulse',
+            )}
+            onClick={handleLocateUser}
+          >
+            <Crosshair className="h-5 w-5" />
+          </button>
 
           {import.meta.env.VITE_MAPTILER_API_KEY && (
             <div className={cn(

@@ -12,6 +12,7 @@ import { EXPLORING_EVENT_UI_LABEL } from '@/utils/eventStatusLabels';
 import { endOfDay, startOfDay } from 'date-fns';
 import { MapTileStyle, OSM_TILE_URL, OSM_ATTRIBUTION, resolveMapTileLayer } from '@/config/mapTiles';
 import MapViewSkeleton from '@/components/TripDetails/map/MapViewSkeleton';
+import UserLocationLayer, { UserLocationStatus } from '@/components/TripDetails/map/UserLocationLayer';
 
 export type TripMapFilter = 'all' | 'today';
 export type TripMapVariant = 'default' | 'immersive';
@@ -129,6 +130,9 @@ interface TripMapProps {
   mapFilter?: TripMapFilter;
   dayFilterKey?: string;
   tileStyle?: MapTileStyle;
+  showUserLocation?: boolean;
+  locateUserSignal?: number;
+  onUserLocationStatusChange?: (status: UserLocationStatus) => void;
   onEventSelect?: (event: Event) => void;
   focusEventId?: string | null;
   onNavigableEventsChange?: (events: Event[]) => void;
@@ -565,6 +569,9 @@ const TripMap: React.FC<TripMapProps> = ({
   mapFilter = 'all',
   dayFilterKey,
   tileStyle = 'streets',
+  showUserLocation = false,
+  locateUserSignal = 0,
+  onUserLocationStatusChange,
   onEventSelect,
   focusEventId,
   onNavigableEventsChange,
@@ -1052,6 +1059,13 @@ const TripMap: React.FC<TripMapProps> = ({
         style={{ height: '100%', width: '100%' }}
       >
         <MapPinBounds locations={locations} focusEventId={focusEventId} variant={variant} />
+        {showUserLocation && (
+          <UserLocationLayer
+            enabled={showUserLocation}
+            locateSignal={locateUserSignal}
+            onStatusChange={onUserLocationStatusChange}
+          />
+        )}
         <TileLayer
           url={useOsmFallback ? OSM_TILE_URL : tileLayer.url}
           attribution={useOsmFallback ? OSM_ATTRIBUTION : tileLayer.attribution}
